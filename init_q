@@ -1,0 +1,7 @@
+#!/bin/bash
+
+if [ -d /scratch/$USER ] ; then
+    rm -rf /scratch/$USER/*
+else
+    mkdir -p /scratch/$USER
+fi
