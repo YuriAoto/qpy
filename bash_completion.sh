@@ -7,7 +7,6 @@ _qpy()
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    prev_2="${COMP_WORDS[COMP_CWORD-2]}"
     opts="sub check kill finish nodes njobs"
 
     if [[ ${prev} == 'qpy' ]] ; then
@@ -20,10 +19,15 @@ _qpy()
         return 0
     fi
 
-    if [[ ${prev_2} == 'sub' ]] ; then
-        COMPREPLY=( $(compgen -f ${cur}) )
-        return 0
+    if [[ ${COMP_WORDS[@]} > 2 ]]
+    then
+	prev_2="${COMP_WORDS[COMP_CWORD-2]}"
+	if [[ ${prev_2} == 'sub' ]] ; then
+            COMPREPLY=( $(compgen -f ${cur}) )
+            return 0
+	fi
     fi
+
 
 }
 complete -F _qpy qpy
