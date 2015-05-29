@@ -1,5 +1,2 @@
 #!/bin/bash
-ls -l /scratch/$USER
-echo rm -rf `hostname`:/scratch/$USER
-rm -rf /scratch/$USER
-echo all done
+rm -rfv /scratch/$USER

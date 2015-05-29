@@ -1,0 +1,54 @@
+#!/usr/bin/python
+# queue_manager.py
+from multiprocessing.connection import Client
+from time import sleep
+import os
+import sys
+
+home_dir = os.environ['HOME']
+queue_dir = home_dir + '/Codes/queue_hlrs'
+
+f_port = open(queue_dir + '/.port', 'r')
+port = int(f_port.read())
+f_port.close()
+
+address = 'localhost'
+key = 'qwerty'
+
+keywords={'sub':1,
+          'check':2,
+          'kill':3,
+          'finish':4,
+          'nodes':5,
+          'njobs':6
+          }
+
+
+
+option = keywords[sys.argv[1]]
+
+master = Client( (address, port), authkey=key)
+
+arguments = ()
+
+# Submit a job
+if (option == 1):
+    job = ''
+    for i in sys.argv[2:]:
+        job += ' ' + i
+    arguments = [job, os.getcwd()]
+
+# Kill job
+elif (option == 3):
+    arguments = map(int, sys.argv[2:])
+    print arguments
+
+# Change max_nodes or max_jobs
+elif (option == 5 or option == 6):
+    arguments = int( sys.argv[2])
+
+
+master.send( (option, arguments))
+sys.stdout.write( master.recv())
+
+master.close()

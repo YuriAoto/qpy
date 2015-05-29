@@ -9,9 +9,16 @@ import re
 import subprocess
 import sys
 import os
+import random
 
 home_dir = os.environ['HOME']
 queue_dir = home_dir + '/Codes/queue_hlrs'
+
+random.seed()
+port = random.randint( 10000, 20000 )
+f_port = open(queue_dir + '/.port', 'w', 0)
+f_port.write( str( port))
+f_port.close()
 
 def node_alloc():
     queue_script = 'queue'
@@ -32,7 +39,7 @@ def node_alloc():
     node = saloc_stdout[-1]
 
     init_script = 'source ~/.bash_profile; init_q'
-    alloc = subprocess.Popen(["ssh", node, init_script],
+    alloc = subprocess.Popen(["ssh", "-o", "StrictHostKeyChecking=no", node, init_script],
                              shell=False,
                              stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE)
@@ -42,18 +49,43 @@ def node_alloc():
     return (job_id, node)
 
 
-def node_dealloc( jobID, nodeID):
+def node_dealloc( node_id, alloc_id):
     term_script = 'source ~/.bash_profile; term_q'
-    dealloc = subprocess.call(["ssh", "%s" % nodeID, term_script],
-                              shell=True)
+    dealloc = subprocess.Popen(["ssh", "-o", "StrictHostKeyChecking=no", node_id, term_script],
+                               shell=False,
+                               stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE)
+    print "dealloc stdout: ", dealloc.stdout.readlines()
+    print "dealloc stderr: ", dealloc.stderr.readlines()
 
-    command = 'scancel ' + jobID
-    dealloc = subprocess.call(command,
-                              shell=True)
+    command = 'scancel ' + alloc_id
+    dealloc = subprocess.call( command, shell=True)
+
+# Check output
+#
+class out_err_check( threading.Thread):
     
+    def __init__( self, ssh, out_or_err, out_err_file):
+        threading.Thread.__init__( self)
+        self.ssh = ssh
+        self.out_or_err = out_or_err
+        self.file = out_err_file
+        self.file_lock = threading.RLock()
+
+    def run( self):
+
+        if (self.out_or_err):
+            for c in iter( lambda: self.ssh.stdout.read(1), ''):
+                self.file_lock.acquire()
+                self.file.write(c)
+                self.file_lock.release()
+        else:
+            for c in iter( lambda: self.ssh.stderr.read(1), ''):
+                self.file_lock.acquire()
+                self.file.write(c)
+                self.file_lock.release()
+
     
-
-
 # Job sender - send a job to a node
 #
 class job_send( threading.Thread):
@@ -63,23 +95,35 @@ class job_send( threading.Thread):
         self.node = node
         self.job = job
         self.jobID = jobID
+        self.err_msg = ''
 
     def run( self):
         command = 'source ~/.bash_profile; cd ' + self.job[1] + '; ' + self.job[0]
-        ssh = subprocess.Popen(["ssh", "%s" % self.node, command],
+        ssh = subprocess.Popen(["ssh", self.node, command],
                                shell=False,
                                stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE)
-        print "stdout: ", ssh.stdout.readlines()
-        print "stderr: ", ssh.stderr.readlines()
+        print ssh.pid
+        f_out_err = open( self.job[1] + '/job_' + str(self.jobID) + '.outerr', 'w', 0)
+
+        err_chk = out_err_check( ssh, False, f_out_err)
+        err_chk.start()
+        out_chk = out_err_check( ssh, True, f_out_err)
+        out_chk.start()
+
+        err_chk.join()
+        out_chk.join()
+
+        f_out_err.close()
+
 
 # A node.
 #
 class node_connection( threading.Thread):
 
-    def __init__( self):
+    def __init__( self, max_jobs):
         threading.Thread.__init__( self)
-        self.max_jobs = 20
+        self.max_jobs = max_jobs
         self.queue = Queue()
         self.jobs = []
         self.jobs_lock = threading.RLock()
@@ -126,6 +170,8 @@ class submission_control( threading.Thread):
     def __init__( self):
         threading.Thread.__init__( self)
         self.node_list = []
+        self.max_nodes = 3
+        self.max_jobs_default = 20
         self.jobs_queue = Queue()
         self.queue_lock = threading.RLock()
 
@@ -140,6 +186,12 @@ class submission_control( threading.Thread):
                         node_c.jobs.remove(running_job)
                 node_c.jobs_lock.release()
 
+            # Dealloc the non-used node
+            for node_c in self.node_list:
+                if (not( node_c.jobs)):
+                    node_dealloc( node_c.node_id, node_c.alloc_id)
+                    self.node_list.remove( node_c)
+
             # Send a job, if there is space
             self.queue_lock.acquire()
             if (not( self.jobs_queue.empty())):
@@ -150,8 +202,13 @@ class submission_control( threading.Thread):
                     if (free > best_free):
                         best_node = node_c
                         best_free = free
+                if (best_node == None and len( self.node_list) < self.max_nodes):
+                    best_node = node_connection( self.max_jobs_default)
+                    best_node.start()
+                    sub_ctrl.node_list.append( best_node)
                 if (best_node != None):
                     best_node.queue.put( self.jobs_queue.get())
+
             self.queue_lock.release()
 
 
@@ -162,58 +219,32 @@ class submission_control( threading.Thread):
 #   (job_type, job)
 # where:
 #   job_type is
-#       0 - submit a job
-#       1 - kill a job
-#       2 - add a node or change max_jobs
-#       3 - remove a node
-#       4 - show nodes
-#       5 - show jobs
+#       1 - submit a job     (sub)
+#       2 - check the jobs   (check)
+#       3 - kill a job       (kill)
+#       4 - kill the master  (finish)
+#       5 - change max_nodes (nodes)
+#       6 - change max_jobs  (njobs)
 #              
 #   job is a list with the job informations
 #
 def handle_client( sub_ctrl, jobId):
     print "queue_master_driver: ready"
-    server_master = Listener(( "localhost", 16011), authkey = 'qwerty')
+    server_master = Listener(( "localhost", port), authkey = 'qwerty')
     while True:
         client_master = server_master.accept()
         (job_type, job) = client_master.recv()
 
-        # Send or kill a job
-        if (job_type == 0 or job_type == 1):
-            client_master.send( 'Job received.')
+        # Send a job
+        if (job_type == 1):
             sub_ctrl.queue_lock.acquire()
             sub_ctrl.jobs_queue.put( (jobId, job_type, job))
             sub_ctrl.queue_lock.release()
             jobId += 1
+            client_master.send( 'Job received.\n')
 
-        # Add a node or change max_jobs
-#        elif (job_type == 2):
-            # node_found = False
-            # for node in sub_ctrl.node_list:
-            #     if node.add == job[0]:
-            #         node.max_jobs = job[1]
-            #         client_master.send( 'max_jobs changed to ' + str( job[1]) + ' for node ' + job[0] + '.')
-            #         node_found = True
-            #         break
-            # if (not( node_found)):
-            #     node = node_connection( job[0], job[1])
-            #     node.start()
-            #     sub_ctrl.node_list.append( node)
-            #     client_master.send( 'Node ' + job[0] + ' added, with max_jobs set to ' + str( job[1]) + '.')
-
-        # Kill a job
-        elif (job_type == 3):
-            client_master.send( 'Kill job: not yet implemented.')
-
-        # Show the nodes
-        elif (job_type == 4):
-            cur_nodes = ''
-            for node in sub_ctrl.node_list:
-                cur_nodes += node.node_id + ' ' + str( len( node.jobs)) + '/' + str( node.max_jobs) + '\n'
-            client_master.send( cur_nodes)
-
-        # Show the jobs
-        elif (job_type == 5):
+        # Check jobs
+        elif (job_type == 2):
 
             nd_jobs = ''
             cur_jobs = ''
@@ -226,9 +257,8 @@ def handle_client( sub_ctrl, jobId):
                 sub_ctrl.jobs_queue.put( j)
             sub_ctrl.queue_lock.release()
 
-            cur_jobs += 'Queue' + ':\n' + nd_jobs
-
-
+            if (nd_jobs):
+                cur_jobs += 'Queue' + ':\n' + nd_jobs
 
             for node in sub_ctrl.node_list:
                 nd_jobs = ''
@@ -238,21 +268,36 @@ def handle_client( sub_ctrl, jobId):
                     cur_jobs += node.node_id + ':\n' + nd_jobs
 
             client_master.send( cur_jobs)
-            
+
+        # Kill a job
+        elif (job_type == 3):
+#            for i in job:
+#                kill i
+            client_master.send( 'Killing job: not implemented.\n')
+
+
+        # Kill the master execution
+        if (job_type == 4):
+            client_master.send( 'Stopping master driver.\n')
+
+        # Change maximum number of nodes
+        elif (job_type == 5):
+            sub_ctrl.max_nodes = job
+            client_master.send( 'Maximum number of nodes changed to ' + str( job) + '.\n')
+
+        # Change maximum number of jobs
+        elif (job_type == 6):
+            sub_ctrl.max_jobs_default = job
+            for n in sub_ctrl.node_list:
+                n.max_jobs = sub_ctrl.max_jobs_default
+            client_master.send( 'Maximum number of jobs changed to ' + str( job) + '.\n')
+
         else:
-            pass
-
-
+            client_master.send( 'Unknown option: ' + str( job_type) + '\n')
 
 
 sub_ctrl = submission_control()
 sub_ctrl.start()
-
-node = node_connection()
-node.start()
-sub_ctrl.node_list.append( node)
-print 'Node ' + node.node_id + ' added, with alloc_id to ' + node.alloc_id
-
 
 #node_dealloc('26402')
 
