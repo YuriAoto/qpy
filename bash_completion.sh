@@ -1,5 +1,5 @@
 # Tab completion generator for qpy
-# 
+#
 # 29 May 2015 - Pradipta and Yuri
 _qpy() 
 {
