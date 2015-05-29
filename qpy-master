@@ -1,5 +1,7 @@
 #!/usr/bin/python
-# queue_master_driver.py
+# qpy-master - set the main driver for qpy
+#
+# 29 May 2015 - Pradipta and Yuri
 from multiprocessing.connection import Listener
 from multiprocessing.connection import Client
 import threading

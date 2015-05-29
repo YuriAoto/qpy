@@ -1,5 +1,7 @@
 #!/usr/bin/python
-# queue_manager.py
+# qpy - queueing manager for qpy
+#
+# 29 May 2015 - Pradipta and Yuri
 from multiprocessing.connection import Client
 from time import sleep
 import os
