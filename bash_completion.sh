@@ -7,7 +7,7 @@ _qpy()
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    opts="sub check kill finish nodes njobs"
+    opts="sub check kill finish nodes njobs config"
 
     if [[ ${prev} == 'qpy' ]] ; then
         COMPREPLY=( $(compgen -W "${opts}" ${cur}) )

@@ -10,6 +10,8 @@ import sys
 home_dir = os.environ['HOME']
 queue_dir = home_dir + '/Codes/queue_hlrs'
 
+#port=16000
+
 f_port = open(queue_dir + '/.port', 'r')
 port = int(f_port.read())
 f_port.close()
@@ -17,19 +19,29 @@ f_port.close()
 address = 'localhost'
 key = 'qwerty'
 
-keywords={'sub':1,
-          'check':2,
-          'kill':3,
-          'finish':4,
-          'nodes':5,
-          'njobs':6
+keywords={'sub':   (1, 'submit a job. Arguments: the job command'),
+          'check': (2, 'check the current jobs. No arguments'),
+          'kill':  (3, 'kill jobs. Argument: the jobs id'),
+          'finish':(4, 'finish the master execution. No arguments'),
+          'nodes': (5, 'change the maximum number of nodes. Argument: the desired value'),
+          'njobs': (6, 'change the maximum number of jobs per node. Argument: the desired value'),
+          'config':(7, 'show the current configuration. No arguments')
           }
 
 
-
-option = keywords[sys.argv[1]]
-
-master = Client( (address, port), authkey=key)
+try:
+    option = keywords[sys.argv[1]][0]
+except:
+    str_len = 0
+    for opt in keywords:
+        if (str_len < len( opt)):
+            str_len = len( opt)
+    format_spc = '{0:' + str( str_len+1) + 's}'
+    usage_msg =  'Usage: ' + sys.argv[0] +  ' <option> [<argumnts>].\n'
+    usage_msg += 'Options:'
+    for opt in keywords:
+        usage_msg += '\n  ' + format_spc.format( opt+':') + ' ' + keywords[opt][1]
+    sys.exit( usage_msg)
 
 arguments = ()
 
@@ -43,13 +55,16 @@ if (option == 1):
 # Kill job
 elif (option == 3):
     arguments = map(int, sys.argv[2:])
-    print arguments
 
 # Change max_nodes or max_jobs
 elif (option == 5 or option == 6):
-    arguments = int( sys.argv[2])
+    try:
+        arguments = int( sys.argv[2])
+    except:
+        sys.exit( sys.argv[1] + ' needs an integer as argument.')
 
 
+master = Client( (address, port), authkey=key)
 master.send( (option, arguments))
 sys.stdout.write( master.recv())
 
