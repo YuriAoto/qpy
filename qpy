@@ -6,9 +6,37 @@ from multiprocessing.connection import Client
 from time import sleep
 import os
 import sys
+import subprocess
 
 home_dir = os.environ['HOME']
 queue_dir = home_dir + '/Codes/queue_hlrs'
+user = os.environ['USER']
+scr_dir = '/scratch/'+ user
+
+# '--options' are only be called by qpy-master, not for the users
+
+if (sys.argv[1] == '--alloc'):
+	sleep(1814400)
+
+	exit()
+
+if (sys.argv[1] == '--init'):
+	if (os.path.isdir(scr_dir)):
+		command = 'rm -rf ' + scr_dir + '/*'
+	else:
+		command = 'mkdir ' + scr_dir
+		
+	subprocess.call(command,shell=True)
+
+	exit()
+
+if (sys.argv[1] == '--term'):
+	command = 'rm -rf ' + scr_dir
+	subprocess.call(command,shell=True)
+
+	exit()
+
+# end of '--options'
 
 #port=16000
 
