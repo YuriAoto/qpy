@@ -53,7 +53,8 @@ keywords={'sub':   (1, 'submit a job. Arguments: the job command'),
           'finish':(4, 'finish the master execution. No arguments'),
           'nodes': (5, 'change the maximum number of nodes. Argument: the desired value'),
           'njobs': (6, 'change the maximum number of jobs per node. Argument: the desired value'),
-          'config':(7, 'show the current configuration. No arguments')
+          'config':(7, 'show the current configuration. No arguments'),
+          'done':  (8, 'show the already finished jobs. No arguments')
           }
 
 
@@ -91,6 +92,9 @@ elif (option == 5 or option == 6):
     except:
         sys.exit( sys.argv[1] + ' needs an integer as argument.')
 
+elif (option == 8):
+    if len(sys.argv)>2:
+        arguments = map(int, sys.argv[2:])
 
 master = Client( (address, port), authkey=key)
 master.send( (option, arguments))

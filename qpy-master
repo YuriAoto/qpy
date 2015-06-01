@@ -172,6 +172,8 @@ class submission_control( threading.Thread):
         self.max_jobs_default = 20
         self.jobs_queue = Queue()
         self.queue_lock = threading.RLock()
+        self.jobs_done = []
+        self.jobs_done_lock = threading.RLock()
 
     def run( self):
         while self.live:
@@ -181,6 +183,9 @@ class submission_control( threading.Thread):
                 node_c.jobs_lock.acquire()
                 for running_job in node_c.jobs:
                     if (not (running_job.is_alive())):
+                        self.jobs_done_lock.acquire()
+                        self.jobs_done.append(running_job)
+                        self.jobs_done_lock.release()
                         node_c.jobs.remove(running_job)
                 node_c.jobs_lock.release()
 
@@ -211,6 +216,14 @@ class submission_control( threading.Thread):
 
             sleep(1)
 
+# formating a list of jobs
+def format_jobs(jobs_list):
+    jobs = ''
+    for j in jobs_list:
+        jobs += str( j.jobID) + ':' + j.job[0] + ' (wd: ' + j.job[1] + ')\n';
+
+    return jobs
+
 # return string with current jobs
 def get_cur_jobs( sub_ctrl):
     nd_jobs = ''
@@ -228,9 +241,7 @@ def get_cur_jobs( sub_ctrl):
         cur_jobs += 'Queue' + ':\n' + nd_jobs
 
     for node in sub_ctrl.node_list:
-        nd_jobs = ''
-        for j in node.jobs:
-            nd_jobs += str( j.jobID) + ':' + j.job[0] + ' (wd: ' + j.job[1] + ')\n';
+        nd_jobs = format_jobs(node.jobs)
         if (nd_jobs):
             cur_jobs += node.node_id + ':\n' + nd_jobs
     return cur_jobs
@@ -248,6 +259,7 @@ def get_cur_jobs( sub_ctrl):
 #       5 - change max_nodes (nodes)
 #       6 - change max_jobs  (njobs)
 #       7 - show config      (config)
+#       8 - show jobs done   (done)
 #              
 #   job is a list with the job informations
 #
@@ -303,6 +315,26 @@ def handle_client( sub_ctrl, jobId):
             cur_conf += 'max_jobs  = ' + str( sub_ctrl.max_jobs_default) + '\n'
             cur_conf += 'max_nodes = ' + str( sub_ctrl.max_nodes) + '\n'
             client_master.send( cur_conf)
+
+        # make a list of finished jobs
+        elif (job_type == 8):
+            if (job):
+                sub_ctrl.jobs_done_lock.acquire()
+                for i in job:
+                    for j in sub_ctrl.jobs_done:
+                        if (i == j.jobID):
+                            sub_ctrl.jobs_done.remove(j)
+                            break 
+                sub_ctrl.jobs_done_lock.release()
+                client_master.send( str(len(job)) + ' jobs are removed \n')
+            else:
+                cur_jobs = ''
+                sub_ctrl.jobs_done_lock.acquire()
+                jobs = format_jobs(sub_ctrl.jobs_done)
+                sub_ctrl.jobs_done_lock.release()
+                if (jobs):
+                    cur_jobs += 'finished jobs' + ':\n' + jobs
+                client_master.send(cur_jobs)
 
         else:
             client_master.send( 'Unknown option: ' + str( job_type) + '\n')
