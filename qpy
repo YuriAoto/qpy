@@ -7,38 +7,100 @@ from time import sleep
 import os
 import sys
 import subprocess
+import re
 
 home_dir = os.environ['HOME']
 queue_dir = home_dir + '/Codes/queue_hlrs'
 user = os.environ['USER']
 scr_dir = '/scratch/'+ user
 
-# '--options' are only be called by qpy-master, not for the users
+# Return a list with all children and grand-children from pid
+# The dict parent_of shows the parents of all processes
+def get_all_children( pid, parent_of):
+    cur_child = []
+    for p in parent_of:
+        if (parent_of[p] == pid):
+            cur_child.append(p)
+    all_children = []
+    for c in cur_child:
+        all_children = get_all_children( c, parent_of)
+    all_children.extend( cur_child)
+    return all_children
 
-if (sys.argv[1] == '--alloc'):
-	sleep(1814400)
+# '--options' are to be called only by qpy-master, not by the users
+if (len( sys.argv) > 1):
+    if (sys.argv[1] == '--alloc'):
+        sleep(1814400)
+        exit()
 
-	exit()
+    if (sys.argv[1] == '--init'):
+        if (os.path.isdir( scr_dir)):
+            command = 'rm -rf ' + scr_dir + '/*'
+        else:
+            command = 'mkdir ' + scr_dir
+        subprocess.call( command, shell = True)
+        print "Success on qpy init!"
+        exit()
 
-if (sys.argv[1] == '--init'):
-	if (os.path.isdir(scr_dir)):
-		command = 'rm -rf ' + scr_dir + '/*'
-	else:
-		command = 'mkdir ' + scr_dir
-		
-	subprocess.call(command,shell=True)
+    if (sys.argv[1] == '--term'):
+        command = 'rm -rf ' + scr_dir
+        subprocess.call( command, shell = True)
+        exit()
 
-	exit()
+    if (sys.argv[1] == '--jobkill'):
+        job_id = sys.argv[2]
+        command = 'ps -fu ' + user
+        kill_job_ps = subprocess.Popen(command,
+                                       shell = True,
+                                       stdout = subprocess.PIPE,
+                                       stderr = subprocess.PIPE)
+        ps_out = kill_job_ps.stdout.readlines()
 
-if (sys.argv[1] == '--term'):
-	command = 'rm -rf ' + scr_dir
-	subprocess.call(command,shell=True)
+        # Get calling PID and parents associations:
+        grand_PID = ''
+        parents = {}
+        for l in ps_out:
+            new_pid = l.split()
+            parents[new_pid[1]] = new_pid[2]
+            re_res = re.search('qpy-jobID ' + job_id + ';', l)
+            if (re_res):
+                grand_PID = new_pid[1]
 
-	exit()
+        pid_kill = get_all_children( grand_PID, parents)
+        pid_kill.reverse()
+        for i in pid_kill:
+            kill_job = subprocess.call(['kill', i])
+            print 'Killing PID ' + i
 
+        exit()
 # end of '--options'
 
-#port=16000
+
+# Return a list of integers, described by the string X, as following:
+#
+# '1,2,3'    -> [1,2,3]
+# '1-3'      -> [1,2,3]
+# '1-3,6-10' -> [1,2,3,6,7,8,9,10]
+#
+def string_to_int_list( X):
+    res = []
+    X_by_comma = X.split(',')
+    for i in X_by_comma:
+        i_by_hifen = i.split('-')
+        if (len( i_by_hifen) == 1):
+            try:
+                res.append( int(i_by_hifen[0]))
+            except:
+                return None
+        elif (len( i_by_hifen) == 2):
+            try:
+                res.extend( range( int(i_by_hifen[0]), int(i_by_hifen[1])+1))
+            except:
+                return None
+        else:
+            return None
+
+    return res
 
 f_port = open(queue_dir + '/.port', 'r')
 port = int(f_port.read())
@@ -72,6 +134,8 @@ except:
         usage_msg += '\n  ' + format_spc.format( opt+':') + ' ' + keywords[opt][1]
     sys.exit( usage_msg)
 
+
+# Get arguments, according to the option
 arguments = ()
 
 # Submit a job
@@ -81,10 +145,6 @@ if (option == 1):
         job += ' ' + i
     arguments = [job, os.getcwd()]
 
-# Kill job
-elif (option == 3):
-    arguments = map(int, sys.argv[2:])
-
 # Change max_nodes or max_jobs
 elif (option == 5 or option == 6):
     try:
@@ -92,9 +152,21 @@ elif (option == 5 or option == 6):
     except:
         sys.exit( sys.argv[1] + ' needs an integer as argument.')
 
-elif (option == 8):
-    if len(sys.argv)>2:
-        arguments = map(int, sys.argv[2:])
+# Kill jobs or remove them from the done list
+elif (option == 3 or option == 8):
+    arguments = []
+    for x in sys.argv[2:]:
+        try:
+            new_range = string_to_int_list( x)
+            arguments.extend( new_range)
+        except:
+            if (sys.argv[2] == 'all'):
+                arguments = 'all'
+                break
+            sys.exit( 'Range with wrong format: ' + x)
+
+    if (arguments != 'all'):
+        arguments = list( set( arguments))
 
 master = Client( (address, port), authkey=key)
 master.send( (option, arguments))

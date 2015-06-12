@@ -13,6 +13,14 @@ import sys
 import os
 import random
 
+verbose = False
+
+# Improve with a parser
+if (len( sys.argv) > 1):
+    if (sys.argv[1] == '--verbose'):
+        verbose = True
+
+
 home_dir = os.environ['HOME']
 queue_dir = home_dir + '/Codes/queue_hlrs'
 
@@ -32,7 +40,12 @@ def node_alloc():
                               stderr=subprocess.PIPE)
     salloc_stderr = salloc.stderr.readline()
     re_res = re.match('salloc: Granted job allocation (\d+)', salloc_stderr)
-    job_id = re_res.group(1)
+    try:
+        job_id = re_res.group(1)
+    except:
+        if (verbose):
+            print 'Error in node allocation: ' + salloc_stderr
+        return None
     command = 'squeue | grep ' + job_id
     squeue = subprocess.Popen(command,
                               shell=True,
@@ -41,15 +54,42 @@ def node_alloc():
     saloc_stdout = squeue.stdout.readline().split()
     node = saloc_stdout[-1]
 
-    init_script = 'source ~/.bash_profile; qpy --init'
-    alloc = subprocess.Popen(["ssh", "-o", "StrictHostKeyChecking=no", node, init_script],
-                             shell=False,
-                             stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE)
+    while (True):
 
-    print "Node_alloc init_q stdout: ", alloc.stdout.readlines()
-    print "Node_alloc init_q stderr: ", alloc.stderr.readlines()
+        init_script = 'source ~/.bash_profile; qpy --init'
+        alloc = subprocess.Popen(["ssh", "-o", "StrictHostKeyChecking=no", node, init_script],
+                                 shell=False,
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE)
+
+        alloc_stdout = alloc.stdout.readlines()
+        alloc_stderr = alloc.stderr.readlines()
+        if (verbose):
+            print "alloc stdout:", alloc_stdout
+            print "alloc stderr:", alloc_stderr
+
+        error = False
+        for i in alloc_stderr:
+            if ('No route to host' in i or 'Connection refused' in i):
+                error = True
+
+        success = False
+        for i in alloc_stdout:
+            if ('Success on qpy init!' in i):
+                success = True
+
+        if (not (error) and success):
+            break
+
+        if (verbose):
+            print "Waiting node initialization: " + node
+
+        sleep( 10)
+
     
+    if (verbose):
+        print 'Node ' + node + ' allocated.'
+
     return (job_id, node)
 
 
@@ -59,11 +99,16 @@ def node_dealloc( node_id, alloc_id):
                                shell=False,
                                stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE)
-    print "node_dealloc stdout: ", dealloc.stdout.readlines()
-    print "node_dealloc stderr: ", dealloc.stderr.readlines()
+
+    if (verbose):
+        print "dealloc stdout:", dealloc.stdout.readlines()
+        print "dealloc stderr:", dealloc.stderr.readlines()
 
     command = 'scancel ' + alloc_id
     dealloc = subprocess.call( command, shell=True)
+
+    if (verbose):
+        print 'Node ' + node_id + ' deallocated.'
 
 # Check output
 #
@@ -98,11 +143,12 @@ class job_send( threading.Thread):
         threading.Thread.__init__( self)
         self.node = node
         self.job = job
+        self.status = 'running'
         self.jobID = jobID
         self.err_msg = ''
 
     def run( self):
-        command = 'source ~/.bash_profile; cd ' + self.job[1] + '; ' + self.job[0]
+        command = 'echo qpy-jobID ' + str( self.jobID) + '; source ~/.bash_profile; cd ' + self.job[1] + '; ' + self.job[0]
         ssh = subprocess.Popen(["ssh", self.node, command],
                                shell=False,
                                stdout=subprocess.PIPE,
@@ -129,8 +175,12 @@ class node_connection( threading.Thread):
         threading.Thread.__init__( self)
 
         new_node = node_alloc()
-        self.alloc_id = new_node[0]
-        self.node_id = new_node[1]
+        try:
+            self.alloc_id = new_node[0]
+            self.node_id = new_node[1]
+        except:
+            self.alloc_id = None
+            self.node_id = None
 
         self.max_jobs = max_jobs
         self.queue = Queue()
@@ -156,8 +206,11 @@ class node_connection( threading.Thread):
                 
             sleep(1)
 
-        node_dealloc( self.node_id, self.alloc_id)
-        print "Node " + str( self.node_id) + ' done.'
+        if ( self.node_id != None):
+            node_dealloc( self.node_id, self.alloc_id)
+        
+        if (verbose):
+            print 'Node ' + str( self.node_id) + ' done.'
             
 
 # Control jobs subimission
@@ -171,11 +224,12 @@ class submission_control( threading.Thread):
         self.max_nodes = 3
         self.max_jobs_default = 20
         self.jobs_queue = Queue()
-        self.queue_lock = threading.RLock()
+        self.jobs_queue_lock = threading.RLock()
         self.jobs_done = []
         self.jobs_done_lock = threading.RLock()
 
     def run( self):
+        skip_job_sub = 0
         while self.live:
             
             # Check finished jobs
@@ -183,44 +237,80 @@ class submission_control( threading.Thread):
                 node_c.jobs_lock.acquire()
                 for running_job in node_c.jobs:
                     if (not (running_job.is_alive())):
+                        if (running_job.status == 'running'):
+                            running_job.status = 'normal'
                         self.jobs_done_lock.acquire()
-                        self.jobs_done.append(running_job)
+                        self.jobs_done.append( running_job)
                         self.jobs_done_lock.release()
-                        node_c.jobs.remove(running_job)
+                        node_c.jobs.remove( running_job)
+                        skip_job_sub = 0
                 node_c.jobs_lock.release()
 
             # Dealloc the non-used node
             for node_c in self.node_list:
+                node_c.jobs_lock.acquire()
                 if (not( node_c.jobs)):
                     node_c.queue.put( 'kill')
                     self.node_list.remove( node_c)
+                node_c.jobs_lock.release()
 
             # Send a job, if there is space
-            self.queue_lock.acquire()
-            if (not( self.jobs_queue.empty())):
-                best_free = 0
-                best_node = None
-                for node_c in self.node_list:
-                    free = node_c.max_jobs - len(node_c.jobs)
-                    if (free > best_free):
-                        best_node = node_c
-                        best_free = free
-                if (best_node == None and len( self.node_list) < self.max_nodes):
-                    best_node = node_connection( self.max_jobs_default)
-                    best_node.start()
-                    sub_ctrl.node_list.append( best_node)
-                if (best_node != None):
-                    best_node.queue.put( self.jobs_queue.get())
+            if (skip_job_sub <= 0):
+                self.jobs_queue_lock.acquire()
+                put_a_job = not( self.jobs_queue.empty())
+                self.jobs_queue_lock.release()
+                if (put_a_job):
+                    best_free = 0
+                    best_node = None
+                    for node_c in self.node_list:
+                        node_c.jobs_lock.acquire()
+                        free = node_c.max_jobs - len(node_c.jobs)
+                        node_c.jobs_lock.release()
+                        if (free > best_free):
+                            best_node = node_c
+                            best_free = free
+                    if (best_node == None and len( self.node_list) < self.max_nodes):
+                        best_node = node_connection( self.max_jobs_default)
+                        if (best_node.node_id):
+                            best_node.start()
+                            sub_ctrl.node_list.append( best_node)
+                        else:
+                            best_node.start()
+                            best_node.queue.put( 'kill')
+                            best_node = None
+                            skip_job_sub = 100
+                    if (best_node != None):
+                        if (verbose):
+                            print "submission control: putting job"
+                        self.jobs_queue_lock.acquire()
+                        best_node.queue.put( self.jobs_queue.get())
+                        self.jobs_queue_lock.release()
+            else:
+                skip_job_sub = skip_job_sub - 1
+                if (verbose):
+                    print "Skipping job submission: " + str( skip_job_sub)
 
-            self.queue_lock.release()
+            sleep( 1)
 
-            sleep(1)
+# To sort by jobID in format_jobs
+def get_jobID_to_sort( l):
+    return l[0]
 
 # formating a list of jobs
-def format_jobs(jobs_list):
-    jobs = ''
+def format_jobs( jobs_list):
+
+    list_tmp = []
     for j in jobs_list:
-        jobs += str( j.jobID) + ':' + j.job[0] + ' (wd: ' + j.job[1] + ')\n';
+        if (j.status == 'running'):
+            list_tmp.append( (j.jobID, str( j.jobID) + ':' + j.job[0] + ' (wd: ' + j.job[1] + ')\n'))
+        else:
+            list_tmp.append( (j.jobID, str( j.jobID) + ' (' + j.status + '):' + j.job[0] + ' (wd: ' + j.job[1] + ')\n'))
+
+    list_tmp.sort( key = get_jobID_to_sort)
+
+    jobs = ''
+    for i in list_tmp:
+        jobs += i[1];
 
     return jobs
 
@@ -229,22 +319,38 @@ def get_cur_jobs( sub_ctrl):
     nd_jobs = ''
     cur_jobs = ''
 
-    sub_ctrl.queue_lock.acquire()
+    sub_ctrl.jobs_queue_lock.acquire()
     n_q = sub_ctrl.jobs_queue.qsize()
     for i in range( 0, n_q):
         j = sub_ctrl.jobs_queue.get()
         nd_jobs += str( j[0]) + ':' + j[2][0] + ' (wd: ' + j[2][1] + ')\n';
         sub_ctrl.jobs_queue.put( j)
-    sub_ctrl.queue_lock.release()
+    sub_ctrl.jobs_queue_lock.release()
 
     if (nd_jobs):
         cur_jobs += 'Queue' + ':\n' + nd_jobs
 
     for node in sub_ctrl.node_list:
-        nd_jobs = format_jobs(node.jobs)
+        nd_jobs = format_jobs( node.jobs)
         if (nd_jobs):
             cur_jobs += node.node_id + ':\n' + nd_jobs
     return cur_jobs
+
+
+
+# Kill job <ID> on node <node>
+def kill_a_job( j):
+    kill_command = 'source ~/.bash_profile; qpy --jobkill ' + str( j.jobID)
+    kill_p = subprocess.Popen(["ssh", "-o", "StrictHostKeyChecking=no", j.node, kill_command],
+                              shell=False,
+                              stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE)
+    j.status = 'killed'
+    if (verbose):
+        print "Killing job " + str( j.jobID) + ' on node ' + j.node
+        print "kill_stdout: ", kill_p.stdout.readlines()
+        print "kill_stderr: ", kill_p.stderr.readlines()
+
 
 
 # Get job from client and send it for submission
@@ -264,17 +370,18 @@ def get_cur_jobs( sub_ctrl):
 #   job is a list with the job informations
 #
 def handle_client( sub_ctrl, jobId):
-    print "queue_master_driver: ready"
+    if (verbose):
+        print "queue_master_driver: ready"
     server_master = Listener(( "localhost", port), authkey = 'qwerty')
     while True:
         client_master = server_master.accept()
-        (job_type, job) = client_master.recv()
+        (job_type, arguments) = client_master.recv()
 
         # Send a job
         if (job_type == 1):
-            sub_ctrl.queue_lock.acquire()
-            sub_ctrl.jobs_queue.put( (jobId, job_type, job))
-            sub_ctrl.queue_lock.release()
+            sub_ctrl.jobs_queue_lock.acquire()
+            sub_ctrl.jobs_queue.put( (jobId, job_type, arguments))
+            sub_ctrl.jobs_queue_lock.release()
             jobId += 1
             client_master.send( 'Job received.\n')
 
@@ -284,9 +391,43 @@ def handle_client( sub_ctrl, jobId):
 
         # Kill a job
         elif (job_type == 3):
-#            for i in job:
-#                kill i
-            client_master.send( 'Killing job: not implemented.\n')
+
+            killall = False
+            if ('all' == arguments):
+                killall = True
+
+            n_kill_queue = 0
+            sub_ctrl.jobs_queue_lock.acquire()
+            sub_ctrl.jobs_done_lock.acquire()
+            n_q = sub_ctrl.jobs_queue.qsize()
+            for i in range( 0, n_q):
+                j = sub_ctrl.jobs_queue.get()
+                if (not( killall) and not( j[0] in arguments)):
+                    sub_ctrl.jobs_queue.put( j)
+                else:
+                    n_kill_queue += 1
+            sub_ctrl.jobs_queue_lock.release()
+            sub_ctrl.jobs_done_lock.release()
+
+            n_kill_run = 0
+            if (killall):
+                for n in sub_ctrl.node_list:
+                    for j in n.jobs:
+                        kill_a_job( j)
+                        n_kill_run += 1
+            else:
+                for i in arguments:
+                    job_to_kill = ''
+                    for n in sub_ctrl.node_list:
+                        for j in n.jobs:
+                            if (j.jobID == i):
+                                job_to_kill = j
+                                break
+                    if (job_to_kill):
+                        kill_a_job( job_to_kill)
+                        n_kill_run += 1
+
+            client_master.send( str(n_kill_queue) + ' jobs removed from the queue and ' + str(n_kill_run) + ' jobs killed.\n')
 
         # Finish the master execution
         if (job_type == 4):
@@ -299,15 +440,15 @@ def handle_client( sub_ctrl, jobId):
 
         # Change maximum number of nodes
         elif (job_type == 5):
-            sub_ctrl.max_nodes = job
-            client_master.send( 'Maximum number of nodes changed to ' + str( job) + '.\n')
+            sub_ctrl.max_nodes = arguments
+            client_master.send( 'Maximum number of nodes changed to ' + str( arguments) + '.\n')
 
         # Change maximum number of jobs
         elif (job_type == 6):
-            sub_ctrl.max_jobs_default = job
+            sub_ctrl.max_jobs_default = arguments
             for n in sub_ctrl.node_list:
                 n.max_jobs = sub_ctrl.max_jobs_default
-            client_master.send( 'Maximum number of jobs changed to ' + str( job) + '.\n')
+            client_master.send( 'Maximum number of jobs changed to ' + str( arguments) + '.\n')
 
         # Show current configuration
         elif (job_type == 7):
@@ -316,17 +457,23 @@ def handle_client( sub_ctrl, jobId):
             cur_conf += 'max_nodes = ' + str( sub_ctrl.max_nodes) + '\n'
             client_master.send( cur_conf)
 
-        # make a list of finished jobs
+        # make a list of finished jobs or remove them from the list
         elif (job_type == 8):
-            if (job):
+            if (arguments):
+                n_jobs = 0
                 sub_ctrl.jobs_done_lock.acquire()
-                for i in job:
-                    for j in sub_ctrl.jobs_done:
-                        if (i == j.jobID):
-                            sub_ctrl.jobs_done.remove(j)
-                            break 
-                sub_ctrl.jobs_done_lock.release()
-                client_master.send( str(len(job)) + ' jobs are removed \n')
+                if (arguments == 'all'):
+                    n_jobs = len( sub_ctrl.jobs_done)
+                    sub_ctrl.jobs_done = []
+                else:
+                    for i in arguments:
+                        for j in sub_ctrl.jobs_done:
+                            if (i == j.jobID):
+                                sub_ctrl.jobs_done.remove(j)
+                                n_jobs += 1
+                                break 
+                    sub_ctrl.jobs_done_lock.release()
+                client_master.send( str( n_jobs) + ' finished jobs are removed \n')
             else:
                 cur_jobs = ''
                 sub_ctrl.jobs_done_lock.acquire()
@@ -343,4 +490,5 @@ def handle_client( sub_ctrl, jobId):
 sub_ctrl = submission_control()
 sub_ctrl.start()
 handle_client( sub_ctrl, 1)
-print "queue_master_driver: done!"
+if (verbose):
+    print "queue_master_driver: done!"
