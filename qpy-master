@@ -12,22 +12,43 @@ import subprocess
 import sys
 import os
 import random
+from optparse import OptionParser
 
-verbose = False
+parser = OptionParser()
+parser.add_option("-v", "--verbose",
+                  action="store_true", dest="verbose", default=False,
+                  help="print messages")
 
-# Improve with a parser
-if (len( sys.argv) > 1):
-    if (sys.argv[1] == '--verbose'):
-        verbose = True
+parser.add_option("-c", "--cluster",
+                  dest="cl",
+                  help="the cluster (linux4 and hlrs available)")
+
+
+(options, args) = parser.parse_args()
+
+verbose = options.verbose
+cluster = options.cl
+
+if (not (cluster)):
+    sys.exit( 'give the --cluster option')
+
+if (cluster != "hlrs" and cluster != "linux4"):
+    sys.exit( 'cluster must be hlrs or linux4')
+
+dyn_nodes = cluster == "hlrs"
+
+max_nodes_default = -1
+if (dyn_nodes):
+    max_nodes_default = 3
 
 
 home_dir = os.environ['HOME']
-queue_dir = home_dir + '/Codes/queue_hlrs'
+qpy_dir = os.path.dirname(os.path.abspath(__file__))
 
 random.seed()
 #port = 16000# random.randint( 10000, 20000 )
 port = random.randint( 10000, 20000 )
-f_port = open(queue_dir + '/.port', 'w', 0)
+f_port = open( qpy_dir + '/.port', 'w', 0)
 f_port.write( str( port))
 f_port.close()
 
@@ -171,10 +192,15 @@ class job_send( threading.Thread):
 #
 class node_connection( threading.Thread):
 
-    def __init__( self, max_jobs):
+    def __init__( self, max_jobs, *args):
         threading.Thread.__init__( self)
 
-        new_node = node_alloc()
+        if (dyn_nodes):
+            new_node = node_alloc()
+        else:
+            if ( not(args)):
+                sys.exit( 'Internal error: no arguments in node allocation')
+            new_node = ( None, args[0])
         try:
             self.alloc_id = new_node[0]
             self.node_id = new_node[1]
@@ -192,6 +218,8 @@ class node_connection( threading.Thread):
 
         while True:
             new_job = self.queue.get()
+            if (verbose):
+                print 'Node ' + str( self.node_id) + ': new job.'
 
             if ( isinstance( new_job, str)):
                 if ( new_job == 'kill'):
@@ -206,7 +234,7 @@ class node_connection( threading.Thread):
                 
             sleep(1)
 
-        if ( self.node_id != None):
+        if ( self.alloc_id != None):
             node_dealloc( self.node_id, self.alloc_id)
         
         if (verbose):
@@ -221,7 +249,7 @@ class submission_control( threading.Thread):
         threading.Thread.__init__( self)
         self.live = True
         self.node_list = []
-        self.max_nodes = 3
+        self.max_nodes = max_nodes_default
         self.max_jobs_default = 20
         self.jobs_queue = Queue()
         self.jobs_queue_lock = threading.RLock()
@@ -247,12 +275,13 @@ class submission_control( threading.Thread):
                 node_c.jobs_lock.release()
 
             # Dealloc the non-used node
-            for node_c in self.node_list:
-                node_c.jobs_lock.acquire()
-                if (not( node_c.jobs)):
-                    node_c.queue.put( 'kill')
-                    self.node_list.remove( node_c)
-                node_c.jobs_lock.release()
+            if (dyn_nodes):
+                for node_c in self.node_list:
+                    node_c.jobs_lock.acquire()
+                    if (not( node_c.jobs)):
+                        node_c.queue.put( 'kill')
+                        self.node_list.remove( node_c)
+                    node_c.jobs_lock.release()
 
             # Send a job, if there is space
             if (skip_job_sub <= 0):
@@ -440,8 +469,21 @@ def handle_client( sub_ctrl, jobId):
 
         # Change maximum number of nodes
         elif (job_type == 5):
-            sub_ctrl.max_nodes = arguments
-            client_master.send( 'Maximum number of nodes changed to ' + str( arguments) + '.\n')
+            if (dyn_nodes):
+                sub_ctrl.max_nodes = arguments
+                client_master.send( 'Maximum number of nodes changed to ' + str( arguments) + '.\n')
+            else:
+                if (arguments):
+                    new_node = node_connection( sub_ctrl.max_jobs_default, arguments)
+                    new_node.start()
+                    sub_ctrl.node_list.append( new_node)
+                    client_master.send( 'Node ' + arguments + ' added.\n')
+                else:
+                    cur_nodes = ''
+                    for node in sub_ctrl.node_list:
+                        cur_nodes += node.node_id + ' ' + str( len( node.jobs)) + '/' + str( node.max_jobs) + '\n'
+                    client_master.send( cur_nodes)
+
 
         # Change maximum number of jobs
         elif (job_type == 6):
