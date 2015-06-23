@@ -8,11 +8,15 @@ import os
 import sys
 import subprocess
 import re
+import threading
 
 home_dir = os.environ['HOME']
 qpy_dir = os.path.dirname(os.path.abspath(__file__))
 user = os.environ['USER']
 scr_dir = '/scratch/'+ user
+
+port_file = qpy_dir + '/.port'
+tutorial_file = qpy_dir + '/tutorial'
 
 # Return a list with all children and grand-children from pid
 # The dict parent_of shows the parents of all processes
@@ -30,7 +34,7 @@ def get_all_children( pid, parent_of):
 # '--options' are to be called only by qpy-master, not by the users
 if (len( sys.argv) > 1):
     if (sys.argv[1] == '--alloc'):
-        sleep(1814400)
+        sleep( float( sys.argv[2]))
         exit()
 
     if (sys.argv[1] == '--init'):
@@ -62,7 +66,7 @@ if (len( sys.argv) > 1):
         for l in ps_out:
             new_pid = l.split()
             parents[new_pid[1]] = new_pid[2]
-            re_res = re.search('qpy-jobID ' + job_id + ';', l)
+            re_res = re.search('export QPY_JOB_ID=' + job_id + ';', l)
             if (re_res):
                 grand_PID = new_pid[1]
 
@@ -102,21 +106,17 @@ def string_to_int_list( X):
 
     return res
 
-f_port = open( qpy_dir + '/.port', 'r')
-port = int( f_port.read())
-f_port.close()
+job_status = ['queue', 'running', 'done', 'killed', 'undone']
 
-address = 'localhost'
-key = 'qwerty'
-
-keywords={'sub':   (1, 'submit a job. Arguments: the job command'),
-          'check': (2, 'check the current jobs. No arguments'),
-          'kill':  (3, 'kill jobs. Argument: the jobs id'),
-          'finish':(4, 'finish the master execution. No arguments'),
-          'nodes': (5, 'change the maximum number of nodes. Argument: the desired value'),
-          'njobs': (6, 'change the maximum number of jobs per node. Argument: the desired value'),
-          'config':(7, 'show the current configuration. No arguments'),
-          'done':  (8, 'show the already finished jobs. No arguments')
+keywords={'sub':     (1, 'submit a job. Arguments: the job command'),
+          'check':   (2, 'check the jobs. Arguments: the desired job status'),
+          'kill':    (3, 'kill jobs. Argument: the jobs id'),
+          'finish':  (4, 'finish the master execution. No arguments'),
+          'nodes':   (5, 'change the maximum number of nodes. Argument: the desired value'),
+          'maxJobs': (6, 'change the maximum number of jobs per node. Argument: the desired value'),
+          'config':  (7, 'show the current configuration. No arguments'),
+          'clean':   (8, 'remove finished jobs from the list. Arguments: the jobs id'),
+          'tutorial':(9, 'run the qpy tutorial. Arguments: optional: a qpy option')
           }
 
 
@@ -128,7 +128,7 @@ except:
         if (str_len < len( opt)):
             str_len = len( opt)
     format_spc = '{0:' + str( str_len+1) + 's}'
-    usage_msg =  'Usage: ' + sys.argv[0] +  ' <option> [<argumnts>].\n'
+    usage_msg =  'Usage: ' + sys.argv[0] +  ' <option> [<arguments>].\n'
     usage_msg += 'Options:'
     for opt in keywords:
         usage_msg += '\n  ' + format_spc.format( opt+':') + ' ' + keywords[opt][1]
@@ -145,33 +145,96 @@ if (option == 1):
         job += ' ' + i
     arguments = [job, os.getcwd()]
 
-# Change max_nodes or max_jobs
-elif (option == 5 or option == 6):
+# Check jobs
+if (option == 2):
+    arguments = {}
+    for x in sys.argv[2:]:
+        if x in job_status:
+            if ('status' in arguments):
+                arguments['status'].append( x)
+            else:
+                arguments['status'] = [x]
+        else:
+            sys.exit( 'Unknown pattern for checking jobs: ' + x)
+
+# Change max_nodes, add/remove nodes
+elif (option == 5):
     try:
         arguments = int( sys.argv[2])
     except:
         try:
-            arguments = sys.argv[2]
+            arguments = sys.argv[2:]
         except:
             arguments = ()
 
-# Kill jobs or remove them from the done list
+# Change max_jobs
+elif (option == 6):
+    try:
+        arguments = [int( sys.argv[2])]
+    except:
+        try:
+            sys.exit( 'First argument for maxJobs must be an integer: ' + sys.argv[2])
+        except:
+            sys.exit( 'maxJobs require an integer as argument.')
+    arguments.extend( sys.argv[3:])
+
+# Kill jobs or clean list
 elif (option == 3 or option == 8):
+    if option == 3:
+        status_bound = (0,2)
+    else:
+        status_bound = (2,5)
     arguments = []
     for x in sys.argv[2:]:
         try:
             new_range = string_to_int_list( x)
             arguments.extend( new_range)
         except:
-            if (sys.argv[2] == 'all'):
-                arguments = 'all'
-                break
-            sys.exit( 'Range with wrong format: ' + x)
+            if (x == 'all' or x in job_status[status_bound[0]:status_bound[1]]):
+                arguments.append( x)
+            else:
+                sys.exit( 'Range with wrong format or invalid status: ' + x)
 
-    if (arguments != 'all'):
-        arguments = list( set( arguments))
+    arguments = list( set( arguments))
 
-master = Client( (address, port), authkey=key)
+# The qpy tutorial
+elif (option == 9):
+    command = 'less ' + tutorial_file
+    try:
+        subprocess.call( command, shell = True)
+    except:
+        sys.exit( 'Error when loading the tutorial.')
+    exit()
+
+try:
+    f = open( port_file, 'r')
+    port = int( f.read())
+    f.close()
+except:
+    sys.exit( 'Problem to get the port number. Are you sure that qpy-master is running?')
+
+address = 'localhost'
+key = 'qwerty'
+
+class try_connection( threading.Thread):
+    def __init__( self):
+        threading.Thread.__init__( self)
+        self.master = None
+    def run( self):
+        self.master = Client( (address, port), authkey=key)
+        
+M = try_connection()
+M.daemon = True
+M.start()
+n=0
+waiting = 60
+while (M.is_alive()):
+    n += 1
+    if (n == waiting):
+        sys.exit( 'Time for connection exceeded. Are you sure that qpy-master is running?')
+    sleep( 0.05)
+
+master = M.master
 master.send( (option, arguments))
 sys.stdout.write( master.recv())
 

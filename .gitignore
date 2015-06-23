@@ -1,1 +1,4 @@
 .port
+.current_nodes
+.known_nodes
+.next_jobID
