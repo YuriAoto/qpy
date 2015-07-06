@@ -50,6 +50,7 @@ if (cluster != "hlrs" and cluster != "linux4"):
 dyn_nodes = cluster == "hlrs"
 
 max_node_time = 1814400
+min_working_time = 600
 max_working_time = 604800
 
 max_nodes_default = -1
@@ -370,8 +371,9 @@ class submission_control( threading.Thread):
 
             # Dealloc the non-used node
             if (dyn_nodes):
+                cur_time = time()
                 for node in self.node_list:
-                    if (not( node.n_jobs)):
+                    if (not( node.n_jobs) and (cur_time - node.init_time) > min_working_time):
                         node.queue.put( 'kill')
                         self.node_list.remove( node)
 
@@ -733,6 +735,7 @@ def handle_client( sub_ctrl, jobId):
                 cur_conf += 'using dynamic node allocation\n'
                 cur_conf += 'max_nodes        = ' + str( sub_ctrl.max_nodes) + '\n'
                 cur_conf += 'max_node_time    = ' + str( max_node_time) + '\n'
+                cur_conf += 'min_working_time = ' + str( min_working_time) + '\n'
                 cur_conf += 'max_working_time = ' + str( max_working_time) + '\n'
 
             client_master.send( cur_conf)
