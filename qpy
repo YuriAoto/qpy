@@ -199,7 +199,19 @@ elif (option == 3 or option == 8):
 
 # The qpy tutorial
 elif (option == 9):
-    command = 'less ' + tutorial_file
+    
+    pattern = ''
+    for i in sys.argv[2:3]:
+        pattern += i
+    for i in sys.argv[3:]:
+        pattern += ' ' + i
+
+    if (pattern in keywords):
+        pattern = '--pattern "# ' + pattern + '"'
+    elif (pattern):
+        pattern = '--pattern "' + pattern + '"'
+
+    command = 'less '  + pattern + ' ' + tutorial_file
     try:
         subprocess.call( command, shell = True)
     except:

@@ -131,7 +131,17 @@ _qpy()
 		COMPREPLY=("${COMPREPLY[@]}" "${jobID}")
 	    fi
 	    compopt +o nospace
-            return 0;
+            return 0;;
+
+	tutorial)
+	    if [[ ${prev} == 'tutorial' ]] ; then
+		COMPREPLY=( $(compgen -W "${opts}" ${cur}) )
+		if [[ "x${cur}" == 'x' ]] ; then
+		    COMPREPLY=("${COMPREPLY[@]}" "<pattern>")
+		fi
+		compopt +o nospace
+		return 0;
+	    fi
 
     esac
 
