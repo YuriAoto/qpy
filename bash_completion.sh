@@ -14,8 +14,12 @@ _qpy()
 
     jobID="__job_ID__"
     newnode="__new_node__"
+    maxJ="__max_jobs__"
+    pattern="__pattern__"
+    noArg="__no_arguments__"
 
     keys_all="all"
+    keys_maxJob_default="maxJob_default"
     keys_status="queue running done killed undone"
     keys_unfinished="queue running"
     keys_finished="done killed undone"
@@ -39,7 +43,29 @@ _qpy()
 
 
     case ${job_kind} in
+
+	# ==========
+	finish)
+
+	    COMPREPLY=( $(compgen -W ": ${noArg}") )
+
+	    compopt +o nospace
+	    return 0;;
+
+	# ==========
+	kill)
+
+	    COMPREPLY=( $(compgen -W "${keys_all} ${keys_unfinished}" ${cur}) )
+	    if [[ "x${cur}" == 'x' ]] ; then
+		COMPREPLY=("${COMPREPLY[@]}" "${jobID}")
+	    fi
+
+	    compopt +o nospace
+            return 0;;
+
+	# ==========
 	sub)
+
 	    # an executable
 	    if [[ ${prev} == 'sub' ]] ; then
 		COMPREPLY=( $(compgen -c ${cur}) )
@@ -57,29 +83,23 @@ _qpy()
 		    [ -d "${COMPREPLY[$i]}" ] && COMPREPLY[$i]=${COMPREPLY[$i]}/
 		done
 	    fi
-	    return 0;;
-	
-	check)
-            COMPREPLY=( $(compgen -W "${keys_status}" ${cur}) )
-	    compopt +o nospace
-            return 0;;
 
-	kill)
-	    COMPREPLY=( $(compgen -W "${keys_all} ${keys_unfinished}" ${cur}) )
+	    return 0;;
+
+	# ==========
+	clean)
+
+	    COMPREPLY=( $(compgen -W "${keys_finished} all" ${cur}) )
 	    if [[ "x${cur}" == 'x' ]] ; then
 		COMPREPLY=("${COMPREPLY[@]}" "${jobID}")
 	    fi
+
 	    compopt +o nospace
             return 0;;
-	
-#	maxJobs) Doesn't work...
-#	    if [[ ${prev} == 'maxJobs' ]] ; then
-#		COMPREPLY=( $(compgen -W "<node> <n_jobs>" ${cur}) )
-#	    fi
-#            compopt +o nospace
-#            return 0;;
-    
+
+	# ==========
 	nodes)
+
 	    if [[ ${prev} == 'nodes' ]] ; then
 		COMPREPLY=( $(compgen -W "${opts_nodes}" ${cur}) )
 		compopt +o nospace
@@ -104,7 +124,16 @@ _qpy()
 		    fi
 		done
 
-		COMPREPLY=( $(compgen -W "${nodes} ${newnode}" ${cur}) )
+		if [[ -z "${nodes}" ]] ; then
+		    COMPREPLY=( $(compgen -W ": ${newnode}" ${cur}) )
+		else
+
+		    if [[ "x${cur}" == 'x' ]] ; then
+			COMPREPLY=( $(compgen -W "${nodes} ${newnode}" ${cur}) )
+		    else
+			COMPREPLY=( $(compgen -W "${nodes}" ${cur}) )
+		    fi
+		fi
 
 	    fi
 
@@ -125,23 +154,66 @@ _qpy()
 	    compopt +o nospace
 	    return 0;;
 
-	clean)
-	    COMPREPLY=( $(compgen -W "${keys_finished} all" ${cur}) )
-	    if [[ "x${cur}" == 'x' ]] ; then
-		COMPREPLY=("${COMPREPLY[@]}" "${jobID}")
-	    fi
+	# ==========
+	config)
+
+	    COMPREPLY=( $(compgen -W ": ${noArg}") )
+
+	    compopt +o nospace
+	    return 0;;
+	
+	# ==========
+	check)
+
+            COMPREPLY=( $(compgen -W "${keys_status}" ${cur}) )
+
 	    compopt +o nospace
             return 0;;
 
-	tutorial)
-	    if [[ ${prev} == 'tutorial' ]] ; then
-		COMPREPLY=( $(compgen -W "${opts}" ${cur}) )
-		if [[ "x${cur}" == 'x' ]] ; then
-		    COMPREPLY=("${COMPREPLY[@]}" "<pattern>")
+	# ==========
+	maxJobs)
+	    if [[ ${prev} == 'maxJobs' ]] ; then
+
+		COMPREPLY=( $(compgen -W ": 0 1 2 3 ${maxJ}") )
+
+	    else
+
+		nodes=''
+		for n in `cat $file_curnodes`
+		do
+		    nodes="$nodes $n"
+		done
+
+		if [[ -n "${nodes}" ]] ; then
+		    COMPREPLY=( $(compgen -W "${nodes} ${keys_maxJob_default}" ${cur}) )
 		fi
-		compopt +o nospace
-		return 0;
+
 	    fi
+
+	    compopt +o nospace
+	    return 0;;
+
+	# ==========
+	tutorial)
+
+	    if [[ ${prev} == 'tutorial' ]] ; then
+
+		COMPREPLY=( $(compgen -W "${opts}" ${cur}) )
+
+		if [[ "x${cur}" == 'x' ]] ; then
+		    COMPREPLY=("${COMPREPLY[@]}" "${pattern}")
+		else
+		    if [[ -z "${COMPREPLY}" ]] ; then
+			COMPREPLY=( $(compgen -W ": ${pattern}") )
+		    fi
+		fi
+	    else
+		COMPREPLY=( $(compgen -W ": ${pattern}") )
+	    fi
+	    
+	    compopt +o nospace
+	    return 0;
+
 
     esac
 
