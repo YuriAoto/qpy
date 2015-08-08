@@ -29,6 +29,79 @@ _qpy()
     file_curnodes="${qpy_dir}/.current_nodes"
     file_knownnodes="${qpy_dir}/.known_nodes"
 
+# Interactive documentation 
+    question_ASCII=$(printf "%d" "'?")
+
+    if [[ ${COMP_TYPE} == ${question_ASCII} && ${cur} == '?' ]] ; then
+
+	echo 
+
+	if [[ ${prev} == 'qpy' ]] ; then
+	
+	    echo "The first argument must be an option."
+	else
+
+	    if [[ ${COMP_WORDS[@]} > 2 ]]
+	    then
+		job_kind="${COMP_WORDS[1]}"
+	    fi
+	    
+	    echo ${job_kind}:
+
+	    case ${job_kind} in
+		
+                # ==========
+ 		finish)
+		    echo "Finishes the execution of qpy-master."
+		    ;;
+                # ==========
+ 		kill)
+		    echo "Kill the required jobs."
+		    ;;
+                # ==========
+ 		sub)
+		    echo "Submit a job."
+		    ;;
+                # ==========
+ 		clean)
+		    echo "Remove finished jobs jobs from the list."
+		    ;;
+                # ==========
+ 		nodes)
+		    echo "Show information about, add or remove nodes. "
+		    ;;
+                # ==========
+ 		config)
+		    echo "Show current configuration for qpy."
+		    ;;
+                # ==========
+ 		check)
+		    echo "Give a list of (required) jobs."
+		    ;;
+                # ==========
+ 		maxJobs)
+		    echo "Show/change maximum jobs per node."
+		    ;;
+                # ==========
+ 		tutorial)
+		    echo "Open the tutorial."
+		    ;;
+		*)
+		    echo "Unknown option."
+		    ;;
+	    esac
+	fi
+	
+	echo "---"
+	echo "For a brief description of the options call qpy without options."
+	echo "For more information try the turorial." | tr -d '\n'
+
+	COMPREPLY=( $(compgen -W "---") )
+        return 0
+    fi
+
+
+
     # The main option
     if [[ ${prev} == 'qpy' ]] ; then
         COMPREPLY=( $(compgen -W "${opts}" ${cur}) )
