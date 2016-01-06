@@ -19,6 +19,10 @@ parser.add_option("-v", "--verbose",
                   action="store_true", dest="verbose", default=False,
                   help="print messages")
 
+parser.add_option("-m", "--multiuser",
+                  action="store_true", dest="multiuser", default=False,
+                  help="set to multiuser behaviour")
+
 parser.add_option("-c", "--cluster",
                   dest="cl",
                   help="the cluster (linux4 and hlrs available)")
@@ -27,9 +31,11 @@ parser.add_option("-i", "--iniJobID",
                   dest="iniJobID",
                   help="the first jobID to be used")
 
+
 (options, args) = parser.parse_args()
 
 verbose = options.verbose
+multiuser = options.multiuser
 cluster = options.cl
 ini_job_ID = options.iniJobID
 
@@ -47,6 +53,9 @@ if (not (cluster)):
 if (cluster != "hlrs" and cluster != "linux4"):
     sys.exit( 'Cluster must be hlrs or linux4.')
 
+if (multiuser and cluster == "hlrs"):
+    sys.exit( 'Multiuser not available on hlrs.')
+
 dyn_nodes = cluster == "hlrs"
 
 max_node_time = 1814400
@@ -59,6 +68,7 @@ if (dyn_nodes):
 
 home_dir = os.environ['HOME']
 qpy_dir = os.path.dirname( os.path.abspath( __file__))
+user = os.environ['USER']
 
 source_these_files = ['~/.bash_profile']
 
@@ -66,6 +76,11 @@ port_file = qpy_dir + '/.port'
 cur_nodes_file = qpy_dir + '/.current_nodes'
 known_nodes_file = qpy_dir + '/.known_nodes'
 jobID_file = qpy_dir + '/.next_jobID'
+
+# multiuser connection variables
+multiuser_address = 'localhost'
+multiuser_key = 'zxcvb'
+multiuser_port = 9999
 
 if (not( os.path.isfile( known_nodes_file))):
     f = open( known_nodes_file, 'w')
@@ -84,6 +99,60 @@ port = random.randint( 10000, 20000 )
 f = open( port_file, 'w', 0)
 f.write( str( port))
 f.close()
+
+# Attempt to connect to qpy-multiuser
+class try_multiuser_connection( threading.Thread):
+    def __init__( self):
+        threading.Thread.__init__( self)
+        self.master = None
+    def run( self):
+        self.master = Client( (multiuser_address, multiuser_port), authkey=multiuser_key)
+
+
+# Send arguments to qpy-multiuser
+def send_multiuser_arguments( option, arguments):
+
+    M = try_multiuser_connection()
+    M.daemon = True
+    M.start()
+    n = 0
+    waiting = 60
+    while (M.is_alive()):
+        n += 1
+        if (n == waiting):
+            return None
+        sleep( 0.05)
+
+    master = M.master
+    master.send( (option, arguments))
+    msg_back = master.recv()
+    master.close()
+    return msg_back
+
+# add as new user to qpy-multiuser
+def add_user_to_multiuser( sub_ctrl):
+    if (verbose):
+        print "Adding user to qpy-multiuser."
+
+    msg = send_multiuser_arguments( 1, user)
+    if (msg == None):
+        sub_ctrl.live = False
+        os.remove( port_file)
+        sys.exit( 'Time for connection exceeded. Are you sure that qpy-multiuser is running?')
+
+    if (verbose):
+        print 'multiuser message:', msg
+        print 'Adding known nodes.'
+
+    f = open( msg[1], 'r')
+    for  line in f:
+        line_spl = line.split()
+        new_node = NODE( int(line_spl[1]), line_spl[0])
+        new_node.start()
+        sub_ctrl.node_list.append( new_node)
+    f.close()
+
+    return True
 
 # Check if the <command> sent by ssh to <address> return the <exp_out> message without errors
 def is_ssh_working( address, command, exp_out):
@@ -365,6 +434,15 @@ class submission_control( threading.Thread):
                     self.jobs.done.append( job)
                     job.node.n_jobs -= 1
                     skip_job_sub = 0
+
+                    if (multiuser):
+                        multiuser_args = [user, job.ID, job.node.node_id]
+                        msg_back = send_multiuser_arguments( 7, multiuser_args)
+                        if (msg_back == None):
+                            pass # MULTIUSER PROBLEM
+                        if (verbose):
+                            print 'multiuser messssage (finished jobs): ', msg_back
+
                 else:
                     i += 1
             self.jobs.lock.release()
@@ -383,30 +461,45 @@ class submission_control( threading.Thread):
                 queue_has_jobs = not( self.jobs.Q.empty())
                 self.jobs.Q_lock.release()
                 if (queue_has_jobs):
-                    best_free = 0
                     best_node = None
-                    cur_time = time()
-                    for node in self.node_list:
-                        free = node.max_jobs - node.n_jobs
-                        if (free > best_free):
-                            if (not( dyn_nodes) or (cur_time - node.init_time) < max_working_time):
+                    if (multiuser):
+                        multiuser_args = user
+                        msg_back = send_multiuser_arguments( 5, multiuser_args)
+                        if (msg_back == None):
+                            pass # MULTIUSER PROBLEM
+                        for node in self.node_list:
+                            if (msg_back == node.node_id):
                                 best_node = node
-                                best_free = free
-                    if (best_node == None and len( self.node_list) < self.max_nodes):
-                        best_node = NODE( self.max_jobs_default)
-                        if (best_node.node_id):
-                            best_node.start()
-                            sub_ctrl.node_list.append( best_node)
-                        else:
-                            best_node.start()
-                            best_node.queue.put( 'kill')
-                            best_node = None
-                            skip_job_sub = 100
+                                break
+                    else:
+                        best_free = 0
+                        cur_time = time()
+                        for node in self.node_list:
+                            free = node.max_jobs - node.n_jobs
+                            if (free > best_free):
+                                if (not( dyn_nodes) or (cur_time - node.init_time) < max_working_time):
+                                    best_node = node
+                                    best_free = free
+                        if (best_node == None and len( self.node_list) < self.max_nodes):
+                            best_node = NODE( self.max_jobs_default)
+                            if (best_node.node_id):
+                                best_node.start()
+                                sub_ctrl.node_list.append( best_node)
+                            else:
+                                best_node.start()
+                                best_node.queue.put( 'kill')
+                                best_node = None
+                                skip_job_sub = 100
                     if (best_node != None):
                         if (verbose):
                             print "submission_control: putting job"
                         self.jobs.Q_lock.acquire()
                         job = self.jobs.Q.get()
+                        if (multiuser):
+                            multiuser_args = [user, job.ID]
+                            msg_back = send_multiuser_arguments( 6, multiuser_args)
+                            if (msg_back == None):
+                                pass # MULTIUSER PROBLEM
                         best_node.queue.put( job)
                         best_node.n_jobs += 1
                         self.jobs.Q_lock.release()
@@ -414,6 +507,7 @@ class submission_control( threading.Thread):
                         self.jobs.queue.remove( job)
                         self.jobs.running.append( job)
                         self.jobs.lock.release()
+
             else:
                 skip_job_sub = skip_job_sub - 1
                 if (verbose):
@@ -460,6 +554,13 @@ def job_kill( job):
         print "job_kill stdout: ", kill_p.stdout.readlines()
         print "job_kill stderr: ", kill_p.stderr.readlines()
 
+    if (multiuser):
+        multiuser_args = [user, job.ID, job.node.node_id]
+        print multiuser_args
+        msg_back = send_multiuser_arguments( 7, multiuser_args)
+        if (msg_back == None):
+            pass # MULTIUSER PROBLEM
+
 
 # Get job from client and send it for submission
 # message from client must be:
@@ -484,6 +585,8 @@ def handle_client( sub_ctrl, jobId):
     while True:
         client_master = server_master.accept()
         (job_type, arguments) = client_master.recv()
+        if (verbose):
+            print "Received: " + str(job_type) + " -> " + str(arguments)
 
         # Send a job
         # arguments = the job info (see JOB.info)
@@ -595,7 +698,7 @@ def handle_client( sub_ctrl, jobId):
         #        or  a list: [<add/remove/forceRemove>, <'all'>, <node_1>, <node_2>, ]
         elif (job_type == 5):
             msg = ''
-            if (arguments):
+            if (arguments and not( multiuser)):
                 if (dyn_nodes):
                     try:
                         sub_ctrl.max_nodes = int( arguments)
@@ -679,6 +782,8 @@ def handle_client( sub_ctrl, jobId):
                     sub_ctrl.write_nodes()
                     
             else:
+                if (multiuser):
+                    msg = 'Nodes under multiuser control.\n'
                 for node in sub_ctrl.node_list:
                     msg += node.node_id + ' ' + str( node.n_jobs) + '/' + str( node.max_jobs) + '\n'
 
@@ -687,42 +792,44 @@ def handle_client( sub_ctrl, jobId):
         # Change maximum number of jobs
         # arguments: a list: [<new_maxJob>, <node_1>, <node_2>, ...]. Change all nodes if no nodes were given
         elif (job_type == 6):
-            new_maxJob = arguments[0]
-            if (len( arguments) == 1):
-                sub_ctrl.max_jobs_default = new_maxJob
-                for node in sub_ctrl.node_list:
-                    node.max_jobs = new_maxJob
-                msg = 'Maximum number of jobs changed to ' + str( new_maxJob) + '.\n'
+            if (multiuser):
+                msg = 'Nodes under multiuser control.\n'
             else:
-                default_changed = False
-                if ('maxJob_default' in arguments[1:]):
+                new_maxJob = arguments[0]
+                if (len( arguments) == 1):
                     sub_ctrl.max_jobs_default = new_maxJob
-                    default_changed = True                    
-                while ('maxJob_default' in arguments):
-                    arguments.remove( 'maxJob_default')
-                    
-                nodes_OK = []
-                nodes_BAD = []
-                for node_name in arguments[1:]:
-                    not_changed = True
                     for node in sub_ctrl.node_list:
-                        if (node.node_id == node_name):
-                            node.max_jobs = new_maxJob
-                            not_changed = False
-                            nodes_OK.append( node_name)
-                            break
-                    if (not_changed):
-                        nodes_BAD.append( node_name)
+                        node.max_jobs = new_maxJob
+                    msg = 'Maximum number of jobs changed to ' + str( new_maxJob) + '.\n'
+                else:
+                    default_changed = False
+                    if ('maxJob_default' in arguments[1:]):
+                        sub_ctrl.max_jobs_default = new_maxJob
+                        default_changed = True
+                    while ('maxJob_default' in arguments):
+                        arguments.remove( 'maxJob_default')
+                    nodes_OK = []
+                    nodes_BAD = []
+                    for node_name in arguments[1:]:
+                        not_changed = True
+                        for node in sub_ctrl.node_list:
+                            if (node.node_id == node_name):
+                                node.max_jobs = new_maxJob
+                                not_changed = False
+                                nodes_OK.append( node_name)
+                                break
+                        if (not_changed):
+                            nodes_BAD.append( node_name)
 
-                msg = ''
-                if (default_changed):
-                    msg += 'Defaut value for maximum number of jobs changed to ' + str( new_maxJob) + '.\n'
-                if (nodes_OK):
-                    plural = get_plural( ('node', 'nodes'), nodes_OK)
-                    msg += 'Maximum number of jobs for ' + plural[0] + ' ' + plural[1] + ' changed to ' + str( new_maxJob) + '.\n'
-                if (nodes_BAD):
-                    plural = get_plural( ('Node', 'Nodes'), nodes_BAD)
-                    msg += plural[0]+ ' ' + plural[1] + ' not found.\n'
+                    msg = ''
+                    if (default_changed):
+                        msg += 'Defaut value for maximum number of jobs changed to ' + str( new_maxJob) + '.\n'
+                    if (nodes_OK):
+                        plural = get_plural( ('node', 'nodes'), nodes_OK)
+                        msg += 'Maximum number of jobs for ' + plural[0] + ' ' + plural[1] + ' changed to ' + str( new_maxJob) + '.\n'
+                    if (nodes_BAD):
+                        plural = get_plural( ('Node', 'Nodes'), nodes_BAD)
+                        msg += plural[0]+ ' ' + plural[1] + ' not found.\n'
 
             client_master.send( msg)
 
@@ -737,6 +844,8 @@ def handle_client( sub_ctrl, jobId):
                 cur_conf += 'max_node_time    = ' + str( max_node_time) + '\n'
                 cur_conf += 'min_working_time = ' + str( min_working_time) + '\n'
                 cur_conf += 'max_working_time = ' + str( max_working_time) + '\n'
+            if (multiuser):
+                cur_conf += 'Nodes under multiuser control.\n'
 
             client_master.send( cur_conf)
 
@@ -782,6 +891,10 @@ if (ini_job_ID == None):
 
 sub_ctrl = submission_control()
 sub_ctrl.start()
+
+if (multiuser):
+    add_user_to_multiuser( sub_ctrl)
+
 handle_client( sub_ctrl, ini_job_ID)
 os.remove( port_file)
 
