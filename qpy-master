@@ -110,9 +110,7 @@ class kill_multiuser_connection( threading.Thread):
         self.server = None
     def run( self):
         self.server = Listener(( multiuser_address, multiuser_port), authkey = multiuser_key)
-        print "a"
         client = self.server.accept()
-        print "b"
 
 # Attempt to connect to qpy-multiuser
 class try_multiuser_connection( threading.Thread):
@@ -120,9 +118,7 @@ class try_multiuser_connection( threading.Thread):
         threading.Thread.__init__( self)
         self.master = None
     def run( self):
-        print "c"
         self.master = Client( (multiuser_address, multiuser_port), authkey=multiuser_key)
-        print "d"
 
 # Send arguments to qpy-multiuser
 def send_multiuser_arguments( option, arguments):
