@@ -6,37 +6,37 @@ Some general statements about the program
 
 How to initialize qpy-master
 
-Bla bla explanation
+qpy-master needs to be initialized before submitting any job using qpy. The command to initilize it is: 'qpy-master --cluster=' and the name of the cluster. qpy can only be used in the 'linux4' and 'hlrs' now. So use either of these two keywords for cluster. It is always best to make this command running in background. 
 
 -> Using qpy
 
-Bla bla explanation
+qpy is used to submit jobs from the main server (say linux4 and hlrs) and then the jobs are distributed to different nodes according the availability or the choices given by the user. For the time being, it can only handle jobs running in single processors. The distribution of jobs are different for linux4 and hlrs cluter. For linux 4, the submitted jobs are distributed to the defferent 'orpheus' nodes. The user, however, has to add the nodes and the number of cores the user wants to use on that particular node before submitting the first job. The user, on the other hand, does not have to add any nodes or corersponding number of cores while using hlrs cluster. qpy allot a node itself along with the avaliable cores in it whenever it needs to submit any new job. 
+
+The followings are the commands that are necessary to use qpy. While qoy-master is already running in the background, the user can user any of these commands as 'qpy [cmd]'
 
 # sub
 
-Submiting jobs...
-
-Bla bla this is a part of the tutorial
+Submit any script after the command 'qpy sub'. The output and the error file of running that particular script will be written in a single file 'job_[jodid].outerr'.
 
 # check
 
-Bla bla
+Check the status of all the submitted jobs. The command 'qpy check' gives the list of all jobs submitted along with the following information in this particular order: [jobid] [status] [submitted script] [working directory]. One can also check jobs of specific status which are: 'running', 'done', 'killed', 'undone' and 'queue' adding the keyword after 'qpy check'
 
 # kill
 
-Bla bla
+Kill a particular jobs using the command 'qpy kill [jobid]'. One can also kill several jobs by providing a list of jobid's or a range of jobid's separated by '-'. Kill 'all'/'running' jobs or jobs in 'queue' by replacing the [jobid] with these keywords. 
 
 # finish
 
-Bla bla
+If you feel like done using qpy or want to update the version and rerun it, please finish the existing qpy-master which is running in background using 'qpy finish'. If somehow the qpy-master crashe while using, please remove the '.port' file from the qpy directory before starting a new qpy session. 
 
 # nodes
 
-Bla bla
+Check all the nodes that are working and also the number of cores being used. For linux4, add or remove any node by adding the node after 'qpy nodes add/remove'.
 
 # maxJobs
 
-Bla bla
+
 
 # config
 
