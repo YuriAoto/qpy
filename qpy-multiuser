@@ -1,0 +1,263 @@
+#!/usr/bin/python
+# qpy - control the nodes distribution for several users
+#
+# 26 December 2015 - Pradipta and Yuri
+# 06 January 2016 - Pradipta and Yuri
+from multiprocessing.connection import Client
+from multiprocessing.connection import Listener
+from time import sleep
+import os
+import sys
+import subprocess
+import re
+import threading
+import math
+from optparse import OptionParser
+
+
+# Important variables
+known_nodes_file = '/home/linux4_i2/aoto/Codes/qpy_multiuser/known_nodes'
+allowed_users_file = '/home/linux4_i2/aoto/Codes/qpy_multiuser/allowed_users'
+
+allowed_users = []
+
+nodes = {}
+users = {}
+N_cores = 0
+N_jobs  = 0
+
+multiuser_address = 'localhost'
+multiuser_key = 'zxcvb'
+multiuser_port = 9999
+
+parser = OptionParser()
+parser.add_option("-v", "--verbose",
+                  action="store_true", dest="verbose", default=False,
+                  help="print messages")
+(options, args) = parser.parse_args()
+verbose = options.verbose
+
+
+# Node informations
+class NODE():
+    def __init__( self, max_jobs):
+        self.max_jobs = max_jobs
+        self.n_jobs = 0
+
+
+# User informations
+class USER():
+    def __init__( self):
+        self.max_jobs = 0
+        self.cur_jobs = []
+        self.n_jobs = 0
+
+    def add_virtual_job( self):
+        global N_jobs
+        if (self.n_jobs >= self.max_jobs):
+            return 'No free cores for you.'
+        else:
+            for node, info in nodes.iteritems():
+                if (info.n_jobs < info.max_jobs):
+                    self.cur_jobs.append( [-1, node])
+                    self.n_jobs += 1
+                    info.n_jobs += 1
+                    N_jobs += 1
+                    return node
+        return 'No free cores in the system.'
+
+    def remove_job( self, jobID, node):
+        global N_jobs
+        if ([jobID, node] in self.cur_jobs):
+            self.cur_jobs.remove( [jobID, node])
+            self.n_jobs -= 1
+            nodes[node].n_jobs -= 1
+            N_jobs -= 1
+            return 'Job removed.'
+        return 'Job not found.'
+
+
+# Write known nodes in disk
+def write_nodes():
+    f = open( known_nodes_file, 'w')
+    for node in nodes:
+        f.write( node + ' ' + str( nodes[node].max_jobs) + '\n')
+    f.close()
+        
+
+# Distribute cores among users
+# def distribute_cores( rule):
+#     n_users = len( users)
+#     if (n_users == 0):
+#         return
+#     N_per_user = N_cores/n_users
+#     for user in users:
+#         users[user].max_jobs = N_per_user
+#     extra_cores = N_cores - N_per_user*n_users
+#     for user in users:
+#         if (extra_cores == 0):
+#             break
+#         users[user].max_jobs += int(math.copysign(1,extra_cores))
+#         extra_cores += math.copysign(1,-extra_cores)
+
+def distribute_cores( rule):
+    if (len( users) == 2):
+        users['aoto'].max_jobs = 3
+        users['samanta'].max_jobs = N_cores - 3
+
+
+# Get action from client and execute it
+# message from client must be:
+#   (action_type, arguments)
+# where:
+#   action_type is
+#       1 - add/configure user
+#       2 - add/configure node
+#       3 - finish qpy-multiuser
+#       4 - status
+#       5 - require a core
+#       6 - free a core
+#              
+#   the arguments are option dependent. See below
+#
+def handle_client( ):
+    global N_cores
+    if (verbose):
+        print "handle_client: ready"
+    server = Listener(( multiuser_address, multiuser_port), authkey = multiuser_key)
+    while True:
+        client = server.accept()
+        (action_type, arguments) = client.recv()
+        if (verbose):
+            print "Received: " + str(action_type) + " -> " + str(arguments)
+
+        # Add a user
+        # arguments = (user_name, [cur_jobs])
+        if (action_type == 1):
+            if (arguments[0] in users):
+                msg = 'User exists.'
+            else:
+                if (arguments[0] in allowed_users):
+                    new_user = USER()
+                    if (len(arguments) == 2):
+                        new_user.cur_jobs = arguments[1]
+                        new_user.n_jobs = len(arguments[1])
+                    users[arguments[0]] = new_user
+                    msg = 'User added.'
+                    distribute_cores( 'even')
+                else:
+                    msg = 'Not allowed user.'
+
+            client.send( (msg, known_nodes_file))
+
+        # Add a node
+        # arguments = (node_name, n_cores)
+        elif (action_type == 2):
+
+            if (arguments[0] in nodes):
+                msg = 'node exists.'
+            else:
+                new_node = NODE( arguments[1])
+                nodes[arguments[0]] = new_node
+                N_cores += arguments[1]
+                msg = 'Node added.'
+                distribute_cores( 'even')
+                write_nodes()
+
+            client.send( msg)
+
+        # finish qpy-multiuser
+        # no arguments
+        elif (action_type == 3):
+            client.send( 'Finishing qpy-multiuser.')
+            break
+
+        # show status
+        # no arguments
+        elif (action_type == 4):
+            Umsg = ''
+            for user, info in users.iteritems():
+                Umsg += '  ' + user + ': ' + str( info.n_jobs) + '/' + str( info.max_jobs) + '\n'
+                for job in info.cur_jobs:
+                    Umsg += '     ' + str( job) + '\n'
+            if (Umsg):
+                Umsg = 'Users:\n' + Umsg
+            else:
+                Umsg = 'No users.\n'
+
+            Nmsg = ''
+            for node, info in nodes.iteritems():
+                Nmsg += '  ' + node + ': ' + str( info.n_jobs) + '/' + str( info.max_jobs) + '\n'
+            if (Nmsg):
+                Nmsg = 'Nodes:\n' + Nmsg
+            else:
+                Nmsg = 'No nodes.\n'
+
+            msg = Umsg + Nmsg
+
+            msg = msg + 'Cores: ' + str(N_jobs) + '/' + str( N_cores)
+
+            client.send( msg)
+
+        # require a core
+        # arguments = user_name
+        elif (action_type == 5):
+            try:
+                alloc_status = users[arguments].add_virtual_job()
+                client.send( str( alloc_status))
+            except KeyError:
+                client.send( 'User does not exists.')
+            except:
+                client.send( 'Exception raised.')
+
+
+        # change ID
+        # arguments = (user_name, jobID)
+        elif (action_type == 6):
+            try:
+                last_job = users[arguments[0]].cur_jobs[-1]
+                if (last_job[0] != -1):
+                    client.send( 'Error, the last job does not have -1 as ID.')
+                else:
+                    last_job[0] = arguments[1]
+                    client.send( 'Done.')
+            except KeyError:
+                client.send( 'User does not exists.')
+            except IndexError:
+                client.send( 'There are no jobs.')
+
+
+        # free a core
+        # arguments = (user_name, jobID, node_name)
+        elif (action_type == 7):
+            try:
+                rem_status = users[arguments[0]].remove_job( arguments[1], arguments[2])
+                client.send( str( rem_status))
+            except KeyError:
+                client.send( 'User does not exists.')
+            except:
+                client.send( 'Exception raised.')
+
+        else:
+            client.send( 'Unknown option: ' + str( action_type))
+
+
+# Add known nodes
+if (os.path.isfile( known_nodes_file)):
+    f = open( known_nodes_file, 'r')
+    for line in f:
+        line_spl = line.split()
+        new_node = NODE( int(line_spl[1]))
+        nodes[line_spl[0]] = new_node
+        N_cores += new_node.max_jobs
+    f.close()
+
+# Add allowed users
+if (os.path.isfile( allowed_users_file)):
+    f = open( allowed_users_file, 'r')
+    for line in f:
+        allowed_users.append( line.strip())
+    f.close()
+
+
+handle_client()

@@ -1,0 +1,119 @@
+#!/usr/bin/python
+# qpy - user interface to the qpy-multiuser
+#
+# 31 Dec 2015 - Pradipta and Yuri
+from multiprocessing.connection import Client
+from time import sleep
+import os
+import sys
+import subprocess
+import re
+import threading
+
+# Important variables
+multiuser_address = 'localhost'
+multiuser_key = 'zxcvb'
+multiuser_port = 9999
+
+
+keywords={'user':       (1, 'add user. Arguments: user_name'),
+          'node':       (2, 'add/configure node. Arguments: node_name n_cores mem'),
+          'finish':     (3, 'finish the multiuser execution. No arguments'),
+          'status':     (4, 'show status. No arguments'),
+          'req_core':   (5, 'Require a core: Arguments: user_name'),
+          'mod_jobID':  (6, 'Modify the job ID for the last job: Arguments: user_name, job_ID'),
+          'remove_job': (7, 'Remove a job: Arguments: user_name, job_ID, node_name')
+          }
+
+
+try:
+    option = keywords[sys.argv[1]][0]
+except:
+    str_len = 0
+    for opt in keywords:
+        if (keywords[opt][0] < 0):
+            continue
+        if (str_len < len( opt)):
+            str_len = len( opt)
+    format_spc = '{0:' + str( str_len+1) + 's}'
+    usage_msg =  'Usage: ' + sys.argv[0] +  ' <option> [<arguments>].\n'
+    usage_msg += 'Options:'
+    for opt in keywords:
+        usage_msg += '\n  ' + format_spc.format( opt+':') + ' ' + keywords[opt][1]
+    sys.exit( usage_msg)
+
+
+# Get arguments, according to the option
+arguments = ()
+
+# User
+if (option == 1):
+    try:
+        arguments = (sys.argv[2], [])
+    except:
+        usage_msg =  'Usage: ' + sys.argv[0] +  ' user <user_name>.'
+        sys.exit( usage_msg)
+        
+
+# Node
+if (option == 2):
+    try:
+        arguments = [sys.argv[2], int( sys.argv[3])]
+    except:
+        usage_msg = 'Usage: ' + sys.argv[0] +  ' node <node_name> <n_codes>.'
+        sys.exit( usage_msg)
+
+
+# request core
+if (option == 5):
+    try:
+        arguments = sys.argv[2]
+    except:
+        usage_msg = 'Usage: ' + sys.argv[0] +  ' req_core <user_name>.'
+        sys.exit( usage_msg)
+
+# modify jobID
+if (option == 6):
+    try:
+        arguments = [sys.argv[2], int( sys.argv[3])]
+    except:
+        usage_msg = 'Usage: ' + sys.argv[0] +  ' mode_jobID <user_name> <job_ID>.'
+        sys.exit( usage_msg)
+
+
+# remove a job
+if (option == 7):
+    try:
+        arguments = [sys.argv[2], int( sys.argv[3]), sys.argv[4]]
+    except:
+        usage_msg = 'Usage: ' + sys.argv[0] +  ' remove_job <user_name> <job_ID> <node_name>.'
+        sys.exit( usage_msg)
+
+
+class try_connection( threading.Thread):
+    def __init__( self):
+        threading.Thread.__init__( self)
+        self.master = None
+    def run( self):
+        self.master = Client( (multiuser_address, multiuser_port), authkey=multiuser_key)
+
+        
+M = try_connection()
+M.daemon = True
+M.start()
+n = 0
+waiting = 60
+while (M.is_alive()):
+    n += 1
+    if (n == waiting):
+        sys.exit( 'Time for connection exceeded. Are you sure that qpy-master is running?')
+    sleep( 0.05)
+
+master = M.master
+master.send( (option, arguments))
+message_back = master.recv()
+if (isinstance( message_back, tuple)):
+    message_back = message_back[0]
+sys.stdout.write( message_back + '\n')
+
+master.close()
