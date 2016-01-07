@@ -62,6 +62,8 @@ max_node_time = 1814400
 min_working_time = 600
 max_working_time = 604800
 
+multiuser_waiting_time = 15
+
 max_nodes_default = -1
 if (dyn_nodes):
     max_nodes_default = 3
@@ -100,26 +102,40 @@ f = open( port_file, 'w', 0)
 f.write( str( port))
 f.close()
 
+
+# Attempt to connect to qpy-multiuser
+class kill_multiuser_connection( threading.Thread):
+    def __init__( self):
+        threading.Thread.__init__( self)
+        self.server = None
+    def run( self):
+        self.server = Listener(( multiuser_address, multiuser_port), authkey = multiuser_key)
+        print "a"
+        client = self.server.accept()
+        print "b"
+
 # Attempt to connect to qpy-multiuser
 class try_multiuser_connection( threading.Thread):
     def __init__( self):
         threading.Thread.__init__( self)
         self.master = None
     def run( self):
+        print "c"
         self.master = Client( (multiuser_address, multiuser_port), authkey=multiuser_key)
-
+        print "d"
 
 # Send arguments to qpy-multiuser
 def send_multiuser_arguments( option, arguments):
 
     M = try_multiuser_connection()
-    M.daemon = True
     M.start()
     n = 0
     waiting = 60
     while (M.is_alive()):
         n += 1
         if (n == waiting):
+            L = kill_multiuser_connection()
+            L.start()
             return None
         sleep( 0.05)
 
@@ -134,7 +150,7 @@ def add_user_to_multiuser( sub_ctrl):
     if (verbose):
         print "Adding user to qpy-multiuser."
 
-    msg = send_multiuser_arguments( 1, user)
+    msg = send_multiuser_arguments( 1, (user, []))
     if (msg == None):
         sub_ctrl.live = False
         os.remove( port_file)
@@ -400,6 +416,7 @@ class submission_control( threading.Thread):
         self.max_nodes = max_nodes_default
         self.max_jobs_default = 20
         self.jobs = job_collection()
+        self.multiuser_cur_jobs = []
 
     def write_nodes( self):
         f = open( cur_nodes_file, 'w')
@@ -438,10 +455,17 @@ class submission_control( threading.Thread):
                     if (multiuser):
                         multiuser_args = [user, job.ID, job.node.node_id]
                         msg_back = send_multiuser_arguments( 7, multiuser_args)
-                        if (msg_back == None):
-                            pass # MULTIUSER PROBLEM
+                        send_again = (msg_back == None)
+                        while (msg_back == None):
+                            if (verbose):
+                                print 'Waiting multiuser reply.'
+                            sleep( multiuser_waiting_time)
+                            msg_back = send_multiuser_arguments( 1, (user, self.multiuser_cur_jobs))
+                        if (send_again):
+                            msg_back = send_multiuser_arguments( 7, multiuser_args)
                         if (verbose):
                             print 'multiuser messssage (finished jobs): ', msg_back
+                        self.multiuser_cur_jobs.remove( [job.ID, job.node.node_id])
 
                 else:
                     i += 1
@@ -465,8 +489,16 @@ class submission_control( threading.Thread):
                     if (multiuser):
                         multiuser_args = user
                         msg_back = send_multiuser_arguments( 5, multiuser_args)
-                        if (msg_back == None):
-                            pass # MULTIUSER PROBLEM
+                        send_again = (msg_back == None)
+                        while (msg_back == None):
+                            if (verbose):
+                                print 'Waiting multiuser reply.'
+                            sleep( multiuser_waiting_time)
+                            msg_back = send_multiuser_arguments( 1, (user, self.multiuser_cur_jobs))
+                        if (send_again):
+                            msg_back = send_multiuser_arguments( 5, multiuser_args)
+                        print "---",msg_back
+                        self.multiuser_cur_jobs.append( [-1, msg_back])
                         for node in self.node_list:
                             if (msg_back == node.node_id):
                                 best_node = node
@@ -498,8 +530,15 @@ class submission_control( threading.Thread):
                         if (multiuser):
                             multiuser_args = [user, job.ID]
                             msg_back = send_multiuser_arguments( 6, multiuser_args)
-                            if (msg_back == None):
-                                pass # MULTIUSER PROBLEM
+                            send_again = (msg_back == None)
+                            while (msg_back == None):
+                                if (verbose):
+                                    print 'Waiting multiuser reply.'
+                                sleep( multiuser_waiting_time)
+                                msg_back = send_multiuser_arguments( 1, (user, self.multiuser_cur_jobs))
+                            if (send_again):
+                                msg_back = send_multiuser_arguments( 6, multiuser_args)
+                            self.multiuser_cur_jobs[-1][0] = job.ID
                         best_node.queue.put( job)
                         best_node.n_jobs += 1
                         self.jobs.Q_lock.release()
