@@ -2,3 +2,6 @@
 .current_nodes
 .known_nodes
 .next_jobID
+multiuser_allowed_users
+multiuser_distribution_rules
+multiuser_known_nodes

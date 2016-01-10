@@ -82,7 +82,7 @@ jobID_file = qpy_dir + '/.next_jobID'
 # multiuser connection variables
 multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
-multiuser_port = 9999
+multiuser_port = 9998
 
 if (not( os.path.isfile( known_nodes_file))):
     f = open( known_nodes_file, 'w')
@@ -112,6 +112,7 @@ class kill_multiuser_connection( threading.Thread):
         self.server = Listener(( multiuser_address, multiuser_port), authkey = multiuser_key)
         client = self.server.accept()
 
+
 # Attempt to connect to qpy-multiuser
 class try_multiuser_connection( threading.Thread):
     def __init__( self):
@@ -119,6 +120,7 @@ class try_multiuser_connection( threading.Thread):
         self.master = None
     def run( self):
         self.master = Client( (multiuser_address, multiuser_port), authkey=multiuser_key)
+
 
 # Send arguments to qpy-multiuser
 def send_multiuser_arguments( option, arguments):
@@ -152,9 +154,12 @@ def add_user_to_multiuser( sub_ctrl):
         os.remove( port_file)
         sys.exit( 'Time for connection exceeded. Are you sure that qpy-multiuser is running?')
 
+    if (msg[0][0] == 1):
+        sys.exit( 'You are not allowed to use qpy-multiuser. Contact the qpy-team.')
+
     if (verbose):
-        print 'multiuser message:', msg
-        print 'Adding known nodes.'
+        print 'Multiuser message:', msg[0][1]
+        print 'Adding known nodes from file', msg[1]
 
     f = open( msg[1], 'r')
     for  line in f:
@@ -349,6 +354,8 @@ class job_collection():
         self.killed = []
         self.undone = []
 
+        self.queue_size = 0
+
         self.Q = Queue()
         self.Q_lock = threading.RLock()
 
@@ -449,7 +456,7 @@ class submission_control( threading.Thread):
                     skip_job_sub = 0
 
                     if (multiuser):
-                        multiuser_args = [user, job.ID, job.node.node_id]
+                        multiuser_args = [user, job.ID, job.node.node_id, self.jobs.queue_size]
                         msg_back = send_multiuser_arguments( 7, multiuser_args)
                         send_again = (msg_back == None)
                         while (msg_back == None):
@@ -459,8 +466,10 @@ class submission_control( threading.Thread):
                             msg_back = send_multiuser_arguments( 1, (user, self.multiuser_cur_jobs))
                         if (send_again):
                             msg_back = send_multiuser_arguments( 7, multiuser_args)
+                        if (msg_back[0] != 0):
+                            print "WARNING in removing job: ", msg_back[1]
                         if (verbose):
-                            print 'multiuser messssage (finished jobs): ', msg_back
+                            print 'Multiuser messssage (finished jobs): ', msg_back[1]
                         self.multiuser_cur_jobs.remove( [job.ID, job.node.node_id])
 
                 else:
@@ -483,7 +492,7 @@ class submission_control( threading.Thread):
                 if (queue_has_jobs):
                     best_node = None
                     if (multiuser):
-                        multiuser_args = user
+                        multiuser_args = (user, self.jobs.queue_size)
                         msg_back = send_multiuser_arguments( 5, multiuser_args)
                         send_again = (msg_back == None)
                         while (msg_back == None):
@@ -493,12 +502,16 @@ class submission_control( threading.Thread):
                             msg_back = send_multiuser_arguments( 1, (user, self.multiuser_cur_jobs))
                         if (send_again):
                             msg_back = send_multiuser_arguments( 5, multiuser_args)
-                        print "---",msg_back
-                        self.multiuser_cur_jobs.append( [-1, msg_back])
-                        for node in self.node_list:
-                            if (msg_back == node.node_id):
-                                best_node = node
-                                break
+                        if (msg_back[0] < 0):
+                            print "WARNING when removing job: ", msg_back[1]
+                        if (verbose):
+                            print 'Multiuser messssage (requiring node): ', msg_back[1]
+                        if (msg_back[0] == 0):
+                            self.multiuser_cur_jobs.append( [-1, msg_back[1]])
+                            for node in self.node_list:
+                                if (msg_back[1] == node.node_id):
+                                    best_node = node
+                                    break
                     else:
                         best_free = 0
                         cur_time = time()
@@ -524,7 +537,7 @@ class submission_control( threading.Thread):
                         self.jobs.Q_lock.acquire()
                         job = self.jobs.Q.get()
                         if (multiuser):
-                            multiuser_args = [user, job.ID]
+                            multiuser_args = [user, job.ID, self.jobs.queue_size-1]
                             msg_back = send_multiuser_arguments( 6, multiuser_args)
                             send_again = (msg_back == None)
                             while (msg_back == None):
@@ -534,12 +547,17 @@ class submission_control( threading.Thread):
                                 msg_back = send_multiuser_arguments( 1, (user, self.multiuser_cur_jobs))
                             if (send_again):
                                 msg_back = send_multiuser_arguments( 6, multiuser_args)
+                            if (msg_back[0] != 0):
+                                print "WARNING when changing job ID: ", msg_back[1]
+                            if (verbose):
+                                print 'Multiuser messssage (changing node): ', msg_back[1]
                             self.multiuser_cur_jobs[-1][0] = job.ID
                         best_node.queue.put( job)
                         best_node.n_jobs += 1
                         self.jobs.Q_lock.release()
                         self.jobs.lock.acquire()
                         self.jobs.queue.remove( job)
+                        self.jobs.queue_size -= 1
                         self.jobs.running.append( job)
                         self.jobs.lock.release()
 
@@ -630,6 +648,7 @@ def handle_client( sub_ctrl, jobId):
             sub_ctrl.jobs.lock.acquire()
             sub_ctrl.jobs.all.append( new_job)
             sub_ctrl.jobs.queue.append( new_job)
+            sub_ctrl.jobs.queue_size += 1
             sub_ctrl.jobs.lock.release()
             sub_ctrl.jobs.Q_lock.acquire()
             sub_ctrl.jobs.Q.put( new_job)
@@ -674,6 +693,7 @@ def handle_client( sub_ctrl, jobId):
                     job.status = 4
                     sub_ctrl.jobs.lock.acquire()
                     sub_ctrl.jobs.queue.remove( job)
+                    sub_ctrl.jobs.queue_size -= 1
                     sub_ctrl.jobs.undone.append( job)
                     sub_ctrl.jobs.lock.release()
                     n_kill_q += 1
@@ -818,9 +838,13 @@ def handle_client( sub_ctrl, jobId):
                     
             else:
                 if (multiuser):
-                    msg = 'Nodes under multiuser control.\n'
-                for node in sub_ctrl.node_list:
-                    msg += node.node_id + ' ' + str( node.n_jobs) + '/' + str( node.max_jobs) + '\n'
+                    msg = 'Nodes under multiuser control:\n'
+                    msg += send_multiuser_arguments( 4, ())[1] + '\n'
+                    for node in sub_ctrl.node_list:
+                        msg = msg.replace(node.node_id + ': ', node.node_id + ': ' + str( node.n_jobs) + '/')
+                else:
+                    for node in sub_ctrl.node_list:
+                        msg += node.node_id + ' ' + str( node.n_jobs) + '/' + str( node.max_jobs) + '\n'
 
             client_master.send( msg)
 
@@ -828,7 +852,10 @@ def handle_client( sub_ctrl, jobId):
         # arguments: a list: [<new_maxJob>, <node_1>, <node_2>, ...]. Change all nodes if no nodes were given
         elif (job_type == 6):
             if (multiuser):
-                msg = 'Nodes under multiuser control.\n'
+                msg = 'Nodes under multiuser control:\n'
+                msg += send_multiuser_arguments( 4, ())[1] + '\n'
+                for node in sub_ctrl.node_list:
+                    msg = msg.replace(node.node_id + ': ', node.node_id + ': ' + str( node.n_jobs) + '/')
             else:
                 new_maxJob = arguments[0]
                 if (len( arguments) == 1):

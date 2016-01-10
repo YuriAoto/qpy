@@ -13,16 +13,17 @@ import threading
 # Important variables
 multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
-multiuser_port = 9999
+multiuser_port = 9998
 
 
 keywords={'user':       (1, 'add user. Arguments: user_name'),
           'node':       (2, 'add/configure node. Arguments: node_name n_cores mem'),
           'finish':     (3, 'finish the multiuser execution. No arguments'),
           'status':     (4, 'show status. No arguments'),
-          'req_core':   (5, 'Require a core: Arguments: user_name'),
-          'mod_jobID':  (6, 'Modify the job ID for the last job: Arguments: user_name, job_ID'),
-          'remove_job': (7, 'Remove a job: Arguments: user_name, job_ID, node_name')
+          'req_core':   (5, 'Require a core: Arguments: user_name, queue_size'),
+          'mod_jobID':  (6, 'Modify the job ID for the last job: Arguments: user_name, job_ID, queue_size'),
+          'remove_job': (7, 'Remove a job: Arguments: user_name, job_ID, node_name, queue_size'),
+          'distribute': (8, 'Distribute cores: No arguments')
           }
 
 
@@ -67,26 +68,26 @@ if (option == 2):
 # request core
 if (option == 5):
     try:
-        arguments = sys.argv[2]
+        arguments = (sys.argv[2], int(sys.argv[3]))
     except:
-        usage_msg = 'Usage: ' + sys.argv[0] +  ' req_core <user_name>.'
+        usage_msg = 'Usage: ' + sys.argv[0] +  ' req_core <user_name> <queue_size>.'
         sys.exit( usage_msg)
 
 # modify jobID
 if (option == 6):
     try:
-        arguments = [sys.argv[2], int( sys.argv[3])]
+        arguments = [sys.argv[2], int( sys.argv[3]), int(sys.argv[5])]
     except:
-        usage_msg = 'Usage: ' + sys.argv[0] +  ' mode_jobID <user_name> <job_ID>.'
+        usage_msg = 'Usage: ' + sys.argv[0] +  ' mode_jobID <user_name> <job_ID> <queue_size>.'
         sys.exit( usage_msg)
 
 
 # remove a job
 if (option == 7):
     try:
-        arguments = [sys.argv[2], int( sys.argv[3]), sys.argv[4]]
+        arguments = [sys.argv[2], int( sys.argv[3]), sys.argv[4], int(sys.argv[5])]
     except:
-        usage_msg = 'Usage: ' + sys.argv[0] +  ' remove_job <user_name> <job_ID> <node_name>.'
+        usage_msg = 'Usage: ' + sys.argv[0] +  ' remove_job <user_name> <job_ID> <node_name> <queue_size>.'
         sys.exit( usage_msg)
 
 
@@ -112,8 +113,10 @@ while (M.is_alive()):
 master = M.master
 master.send( (option, arguments))
 message_back = master.recv()
-if (isinstance( message_back, tuple)):
-    message_back = message_back[0]
+if (isinstance( message_back[0], tuple)):
+    message_back = message_back[0][1]
+else:
+    message_back = message_back[1]
 sys.stdout.write( message_back + '\n')
 
 master.close()
