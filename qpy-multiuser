@@ -29,7 +29,7 @@ N_min_jobs = 0
 
 multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
-multiuser_port = 9998
+multiuser_port = 9999
 
 parser = OptionParser()
 parser.add_option("-v", "--verbose",

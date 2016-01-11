@@ -82,7 +82,7 @@ jobID_file = qpy_dir + '/.next_jobID'
 # multiuser connection variables
 multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
-multiuser_port = 9998
+multiuser_port = 9999
 
 if (not( os.path.isfile( known_nodes_file))):
     f = open( known_nodes_file, 'w')
