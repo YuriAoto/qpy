@@ -10,6 +10,8 @@ import subprocess
 import re
 import threading
 
+from qpy_general_variables import *
+
 home_dir = os.environ['HOME']
 qpy_dir = os.path.dirname(os.path.abspath(__file__))
 user = os.environ['USER']
@@ -108,15 +110,15 @@ def string_to_int_list( X):
 
 job_status = ['queue', 'running', 'done', 'killed', 'undone']
 
-keywords={'sub':     (1, 'submit a job. Arguments: the job command'),
-          'check':   (2, 'check the jobs. Arguments: the desired job status'),
-          'kill':    (3, 'kill jobs. Argument: the jobs id'),
-          'finish':  (4, 'finish the master execution. No arguments'),
-          'nodes':   (5, 'change the maximum number of nodes. Argument: the desired value'),
-          'maxJobs': (6, 'change the maximum number of jobs per node. Argument: the desired value'),
-          'config':  (7, 'show the current configuration. No arguments'),
-          'clean':   (8, 'remove finished jobs from the list. Arguments: the jobs id'),
-          'tutorial':(9, 'run the qpy tutorial. Arguments: optional: a qpy option')
+keywords={'sub':     (JOBTYPE_SUB     , 'Submit a job. Arguments: the job command'),
+          'check':   (JOBTYPE_CHECK   , 'Check the jobs. Arguments: the desired job status'),
+          'kill':    (JOBTYPE_KILL    , 'Kill jobs. Argument: the jobs id'),
+          'finish':  (JOBTYPE_FINISH  , 'Finish the master execution. No arguments'),
+          'nodes':   (JOBTYPE_NODES   , 'Change the maximum number of nodes. Argument: the desired value'),
+          'maxJobs': (JOBTYPE_MAXJOBS , 'Change the maximum number of jobs per node. Argument: the desired value'),
+          'config':  (JOBTYPE_CONFIG  , 'Show the current configuration. No arguments'),
+          'clean':   (JOBTYPE_CLEAN   , 'Remove finished jobs from the list. Arguments: the jobs id'),
+          'tutorial':(JOBTYPE_TUTORIAL, 'Run the qpy tutorial. Arguments: optional: a qpy option')
           }
 
 
@@ -139,14 +141,14 @@ except:
 arguments = ()
 
 # Submit a job
-if (option == 1):
+if (option == JOBTYPE_SUB):
     job = ''
     for i in sys.argv[2:]:
         job += ' ' + i
     arguments = [job, os.getcwd()]
 
 # Check jobs
-if (option == 2):
+if (option == JOBTYPE_CHECK):
     arguments = {}
     for x in sys.argv[2:]:
         if x in job_status:
@@ -158,7 +160,7 @@ if (option == 2):
             sys.exit( 'Unknown pattern for checking jobs: ' + x)
 
 # Change max_nodes, add/remove nodes
-elif (option == 5):
+elif (option == JOBTYPE_NODES):
     try:
         arguments = int( sys.argv[2])
     except:
@@ -168,7 +170,7 @@ elif (option == 5):
             arguments = ()
 
 # Change max_jobs
-elif (option == 6):
+elif (option == JOBTYPE_MAXJOBS):
     try:
         arguments = [int( sys.argv[2])]
     except:
@@ -179,8 +181,8 @@ elif (option == 6):
     arguments.extend( sys.argv[3:])
 
 # Kill jobs or clean list
-elif (option == 3 or option == 8):
-    if option == 3:
+elif (option == JOBTYPE_KILL or option == JOBTYPE_CLEAN):
+    if option == JOBTYPE_KILL:
         status_bound = (0,2)
     else:
         status_bound = (2,5)
@@ -198,7 +200,7 @@ elif (option == 3 or option == 8):
     arguments = list( set( arguments))
 
 # The qpy tutorial
-elif (option == 9):
+elif (option == JOBTYPE_TUTORIAL):
     
     pattern = ''
     for i in sys.argv[2:3]:

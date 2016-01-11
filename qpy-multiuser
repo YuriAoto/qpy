@@ -14,9 +14,11 @@ import threading
 import math
 from optparse import OptionParser
 
+from qpy_general_variables import *
+
 
 # Important variables
-known_nodes_file = '/home/linux4_i2/aoto/Codes/qpy/multiuser_known_nodes'
+nodes_file = '/home/linux4_i2/aoto/Codes/qpy/multiuser_nodes'
 allowed_users_file = '/home/linux4_i2/aoto/Codes/qpy/multiuser_allowed_users'
 nodes_distribution_file = '/home/linux4_i2/aoto/Codes/qpy/multiuser_distribution_rules'
 
@@ -147,13 +149,34 @@ class USER():
         return (1, 'Job not found.')
 
 
-# Write known nodes in disk
-def write_nodes():
-    f = open( known_nodes_file, 'w')
-    for node in nodes:
-        f.write( node + ' ' + str( nodes[node].max_jobs) + '\n')
-    f.close()
+# Load nodes file
+def load_nodes():
+    global N_cores
+    if (os.path.isfile( nodes_file)):
+        f = open( nodes_file, 'r')
+        nodes_in_file = []
+        for line in f:
+            line_spl = line.split()
+            name = line_spl[0]
+            cores = int( line_spl[1])
+            nodes_in_file.append( name)
+            if (name in nodes):
+                N_cores += cores - new_node.max_jobs
+                nodes[name].max_jobs = cores
+            else:
+                new_node = NODE( cores)
+                nodes[name] = new_node
+                N_cores += new_node.max_jobs
+        f.close()
+        not_in_file = []
+        for node in nodes:
+            if (not( node in nodes_in_file)):
+                not_in_file.append(node)
+        for node in not_in_file:
+            nodes.pop( node)
 
+
+# Distribute cores
 def distribute_cores( ):
     f = open( nodes_distribution_file, 'r')
     line = f.readline()
@@ -264,16 +287,8 @@ def distribute_cores( ):
 # Get action from client and execute it
 # message from client must be:
 #   (action_type, arguments)
-# where:
-#   action_type is
-#       1 - add/configure user
-#       2 - add/configure node
-#       3 - finish qpy-multiuser
-#       4 - status
-#       5 - require a core
-#       6 - free a core
 #              
-#   the arguments are option dependent. See below
+#   The arguments are option dependent. See below
 #
 def handle_client( ):
     global N_cores
@@ -286,78 +301,32 @@ def handle_client( ):
         if (verbose):
             print "Received: " + str(action_type) + " -> " + str(arguments)
 
-        # Add a user
-        # arguments = (user_name, [cur_jobs])
-        if (action_type == 1):
-            user = arguments[0]
-            if (user in users):
-                if (len(arguments) == 2):
-                    for job in users[user].cur_jobs:
-                        nodes[job[1]].n_jobs -= 1
-                    N_cores -= len( users[user].cur_jobs)
-                    users[user].cur_jobs = arguments[1]
-                    users[user].n_jobs = len(arguments[1])
-                    N_cores += users[user].n_jobs
-                    
-                msg = (0, 'User exists.')
-            else:
-                # Add allowed users
-                allowed_users = []
-                if (os.path.isfile( allowed_users_file)):
-                    f = open( allowed_users_file, 'r')
-                    for line in f:
-                        allowed_users.append( line.strip())
-                    f.close()
 
-                if (user in allowed_users):
-                    new_user = USER( user)
-                    users[user] = new_user
-                    if (len(arguments) == 2):
-                         for job in users[user].cur_jobs:
-                             nodes[job[1]].n_jobs -= 1
-                         N_cores -= len( users[user].cur_jobs)
-                         users[user].cur_jobs = arguments[1]
-                         users[user].n_jobs = len(arguments[1])
-                         N_cores += users[user].n_jobs
-
-                    status = distribute_cores()
-                    if (status != 0):
-                        msg = (0, 'User added. Cores distribution failed.')
-                    else:
-                        msg = (0, 'User added.')
-                else:
-                    msg = (1, 'Not allowed user.')
-
-            client.send( (msg, known_nodes_file))
-
-        # Add a node
-        # arguments = (node_name, n_cores)
-        elif (action_type == 2):
-
-            if (arguments[0] in nodes):
-                msg = (0, 'node exists.')
-            else:
-                new_node = NODE( arguments[1])
-                nodes[arguments[0]] = new_node
-                N_cores += arguments[1]
-                status = distribute_cores()
-                if (status != 0):
-                    msg = (0, 'Node added. Cores distribution failed.')
-                else:
-                    msg = (0, 'Node added.')
-                write_nodes()
-
+        # Reload the nodes
+        # Arguments = ()
+        if (action_type == MULTIUSER_NODES):
+            try:
+                load_nodes()
+                msg = (0, 'Nodes loaded.')
+            except:
+                msg = (1, 'Problem when loading nodes. Is this the correct file: ' + known_nodes_file + '?')
             client.send( msg)
 
-        # finish qpy-multiuser
-        # no arguments
-        elif (action_type == 3):
-            client.send( (0, 'Finishing qpy-multiuser.'))
-            break
 
-        # show status
-        # no arguments
-        elif (action_type == 4):
+        # Redistribute cores
+        # Arguments = ()
+        elif (action_type == MULTIUSER_DISTRIBUTE):
+            status = distribute_cores()
+            if (status != 0):
+                msg = (1, 'Cores distribution failed.')
+            else:
+                msg = (0, 'Cores distributed.')
+            client.send( msg)
+
+
+        # Show status
+        # Arguments = ()
+        elif (action_type == MULTIUSER_STATUS):
             Umsg = ''
             for user, info in users.iteritems():
                 Umsg += '  ' + user + ': ' + str( info.n_jobs) + '+' + str( info.n_queue) + '/' + str( info.min_cores)
@@ -371,7 +340,6 @@ def handle_client( ):
                 Umsg = 'Users:\n' + Umsg
             else:
                 Umsg = 'No users.\n'
-
             Nmsg = ''
             for node, info in nodes.iteritems():
                 Nmsg += '  ' + node + ': ' + str( info.n_jobs) + '/' + str( info.max_jobs) + '\n'
@@ -379,16 +347,63 @@ def handle_client( ):
                 Nmsg = 'Nodes:\n' + Nmsg
             else:
                 Nmsg = 'No nodes.\n'
-
             msg = Umsg + Nmsg
-
             msg = msg + 'Cores: ' + str(N_jobs) + '/' + str( N_cores)
-
             client.send( (0, msg))
 
-        # require a core
-        # arguments = (user_name, queue_size)
-        elif (action_type == 5):
+
+        # Finish qpy-multiuser
+        # Arguments = ()
+        elif (action_type == MULTIUSER_FINISH):
+            client.send( (0, 'Finishing qpy-multiuser.'))
+            break
+
+
+        # Add a user
+        # arguments = (user_name, [cur_jobs])
+        elif (action_type == MULTIUSER_USER):
+            user = arguments[0]
+            if (user in users):
+                if (len(arguments) == 2):
+                    for job in users[user].cur_jobs:
+                        nodes[job[1]].n_jobs -= 1
+                    N_cores -= len( users[user].cur_jobs)
+                    users[user].cur_jobs = arguments[1]
+                    users[user].n_jobs = len(arguments[1])
+                    N_cores += users[user].n_jobs
+                msg = (0, 'User exists.')
+            else:
+                # Add allowed users
+                allowed_users = []
+                if (os.path.isfile( allowed_users_file)):
+                    f = open( allowed_users_file, 'r')
+                    for line in f:
+                        allowed_users.append( line.strip())
+                    f.close()
+                if (user in allowed_users):
+                    new_user = USER( user)
+                    users[user] = new_user
+                    if (len(arguments) == 2):
+                         for job in users[user].cur_jobs:
+                             nodes[job[1]].n_jobs -= 1
+                         N_cores -= len( users[user].cur_jobs)
+                         users[user].cur_jobs = arguments[1]
+                         users[user].n_jobs = len(arguments[1])
+                         N_cores += users[user].n_jobs
+                    status = distribute_cores()
+                    if (status != 0):
+                        msg = (0, 'User added. Cores distribution failed.')
+                    else:
+                        msg = (0, 'User added.')
+                else:
+                    msg = (1, 'Not allowed user.')
+                print msg
+            client.send( (msg, nodes_file))
+
+
+        # Require a core
+        # Arguments = (user_name, queue_size)
+        elif (action_type == MULTIUSER_REQ_CORE):
             try:
                 alloc_status = users[arguments[0]].add_virtual_job()
                 client.send( alloc_status)
@@ -396,16 +411,16 @@ def handle_client( ):
             except KeyError:
                 client.send( (-1, 'User does not exists.'))
             except Exception as ex:
-                template = "An exception of type {0} occured.\nArguments:\n{1!r}"
+                template = "An exception of type {0} occured - require a core.\nArguments:\n{1!r}"
                 msg = template.format(type(ex).__name__, ex.args)
                 if (verbose):
                     print msg
                 client.send( (-2, 'Exception raised:\n' + msg + '\nContact the qpy-team.'))
 
 
-        # change ID
-        # arguments = (user_name, jobID, queue_size)
-        elif (action_type == 6):
+        # Change ID
+        # Arguments = (user_name, jobID, queue_size)
+        elif (action_type == MULTIUSER_MOD_JOBID):
             try:
                 last_job = users[arguments[0]].cur_jobs[-1]
                 users[arguments[0]].n_queue = int(arguments[2])
@@ -419,16 +434,16 @@ def handle_client( ):
             except IndexError:
                 client.send( (-2, 'There are no jobs.'))
             except Exception as ex:
-                template = "An exception of type {0} occured.\nArguments:\n{1!r}"
+                template = "An exception of type {0} occured - change ID.\nArguments:\n{1!r}"
                 msg = template.format(type(ex).__name__, ex.args)
                 if (verbose):
                     print msg
                 client.send( (-2, 'Exception raised:\n' + msg + '\nContact the qpy-team.'))
 
 
-        # free a core
-        # arguments = (user_name, jobID, node_name, queue_size)
-        elif (action_type == 7):
+        # Free a core
+        # Arguments = (user_name, jobID, node_name, queue_size)
+        elif (action_type == MULTIUSER_REMOVE_JOB):
             try:
                 rem_status = users[arguments[0]].remove_job( arguments[1], arguments[2])
                 users[arguments[0]].n_queue = int(arguments[3])
@@ -436,39 +451,16 @@ def handle_client( ):
             except KeyError:
                 client.send( (-1, 'User does not exists.'))
             except Exception as ex:
-                template = "An exception of type {0} occured.\nArguments:\n{1!r}"
+                template = "An exception of type {0} occured - free a core.\nArguments:\n{1!r}"
                 msg = template.format(type(ex).__name__, ex.args)
                 if (verbose):
                     print msg
                 client.send( (-2, 'Exception raised:\n' + msg + '\nContact the qpy-team.'))
 
-        # redistribute cores
-        # no arguments
-        elif (action_type == 8):
 
-            status = distribute_cores()
-            if (status != 0):
-                msg = (1, 'Cores distribution failed.')
-            else:
-                msg = (0, 'Cores distributed.')
-
-            client.send( msg)
-
+        # Unknown option
         else:
             client.send( (-1, 'Unknown option: ' + str( action_type)))
 
-
-# Add known nodes
-if (os.path.isfile( known_nodes_file)):
-    f = open( known_nodes_file, 'r')
-    for line in f:
-        line_spl = line.split()
-        new_node = NODE( int(line_spl[1]))
-        nodes[line_spl[0]] = new_node
-        N_cores += new_node.max_jobs
-    f.close()
-
-
-
-
+load_nodes()
 handle_client()
