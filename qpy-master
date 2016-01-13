@@ -6,6 +6,7 @@ from multiprocessing.connection import Listener
 from multiprocessing.connection import Client
 import threading
 from time import sleep, time
+from collections import deque
 from Queue import Queue
 import re
 import subprocess
@@ -65,6 +66,7 @@ min_working_time = 600
 max_working_time = 604800
 
 multiuser_waiting_time = 15
+conn_multiuser_at = 600
 
 max_nodes_default = -1
 if (dyn_nodes):
@@ -84,7 +86,7 @@ jobID_file = qpy_dir + '/.next_jobID'
 # multiuser connection variables
 multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
-multiuser_port = 9999
+multiuser_port = 9998
 
 if (not( os.path.isfile( known_nodes_file))):
     f = open( known_nodes_file, 'w')
@@ -105,120 +107,51 @@ f.write( str( port))
 f.close()
 
 
-# # Kill an attempt to connect to qpy-multiuser
-# class kill_multiuser_connection( threading.Thread):
-#     def __init__( self):
-#         threading.Thread.__init__( self)
-#         self.listener = None
-#     def run( self):
-#         self.listener = Listener(( multiuser_address, multiuser_port), authkey = multiuser_key)
-#         conn = self.listener.accept()
-#         conn.close()
-#         self.listener.close()
 
-# # Attempt to connect to qpy-multiuser
-# class try_multiuser_connection( threading.Thread):
-#     def __init__( self):
-#         threading.Thread.__init__( self)
-#         self.conn = None
-#     def run( self):
-#         self.conn = Client( (multiuser_address, multiuser_port), authkey=multiuser_key)
+# Attempt to connect to qpy-multiuser
+class kill_multiuser_connection( threading.Thread):
+    def __init__( self):
+        threading.Thread.__init__( self)
+        self.conn = None
+    def run( self):
+        self.conn = Listener(( multiuser_address, multiuser_port), authkey = multiuser_key)
+        client = self.conn.accept()
 
-
-# Send arguments to qpy-multiuser
-# def send_multiuser_arguments( option, arguments, sub_ctrl):
-
-#     worked_at_once = True
-#     while (True):
-#         con_success = True
-#         M = try_multiuser_connection()
-#         M.start()
-#         n = 0
-#         waiting = 60
-#         while (M.is_alive()):
-#             n += 1
-#             if (n == waiting):
-#                 L = kill_multiuser_connection()
-#                 L.start()
-#                 con_success = False
-#                 if (sub_ctrl == None):
-#                     return None
-#             sleep( 0.05)
-
-#         if (con_success):
-#             break
-#         else:
-#             if (verbose):
-#                 print "Waiting for multiuser connection."
-#             worked_at_once = False
-#             sleep( multiuser_waiting_time)
-
-#     conn = M.conn
-
-#     if (not(worked_at_once) and sub_ctrl != None):
-#         conn.send( (MULTIUSER_USER, (user, sub_ctrl.multiuser_cur_jobs)))
-#         msg_back = conn.recv()
-#         conn.close()
-#         M = try_multiuser_connection()
-#         M.start()
-#         conn = M.conn
-
-#     conn.send( (option, arguments))
-#     msg_back = conn.recv()
-
-#     if (msg_back[0] == -1): # user does not exist in multiuser
-#         conn.close()
-#         M = try_multiuser_connection()
-#         M.start()
-#         conn = M.conn
-#         conn.send( (MULTIUSER_USER, (user, sub_ctrl.multiuser_cur_jobs)))
-#         print sub_ctrl.multiuser_cur_jobs
-#         print "qqq"
-#         msg_back = conn.recv()
-#         conn.close()
-#         M = try_multiuser_connection()
-#         M.start()
-#         conn = M.conn
-#         if (verbose):
-#             print "Readding user: ", msg_back
-#         conn.send( (option, arguments))
-#         msg_back = conn.recv()
-
-#     conn.close()
-#     return msg_back
-
-
-
+# Attempt to connect to qpy-multiuser
 class try_multiuser_connection( threading.Thread):
     def __init__( self):
         threading.Thread.__init__( self)
-        self.master = None
+        self.conn = None
     def run( self):
-        self.master = Client( (multiuser_address, multiuser_port), authkey=multiuser_key)
+        self.conn = Client( (multiuser_address, multiuser_port), authkey=multiuser_key)
 
-def send_multiuser_arguments( option, arguments, sub_ctrl):
+# Send arguments to qpy-multiuser
+def send_multiuser_arguments( option, arguments):
+
     M = try_multiuser_connection()
-    M.daemon = True
     M.start()
-    n=0
+    n = 0
     waiting = 60
     while (M.is_alive()):
         n += 1
         if (n == waiting):
-            sys.exit( 'Time for connection exceeded. Are you sure that qpy-master is running?')
+            L = kill_multiuser_connection()
+            L.start()
+            return None
         sleep( 0.05)
 
-    master = M.master
-    master.send( (option, arguments))
-    return master.recv()
-
+    conn = M.conn
+    conn.send( (option, arguments))
+    msg_back = conn.recv()
+    conn.close()
+    return msg_back
 
 # add as new user to qpy-multiuser
 def add_user_to_multiuser( sub_ctrl):
     if (verbose):
         print "Adding user to qpy-multiuser."
 
-    msg = send_multiuser_arguments( MULTIUSER_USER, (user, []), None)
+    msg = send_multiuser_arguments( MULTIUSER_USER, (user, []))
     if (msg == None):
         sub_ctrl.live = False
         os.remove( port_file)
@@ -376,6 +309,7 @@ class JOB( threading.Thread):
         threading.Thread.__init__( self)
         self.ID = jobID
         self.info = job_info
+        self.n_cores = 1
         self.node = None
         self.status = 0
         self.err_msg = ''
@@ -383,6 +317,7 @@ class JOB( threading.Thread):
     def run( self):
         command =  'export QPY_JOB_ID=' + str( self.ID) + '; '
         command += 'export QPY_NODE=' + str( self.node.node_id) + '; '
+        command += 'export QPY_N_CORES=' + str( self.node.n_cores) + '; '
         for sf in source_these_files:
             command += 'source ' + sf + '; '
         command += 'cd ' + self.info[1] + '; ' 
@@ -403,6 +338,23 @@ class JOB( threading.Thread):
         out_chk.join()
 
         f_out_err.close()
+
+    def parse_options( self):
+        first_arg = self.info[0].split()[0]
+        if (first_arg[0] == '/'):
+            script_name = first_arg
+        else (first_arg[0:2] == './' or first_arg[0:3] == '../'):
+            script_name = self.info[1] + '/' + first_arg
+        if (os.path.isfile( script_name)):
+            f = open( script_name, 'r')
+            for line in f:
+                if (re.match( '#QPY', line)):
+                    re_res = re.search( 'n_cores=(\d+)', line)
+                    try:
+                        self.n_cores = int(re_res.group(1))
+                    except:
+                        pass
+            f.close()
 
     # return a boolean, indicating whether this job obbeys the dictionary pattern or not
     # empty pattern means that everthing is required
@@ -426,7 +378,7 @@ class job_collection():
 
         self.queue_size = 0
 
-        self.Q = Queue()
+        self.Q = deque()
         self.Q_lock = threading.RLock()
 
 # A node.
@@ -511,7 +463,16 @@ class submission_control( threading.Thread):
     def run( self):
         skip_job_sub = 0
         self.write_nodes()
+        n_time_multiuser = 0
         while self.live:
+
+            # Connect with qpy-multiuser
+            if (multiuser and n_time_multiuser == 0):
+                # Check multiuser
+                n_time_multiuser = conn_multiuser_at
+            else:
+                n_time_multiuser -= 1
+
             
             # Check finished jobs
             self.jobs.lock.acquire()
@@ -526,25 +487,17 @@ class submission_control( threading.Thread):
                     skip_job_sub = 0
 
                     if (multiuser):
-                        multiuser_args = (user, job.ID, job.node.node_id, self.jobs.queue_size)
-                        msg_back = send_multiuser_arguments( MULTIUSER_REMOVE_JOB, multiuser_args, self)
+                        multiuser_args = (user, job.ID, self.jobs.queue_size)
+                        msg_back = send_multiuser_arguments( MULTIUSER_REMOVE_JOB, multiuser_args)
 
-                        # send_again = (msg_back == None)
-                        # while (msg_back == None):
-                        #     if (verbose):
-                        #         print 'Waiting multiuser reply.'
-                        #     sleep( multiuser_waiting_time)
-                        #     msg_back = send_multiuser_arguments( MULTIUSER_USER, (user, self.multiuser_cur_jobs))
-                        # if (send_again):
-                        #     msg_back = send_multiuser_arguments( MULTIUSER_REMOVE_JOB, multiuser_args)
-                        # if (msg_back[0] == 0):
-                        #     pass
-                        # elif (msg_back[0] == -1): # user does not exist in multiuser
-                        #     send_multiuser_arguments( MULTIUSER_USER, (user, self.multiuser_cur_jobs))
-                        #     msg_back = send_multiuser_arguments( MULTIUSER_REMOVE_JOB, multiuser_args)
-                        # else:
-                        #     print "WARNING in removing job: ", msg_back[1]
-
+                        if (msg_back == None):
+                            skip_job_sub = 300
+                        if (msg_back[0] == 0):
+                            pass
+                        elif (msg_back[0] == -1): # user does not exist in multiuser
+                            pass
+                        else:
+                            print "WARNING in removing a job: ", msg_back[1]
                         if (verbose):
                             print 'Multiuser message (removing a job): ', msg_back[1]
                         self.multiuser_cur_jobs.remove( [job.ID, job.node.node_id])
@@ -564,34 +517,29 @@ class submission_control( threading.Thread):
             # Send a job, if there is space
             if (skip_job_sub <= 0):
                 self.jobs.Q_lock.acquire()
-                queue_has_jobs = not( self.jobs.Q.empty())
-                self.jobs.Q_lock.release()
+                queue_has_jobs = len( self.jobs.Q) != 0
                 if (queue_has_jobs):
+                    next_jobID = self.jobs.Q[-1].ID
+                    next_Ncores = self.jobs.Q[-1].n_cores
                     best_node = None
                     if (multiuser):
-                        multiuser_args = (user, self.jobs.queue_size)
-                        msg_back = send_multiuser_arguments( MULTIUSER_REQ_CORE, multiuser_args, self)
-
-                        # send_again = (msg_back == None)
-                        # while (msg_back == None):
-                        #     if (verbose):
-                        #         print 'Waiting multiuser reply.'
-                        #     sleep( multiuser_waiting_time)
-                        #     msg_back = send_multiuser_arguments( MULTIUSER_USER, (user, self.multiuser_cur_jobs))
-                        # if (send_again):
-                        #     msg_back = send_multiuser_arguments( MULTIUSER_REQ_CORE, multiuser_args)
-                        # if (msg_back[0] == 0):
-                        #     pass
-                        # elif (msg_back[0] == -1): # user does not exist in multiuser
-                        #     send_multiuser_arguments( MULTIUSER_USER, (user, self.multiuser_cur_jobs))
-                        #     msg_back = send_multiuser_arguments( MULTIUSER_REQ_CORE, multiuser_args)
-                        # else:
-                        #     print "WARNING in sending job: ", msg_back[1]
-                        # if (verbose):
-                        #     print 'Multiuser message (sending job): ', msg_back[1]
+                        multiuser_args = (user, next_jobID, next_Ncores, self.jobs.queue_size)
+                        msg_back = send_multiuser_arguments( MULTIUSER_REQ_CORE, multiuser_args)
+                        
+                        if (msg_back == None):
+                            skip_job_sub = 300
+                            continue # skip
+                        if (msg_back[0] == 0):
+                            pass
+                        elif (msg_back[0] == -1): # user does not exist in multiuser
+                            pass
+                        else:
+                            print "WARNING in sending job: ", msg_back[1]
+                        if (verbose):
+                            print 'Multiuser message (sending job): ', msg_back[1]
 
                         if (msg_back[0] == 0):
-                            self.multiuser_cur_jobs.append( [-1, msg_back[1]])
+                            self.multiuser_cur_jobs.append( [next_jobID, msg_back[1]])
                             for node in self.node_list:
                                 if (msg_back[1] == node.node_id):
                                     best_node = node
@@ -618,42 +566,15 @@ class submission_control( threading.Thread):
                     if (best_node != None):
                         if (verbose):
                             print "submission_control: putting job"
-                        self.jobs.Q_lock.acquire()
-                        job = self.jobs.Q.get()
-                        if (multiuser):
-                            multiuser_args = (user, job.ID, self.jobs.queue_size-1)
-
-                            msg_back = send_multiuser_arguments( MULTIUSER_MOD_JOBID, multiuser_args, self)
-
-                            # send_again = (msg_back == None)
-                            # while (msg_back == None):
-                            #     if (verbose):
-                            #         print 'Waiting multiuser reply.'
-                            #     sleep( multiuser_waiting_time)
-                            #     msg_back = send_multiuser_arguments( MULTIUSER_USER, (user, self.multiuser_cur_jobs))
-                            # if (send_again):
-                            #     msg_back = send_multiuser_arguments( MULTIUSER_MOD_JOBID, multiuser_args)
-                            # if (msg_back[0] == 0):
-                            #     pass
-                            # elif (msg_back[0] == -1): # user does not exist in multiuser
-                            #     send_multiuser_arguments( MULTIUSER_USER, (user, self.multiuser_cur_jobs))
-                            #     msg_back = send_multiuser_arguments( MULTIUSER_MOD_JOBID, multiuser_args)
-                            # else:
-                            #     print "WARNING in removing job: ", msg_back[1]
-
-                            if (verbose):
-                                print 'Multiuser message (changing job ID): ', msg_back[1]
-
-                            self.multiuser_cur_jobs[-1][0] = job.ID
-
+                        job = self.jobs.Q.pop()
                         best_node.queue.put( job)
                         best_node.n_jobs += 1
-                        self.jobs.Q_lock.release()
                         self.jobs.lock.acquire()
                         self.jobs.queue.remove( job)
                         self.jobs.queue_size -= 1
                         self.jobs.running.append( job)
                         self.jobs.lock.release()
+                self.jobs.Q_lock.release()
 
             else:
                 skip_job_sub = skip_job_sub - 1
@@ -702,20 +623,17 @@ def job_kill( job, sub_ctrl):
         print "job_kill stderr: ", kill_p.stderr.readlines()
 
     if (multiuser):
-        multiuser_args = (user, job.ID, job.node.node_id, sub_ctrl.jobs.queue_size)
-        msg_back = send_multiuser_arguments( MULTIUSER_REMOVE_JOB, multiuser_args, sub_ctrl)
+        multiuser_args = (user, job.ID, sub_ctrl.jobs.queue_size)
+        msg_back = send_multiuser_arguments( MULTIUSER_REMOVE_JOB, multiuser_args)
 
-        # send_again = (msg_back == None)
-        # while (msg_back == None):
-        #     if (verbose):
-        #         print 'Waiting multiuser reply.'
-        #     sleep( multiuser_waiting_time)
-        #     msg_back = send_multiuser_arguments( MULTIUSER_USER, (user, self.multiuser_cur_jobs))
-        # if (send_again):
-        #     msg_back = send_multiuser_arguments( MULTIUSER_REMOVE_JOB, multiuser_args)
-        # if (msg_back[0] != 0):
-        #     print "WARNING in removing job: ", msg_back[1]
-
+        if (msg_back == None):
+            skip_job_sub = 300
+        if (msg_back[0] == 0):
+            pass
+        elif (msg_back[0] == -1): # user does not exist in multiuser
+            pass
+        else:
+            print "WARNING in removing a job: ", msg_back[1]
         if (verbose):
             print 'Multiuser message (killing a job): ', msg_back[1]
         sub_ctrl.multiuser_cur_jobs.remove( [job.ID, job.node.node_id])
@@ -746,18 +664,19 @@ def handle_client( sub_ctrl, jobId):
         (job_type, arguments) = client_master.recv()
         if (verbose):
             print "Received: " + str(job_type) + " -> " + str(arguments)
-
+            
         # Send a job
         # arguments = the job info (see JOB.info)
         if (job_type == JOBTYPE_SUB):
             new_job = JOB( jobId, arguments)
+            new_job.parse_options()
             sub_ctrl.jobs.lock.acquire()
             sub_ctrl.jobs.all.append( new_job)
             sub_ctrl.jobs.queue.append( new_job)
             sub_ctrl.jobs.queue_size += 1
             sub_ctrl.jobs.lock.release()
             sub_ctrl.jobs.Q_lock.acquire()
-            sub_ctrl.jobs.Q.put( new_job)
+            sub_ctrl.jobs.Q.appendleft( new_job)
             sub_ctrl.jobs.Q_lock.release()
             client_master.send( 'Job ' + str(jobId) + ' received.\n')
             jobId += 1
@@ -790,19 +709,19 @@ def handle_client( sub_ctrl, jobId):
 
             n_kill_q = 0
             sub_ctrl.jobs.Q_lock.acquire()
-            n_q = sub_ctrl.jobs.Q.qsize()
-            for i in range( 0, n_q):
-                job = sub_ctrl.jobs.Q.get()
-                if (not( kill_q) and not( job.ID in arguments)):
-                    sub_ctrl.jobs.Q.put( job)
-                else:
-                    job.status = 4
-                    sub_ctrl.jobs.lock.acquire()
-                    sub_ctrl.jobs.queue.remove( job)
-                    sub_ctrl.jobs.queue_size -= 1
-                    sub_ctrl.jobs.undone.append( job)
-                    sub_ctrl.jobs.lock.release()
-                    n_kill_q += 1
+            sub_ctrl.jobs.lock.acquire()
+            to_remove = []
+            for job in sub_ctrl.jobs.queue:
+                if (job.ID in arguments or kill_q):
+                    to_remove.append( job)
+            for job in to_remove:
+                job.status = 4
+                sub_ctrl.jobs.queue.remove( job)
+                sub_ctrl.jobs.queue_size -= 1
+                sub_ctrl.jobs.undone.append( job)
+                sub_ctrl.jobs.Q.remove( job)
+                n_kill_q += 1
+            sub_ctrl.jobs.lock.release()
             sub_ctrl.jobs.Q_lock.release()
 
             n_kill_r = 0
@@ -945,7 +864,11 @@ def handle_client( sub_ctrl, jobId):
             else:
                 if (multiuser):
                     msg = 'Nodes under multiuser control:\n'
-                    msg += send_multiuser_arguments( MULTIUSER_STATUS, (), sub_ctrl)[1] + '\n'
+                    msg_back = send_multiuser_arguments( MULTIUSER_STATUS, ())
+                    if (msg_back == None):
+                        msg += 'qpy-multiuser seems not to be running. Contact the qpy-team.\n'
+                    else:
+                        msg += msg_back[1] + '\n'
                     for node in sub_ctrl.node_list:
                         msg = msg.replace(node.node_id + ': ', node.node_id + ': ' + str( node.n_jobs) + '/')
                 else:
@@ -959,9 +882,13 @@ def handle_client( sub_ctrl, jobId):
         elif (job_type == JOBTYPE_MAXJOBS):
             if (multiuser):
                 msg = 'Nodes under multiuser control:\n'
-                msg += send_multiuser_arguments( MULTIUSER_STATUS, (), sub_ctrl)[1] + '\n'
-                for node in sub_ctrl.node_list:
-                    msg = msg.replace(node.node_id + ': ', node.node_id + ': ' + str( node.n_jobs) + '/')
+                msg_back = send_multiuser_arguments( MULTIUSER_STATUS, ())
+                if (msg_back == None):
+                    msg += 'qpy-multiuser seems not to be running. Contact the qpy-team.\n'
+                else:
+                    msg += msg_back[1] + '\n'
+                    for node in sub_ctrl.node_list:
+                        msg = msg.replace(node.node_id + ': ', node.node_id + ': ' + str( node.n_jobs) + '/')
             else:
                 new_maxJob = arguments[0]
                 if (len( arguments) == 1):

@@ -31,7 +31,7 @@ N_min_jobs = 0
 
 multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
-multiuser_port = 9999
+multiuser_port = 9998
 
 parser = OptionParser()
 parser.add_option("-v", "--verbose",
@@ -59,17 +59,15 @@ class USER():
         self.n_jobs = 0
         self.n_queue = 0
 
-    def add_virtual_job( self):
+    def add_job( self, jobID, num_cores):
         global N_jobs, N_min_jobs
         space_available = False
-        using_min_cores = False
         
         N_free_cores = (N_cores - N_jobs) - (N_min_cores - N_min_jobs)
-        free_cores = N_free_cores > 0
+        free_cores = N_free_cores >= num_cores
 
-        if (self.n_jobs < self.min_cores):
+        if (self.n_jobs + num_cores <= self.min_cores):
             space_available = True
-            using_min_cores = True
 
         else:
             use_others_resource = self.n_jobs >= self.min_cores + self.extra_cores
@@ -88,7 +86,7 @@ class USER():
                         N_extra += min(info.extra_cores + info.min_cores - info.n_jobs, info.extra_cores)
 
                 N_extra_per_user = N_extra/N_users_with_queue
-                if (self.n_jobs < self.min_cores + self.extra_cores + N_extra_per_user and free_cores):
+                if (self.n_jobs + num_cores <= self.min_cores + self.extra_cores + N_extra_per_user and free_cores):
                     space_available = True
                     
             else:
@@ -109,7 +107,7 @@ class USER():
 
 
                 N_free_per_user = (N_extra_cores_per_user_free - N_used_extra)/N_users_free
-                if (self.n_jobs < self.min_cores + N_free_per_user and free_cores):
+                if (self.n_jobs + num_cores <= self.min_cores + N_free_per_user and free_cores):
                     space_available = True
 
 
@@ -117,35 +115,44 @@ class USER():
             best_node = None
             best_free = 0
             for node, info in nodes.iteritems():
-                free = info.max_jobs - info.n_jobs
-                if (free > best_free):
+                # Evenly distributing
+                #free = info.max_jobs - info.n_jobs
+                #if (free > best_free and free >= num_cores):
+                #    best_node = node
+                #    best_free = free
+                # first nodes first
+                if (info.max_jobs - info.n_jobs  >= num_cores):
                     best_node = node
-                    best_free = free
 
             if (best_node == None):
-                return (1, 'Could not find node. Inconcistency. Contacte the qpy-team.')
+                return (1, 'No node with this requirement.')
 
-            self.cur_jobs.append( [-1, best_node])
-            self.n_jobs += 1
-            nodes[best_node].n_jobs += 1
-            N_jobs += 1
-            if (using_min_cores):
-                N_min_jobs += 1
+            self.cur_jobs.append( [jobID, best_node, num_cores])
+            self.n_jobs += num_cores
+            nodes[best_node].n_jobs += num_cores
+            N_jobs += num_cores
+
+            if (self.n_jobs < self.min_cores):
+                N_min_jobs += num_cores
+            if (self.n_jobs < self.min_cores + num_cores):
+                N_min_jobs += num_cores + self.min_cores - self.n_jobs
+
             return (0, best_node)
 
-        return (2, 'No free cores in the system.')
+        return (2, 'No free cores.')
 
-    def remove_job( self, jobID, node):
+    def remove_job( self, jobID):
         global N_jobs, N_min_jobs
-        if ([jobID, node] in self.cur_jobs):
-            self.cur_jobs.remove( [jobID, node])
-            self.n_jobs -= 1
-            nodes[node].n_jobs -= 1
-            N_jobs -= 1
-            if (self.n_jobs < self.min_cores):
-                N_min_jobs -= 1
-
-            return (0, 'Job removed.')
+        removed = False
+        for j in self.cur_jobs:
+            if (j[0] == jobID):
+                self.n_jobs -= j[2]
+                nodes[j[1]].n_jobs -= j[2]
+                N_jobs -= j[2]
+                if (self.n_jobs < self.min_cores):
+                    N_min_jobs -= j[2] + self.min_cores - self.n_jobs
+                self.cur_jobs.remove( j)
+                return (0, 'Job removed.')
         return (1, 'Job not found.')
 
 
@@ -161,7 +168,7 @@ def load_nodes():
             cores = int( line_spl[1])
             nodes_in_file.append( name)
             if (name in nodes):
-                N_cores += cores - new_node.max_jobs
+                N_cores += cores - nodes[name].max_jobs
                 nodes[name].max_jobs = cores
             else:
                 new_node = NODE( cores)
@@ -303,18 +310,18 @@ def handle_client( ):
 
 
         # Reload the nodes
-        # Arguments = ()
+        # arguments = ()
         if (action_type == MULTIUSER_NODES):
+            load_nodes()
             try:
-                load_nodes()
                 msg = (0, 'Nodes loaded.')
             except:
-                msg = (1, 'Problem when loading nodes. Is this the correct file: ' + known_nodes_file + '?')
+                msg = (1, 'Problem when loading nodes. Is this the correct file: ' + nodes_file + '?')
             client.send( msg)
 
 
         # Redistribute cores
-        # Arguments = ()
+        # arguments = ()
         elif (action_type == MULTIUSER_DISTRIBUTE):
             status = distribute_cores()
             if (status != 0):
@@ -325,7 +332,7 @@ def handle_client( ):
 
 
         # Show status
-        # Arguments = ()
+        # arguments = ()
         elif (action_type == MULTIUSER_STATUS):
             Umsg = ''
             for user, info in users.iteritems():
@@ -334,8 +341,6 @@ def handle_client( ):
                     Umsg += '+' + str(info.extra_cores) + '\n'
                 else:
                     Umsg += '\n'
-                for job in info.cur_jobs:
-                    Umsg += '     ' + str( job) + '\n'
             if (Umsg):
                 Umsg = 'Users:\n' + Umsg
             else:
@@ -353,24 +358,26 @@ def handle_client( ):
 
 
         # Finish qpy-multiuser
-        # Arguments = ()
+        # arguments = ()
         elif (action_type == MULTIUSER_FINISH):
             client.send( (0, 'Finishing qpy-multiuser.'))
             break
 
 
         # Add a user
-        # arguments = (user_name, [cur_jobs])
+        # arguments = (user_name, cur_jobs)
         elif (action_type == MULTIUSER_USER):
             user = arguments[0]
             if (user in users):
-                if (len(arguments) == 2):
-                    for job in users[user].cur_jobs:
-                        nodes[job[1]].n_jobs -= 1
-                    N_cores -= len( users[user].cur_jobs)
+                if (arguments[1]):
+                    if (verbose):
+                        print "Adding cur_jobs to user."
                     users[user].cur_jobs = arguments[1]
-                    users[user].n_jobs = len(arguments[1])
-                    N_cores += users[user].n_jobs
+                    users[user].n_jobs = 0
+                    for job in users[user].cur_jobs:
+                        nodes[job[1]].n_jobs += job[2]
+                        N_cores += job[2]
+                        users[user].n_jobs += job[2]
                 msg = (0, 'User exists.')
             else:
                 # Add allowed users
@@ -383,13 +390,15 @@ def handle_client( ):
                 if (user in allowed_users):
                     new_user = USER( user)
                     users[user] = new_user
-                    if (len(arguments) == 2):
-                         for job in users[user].cur_jobs:
-                             nodes[job[1]].n_jobs -= 1
-                         N_cores -= len( users[user].cur_jobs)
-                         users[user].cur_jobs = arguments[1]
-                         users[user].n_jobs = len(arguments[1])
-                         N_cores += users[user].n_jobs
+                    if (arguments[1]):
+                        if (verbose):
+                            print "Adding cur_jobs to user."
+                        users[user].cur_jobs = arguments[1]
+                        users[user].n_jobs = 0
+                        for job in users[user].cur_jobs:
+                            nodes[job[1]].n_jobs += job[2]
+                            N_cores += job[2]
+                            users[user].n_jobs += job[2]
                     status = distribute_cores()
                     if (status != 0):
                         msg = (0, 'User added. Cores distribution failed.')
@@ -402,12 +411,15 @@ def handle_client( ):
 
 
         # Require a core
-        # Arguments = (user_name, queue_size)
+        # arguments = (user_name, jobID, n_cores, queue_size)
         elif (action_type == MULTIUSER_REQ_CORE):
             try:
-                alloc_status = users[arguments[0]].add_virtual_job()
+                alloc_status = users[arguments[0]].add_job( int(arguments[1]), int(arguments[2]))
                 client.send( alloc_status)
-                users[arguments[0]].n_queue = int(arguments[1])
+                if ( alloc_status[0] == 0):
+                    users[arguments[0]].n_queue = int(arguments[3]) - 1
+                else:
+                    users[arguments[0]].n_queue = int(arguments[3])
             except KeyError:
                 client.send( (-1, 'User does not exists.'))
             except Exception as ex:
@@ -418,35 +430,12 @@ def handle_client( ):
                 client.send( (-2, 'Exception raised:\n' + msg + '\nContact the qpy-team.'))
 
 
-        # Change ID
-        # Arguments = (user_name, jobID, queue_size)
-        elif (action_type == MULTIUSER_MOD_JOBID):
-            try:
-                last_job = users[arguments[0]].cur_jobs[-1]
-                users[arguments[0]].n_queue = int(arguments[2])
-                if (last_job[0] != -1):
-                    client.send( (1, 'Error, the last job does not have -1 as ID.'))
-                else:
-                    last_job[0] = arguments[1]
-                    client.send( (0, 'Done.'))
-            except KeyError:
-                client.send( (-1, 'User does not exists.'))
-            except IndexError:
-                client.send( (-2, 'There are no jobs.'))
-            except Exception as ex:
-                template = "An exception of type {0} occured - change ID.\nArguments:\n{1!r}"
-                msg = template.format(type(ex).__name__, ex.args)
-                if (verbose):
-                    print msg
-                client.send( (-2, 'Exception raised:\n' + msg + '\nContact the qpy-team.'))
-
-
-        # Free a core
-        # Arguments = (user_name, jobID, node_name, queue_size)
+        # Remove a job
+        # arguments = (user_name, jobID, queue_size)
         elif (action_type == MULTIUSER_REMOVE_JOB):
             try:
-                rem_status = users[arguments[0]].remove_job( arguments[1], arguments[2])
-                users[arguments[0]].n_queue = int(arguments[3])
+                rem_status = users[arguments[0]].remove_job( arguments[1])
+                users[arguments[0]].n_queue = int(arguments[2])
                 client.send( rem_status)
             except KeyError:
                 client.send( (-1, 'User does not exists.'))
