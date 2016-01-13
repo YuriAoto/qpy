@@ -317,7 +317,7 @@ class JOB( threading.Thread):
     def run( self):
         command =  'export QPY_JOB_ID=' + str( self.ID) + '; '
         command += 'export QPY_NODE=' + str( self.node.node_id) + '; '
-        command += 'export QPY_N_CORES=' + str( self.node.n_cores) + '; '
+        command += 'export QPY_N_CORES=' + str( self.node.max_jobs) + '; '
         for sf in source_these_files:
             command += 'source ' + sf + '; '
         command += 'cd ' + self.info[1] + '; ' 
@@ -327,23 +327,25 @@ class JOB( threading.Thread):
                                stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE)
 
-        f_out_err = open( self.info[1] + '/job_' + str(self.ID) + '.outerr', 'w', 0)
+        f_out = open( self.info[1] + '/job_' + str(self.ID) + '.out', 'w', 0)
+        f_err = open( self.info[1] + '/job_' + str(self.ID) + '.err', 'w', 0)
 
-        err_chk = out_err_check( ssh, False, f_out_err)
+        err_chk = out_err_check( ssh, False, f_err)
         err_chk.start()
-        out_chk = out_err_check( ssh, True, f_out_err)
+        out_chk = out_err_check( ssh, True, f_out)
         out_chk.start()
 
         err_chk.join()
         out_chk.join()
 
-        f_out_err.close()
+        f_err.close()
+        f_out.close()
 
     def parse_options( self):
         first_arg = self.info[0].split()[0]
         if (first_arg[0] == '/'):
             script_name = first_arg
-        else (first_arg[0:2] == './' or first_arg[0:3] == '../'):
+        else: #(first_arg[0:2] == './' or first_arg[0:3] == '../'):
             script_name = self.info[1] + '/' + first_arg
         if (os.path.isfile( script_name)):
             f = open( script_name, 'r')
