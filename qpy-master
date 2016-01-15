@@ -26,6 +26,10 @@ parser.add_option("-m", "--multiuser",
                   action="store_true", dest="multiuser", default=False,
                   help="set to multiuser behaviour")
 
+parser.add_option("-s", "--saveMessages",
+                  action="store_true", dest="saveMessages", default=False,
+                  help="set to multiuser behaviour")
+
 parser.add_option("-c", "--cluster",
                   dest="cl",
                   help="the cluster (linux4 and hlrs available)")
@@ -39,6 +43,7 @@ parser.add_option("-i", "--iniJobID",
 
 verbose = options.verbose
 multiuser = options.multiuser
+saveMessages = options.saveMessages
 cluster = options.cl
 ini_job_ID = options.iniJobID
 
@@ -66,7 +71,7 @@ min_working_time = 600
 max_working_time = 604800
 
 multiuser_waiting_time = 15
-conn_multiuser_at = 600
+conn_multiuser_at = 300
 
 max_nodes_default = -1
 if (dyn_nodes):
@@ -83,10 +88,12 @@ cur_nodes_file = qpy_dir + '/.current_nodes'
 known_nodes_file = qpy_dir + '/.known_nodes'
 jobID_file = qpy_dir + '/.next_jobID'
 
-# multiuser connection variables
 multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
-multiuser_port = 9998
+multiuser_port = 9995
+
+if (saveMessages):
+    multiuser_messages = deque(maxlen=25)
 
 if (not( os.path.isfile( known_nodes_file))):
     f = open( known_nodes_file, 'w')
@@ -107,8 +114,7 @@ f.write( str( port))
 f.close()
 
 
-
-# Attempt to connect to qpy-multiuser
+# Kill the attempt to connect to qpy-multiuser
 class kill_multiuser_connection( threading.Thread):
     def __init__( self):
         threading.Thread.__init__( self)
@@ -125,9 +131,9 @@ class try_multiuser_connection( threading.Thread):
     def run( self):
         self.conn = Client( (multiuser_address, multiuser_port), authkey=multiuser_key)
 
+
 # Send arguments to qpy-multiuser
 def send_multiuser_arguments( option, arguments):
-
     M = try_multiuser_connection()
     M.start()
     n = 0
@@ -139,69 +145,58 @@ def send_multiuser_arguments( option, arguments):
             L.start()
             return None
         sleep( 0.05)
-
     conn = M.conn
     conn.send( (option, arguments))
     msg_back = conn.recv()
     conn.close()
+    if (saveMessages):
+        if (not(multiuser_messages) or ((option, arguments), msg_back) != multiuser_messages[-1][0]):
+            multiuser_messages.append( [ ((option, arguments), msg_back), 1])
+        elif (multiuser_messages[-1][1] < 10):
+            multiuser_messages[-1][1] += 1
     return msg_back
+
 
 # add as new user to qpy-multiuser
 def add_user_to_multiuser( sub_ctrl):
     if (verbose):
         print "Adding user to qpy-multiuser."
-
     msg = send_multiuser_arguments( MULTIUSER_USER, (user, []))
     if (msg == None):
         sub_ctrl.live = False
         os.remove( port_file)
         sys.exit( 'Time for connection exceeded. Are you sure that qpy-multiuser is running?')
-
-    if (msg[0][0] == 1):
+    if (msg[0] == 1):
         sys.exit( 'You are not allowed to use qpy-multiuser. Contact the qpy-team.')
-
     if (verbose):
-        print 'Multiuser message:', msg[0][1]
-        print 'Adding known nodes from file', msg[1]
-
-    f = open( msg[1], 'r')
-    for  line in f:
-        line_spl = line.split()
-        new_node = NODE( int(line_spl[1]), line_spl[0])
-        new_node.start()
-        sub_ctrl.node_list.append( new_node)
-    f.close()
-
+        print 'Multiuser message:', msg
     return True
+
 
 # Check if the <command> sent by ssh to <address> return the <exp_out> message without errors
 def is_ssh_working( address, command, exp_out):
-
     ssh = subprocess.Popen(["ssh", "-o", "StrictHostKeyChecking=no", address, command],
                              shell=False,
                              stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE)
-
     ssh_stdout = ssh.stdout.readlines()
     ssh_stderr = ssh.stderr.readlines()
     if (verbose):
         print "is_ssh_working stdout:", ssh_stdout
         print "is_ssh_working stderr:", ssh_stderr
-        
     error = False
     for i in ssh_stderr:
         if ('No route to host' in i or 'Connection refused' in i or 'Could not resolve hostname' in i):
             error = True
-
     success = False
     for i in ssh_stdout:
         if (exp_out in i):
             success = True
-
     return success and not( error)
 
-def get_plural( word_s, stuff):
 
+# Cosmetic: get the plural
+def get_plural( word_s, stuff):
     if (isinstance(stuff, list) and stuff):
         final_list = stuff[0]
         if (len( stuff) > 1):
@@ -211,7 +206,6 @@ def get_plural( word_s, stuff):
             return (word_s[1], final_list)
         else:
             return (word_s[0], final_list)
-
     if (isinstance(stuff, int)):
         if ( stuff == 0):
             return (word_s[1], 'No')
@@ -220,6 +214,7 @@ def get_plural( word_s, stuff):
         return (word_s[0], str( stuff))
 
 
+# Allocate a node. Specific for ASES
 def node_alloc():
     queue_script = 'qpy --alloc ' + str( max_node_time)
     command = 'salloc -N1 -t 21-0 -K -A ithkoehn ' + queue_script + ' &'
@@ -242,34 +237,30 @@ def node_alloc():
                               stderr=subprocess.PIPE)
     saloc_stdout = squeue.stdout.readline().split()
     node = saloc_stdout[-1]
-
     while (not( is_ssh_working( node, 'source ~/.bash_profile; qpy --init', 'Success on qpy init!'))):
         if (verbose):
             print "Waiting node initialization: " + node
         sleep( 10)
-    
     if (verbose):
         print 'Node ' + node + ' allocated.'
-
     return (job_id, node)
 
 
+# Deallocate a node. Specific for ASES
 def node_dealloc( node_id, alloc_id):
     term_script = 'source ~/.bash_profile; qpy --term'
     dealloc = subprocess.Popen(["ssh", "-o", "StrictHostKeyChecking=no", node_id, term_script],
                                shell=False,
                                stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE)
-
     if (verbose):
         print "node_dealloc stdout:", dealloc.stdout.readlines()
         print "node_dealloc stderr:", dealloc.stderr.readlines()
-
     command = 'scancel ' + alloc_id
     dealloc = subprocess.call( command, shell=True)
-
     if (verbose):
         print 'Node ' + node_id + ' deallocated.'
+
 
 # Check output
 #
@@ -310,6 +301,7 @@ class JOB( threading.Thread):
         self.ID = jobID
         self.info = job_info
         self.n_cores = 1
+        self.mem = 5.0
         self.node = None
         self.status = 0
         self.err_msg = ''
@@ -317,7 +309,7 @@ class JOB( threading.Thread):
     def run( self):
         command =  'export QPY_JOB_ID=' + str( self.ID) + '; '
         command += 'export QPY_NODE=' + str( self.node.node_id) + '; '
-        command += 'export QPY_N_CORES=' + str( self.node.max_jobs) + '; '
+        command += 'export QPY_N_CORES=' + str( self.n_cores) + '; '
         for sf in source_these_files:
             command += 'source ' + sf + '; '
         command += 'cd ' + self.info[1] + '; ' 
@@ -342,10 +334,34 @@ class JOB( threading.Thread):
         f_out.close()
 
     def parse_options( self):
-        first_arg = self.info[0].split()[0]
+
+        command = self.info[0].split()
+        while True:
+            if (command[0] == '-n'):
+                try:
+                    self.n_cores = int(command[1])
+                    command.pop(0)
+                    command.pop(0)
+                except:
+                    break
+            elif (command[0] == '-m'):
+                try:
+                    self.mem = int(command[1])
+                    command.pop(0)
+                    command.pop(0)
+                except:
+                    break
+            else:
+                break
+        
+        self.info[0] = ''
+        for c in command:
+            self.info[0] += c + ' '
+        
+        first_arg = command[0]
         if (first_arg[0] == '/'):
             script_name = first_arg
-        else: #(first_arg[0:2] == './' or first_arg[0:3] == '../'):
+        else:
             script_name = self.info[1] + '/' + first_arg
         if (os.path.isfile( script_name)):
             f = open( script_name, 'r')
@@ -354,6 +370,11 @@ class JOB( threading.Thread):
                     re_res = re.search( 'n_cores=(\d+)', line)
                     try:
                         self.n_cores = int(re_res.group(1))
+                    except:
+                        pass
+                    re_res = re.search( 'mem=(\d+)', line)
+                    try:
+                        self.mem = float(re_res.group(1))
                     except:
                         pass
             f.close()
@@ -441,7 +462,10 @@ class submission_control( threading.Thread):
         self.live = True
         self.node_list = []
         self.max_nodes = max_nodes_default
-        self.max_jobs_default = 20
+        if (multiuser):
+            self.max_jobs_default = -1
+        else:
+            self.max_jobs_default = 20
         self.jobs = job_collection()
         self.multiuser_cur_jobs = []
 
@@ -464,13 +488,24 @@ class submission_control( threading.Thread):
             
     def run( self):
         skip_job_sub = 0
-        self.write_nodes()
+        if (not( multiuser)):
+            self.write_nodes()
         n_time_multiuser = 0
+        multiuser_is_alive = True
         while self.live:
 
             # Connect with qpy-multiuser
             if (multiuser and n_time_multiuser == 0):
-                # Check multiuser
+                msg_back = send_multiuser_arguments( MULTIUSER_USER, (user, []))
+                if (msg_back == None):
+                    multiuser_is_alive = False
+                    continue
+                else:
+                    multiuser_is_alive = True
+                if (verbose):
+                    print "Checking multiuser: ", msg_back
+                if (msg_back[1] != 'User exists.'):
+                    msg_back = send_multiuser_arguments( MULTIUSER_USER, (user, self.multiuser_cur_jobs))
                 n_time_multiuser = conn_multiuser_at
             else:
                 n_time_multiuser -= 1
@@ -488,25 +523,18 @@ class submission_control( threading.Thread):
                     job.node.n_jobs -= 1
                     skip_job_sub = 0
 
-                    if (multiuser):
+                    if (multiuser and multiuser_is_alive):
+                        self.multiuser_cur_jobs.remove( [job.ID, job.node.node_id])
                         multiuser_args = (user, job.ID, self.jobs.queue_size)
                         msg_back = send_multiuser_arguments( MULTIUSER_REMOVE_JOB, multiuser_args)
-
                         if (msg_back == None):
-                            skip_job_sub = 300
-                        if (msg_back[0] == 0):
-                            pass
-                        elif (msg_back[0] == -1): # user does not exist in multiuser
-                            pass
-                        else:
-                            print "WARNING in removing a job: ", msg_back[1]
+                            multiuser_is_alive = False
                         if (verbose):
-                            print 'Multiuser message (removing a job): ', msg_back[1]
-                        self.multiuser_cur_jobs.remove( [job.ID, job.node.node_id])
-
+                            print 'Multiuser message (removing a job): ', msg_back
                 else:
                     i += 1
             self.jobs.lock.release()
+
 
             # Dealloc the non-used node
             if (dyn_nodes):
@@ -516,6 +544,7 @@ class submission_control( threading.Thread):
                         node.queue.put( 'kill')
                         self.node_list.remove( node)
 
+
             # Send a job, if there is space
             if (skip_job_sub <= 0):
                 self.jobs.Q_lock.acquire()
@@ -523,29 +552,28 @@ class submission_control( threading.Thread):
                 if (queue_has_jobs):
                     next_jobID = self.jobs.Q[-1].ID
                     next_Ncores = self.jobs.Q[-1].n_cores
+                    next_mem = self.jobs.Q[-1].mem
                     best_node = None
-                    if (multiuser):
-                        multiuser_args = (user, next_jobID, next_Ncores, self.jobs.queue_size)
+                    if (multiuser and multiuser_is_alive):
+                        multiuser_args = (user, next_jobID, next_Ncores, next_mem, self.jobs.queue_size)
                         msg_back = send_multiuser_arguments( MULTIUSER_REQ_CORE, multiuser_args)
-                        
                         if (msg_back == None):
-                            skip_job_sub = 300
-                            continue # skip
-                        if (msg_back[0] == 0):
-                            pass
-                        elif (msg_back[0] == -1): # user does not exist in multiuser
-                            pass
-                        else:
-                            print "WARNING in sending job: ", msg_back[1]
+                            multiuser_is_alive = False
+                            continue
                         if (verbose):
-                            print 'Multiuser message (sending job): ', msg_back[1]
-
+                            print 'Multiuser message (sending job): ', msg_back
                         if (msg_back[0] == 0):
                             self.multiuser_cur_jobs.append( [next_jobID, msg_back[1]])
+                            node_found = False
                             for node in self.node_list:
                                 if (msg_back[1] == node.node_id):
                                     best_node = node
+                                    node_found = True
                                     break
+                            if (not( node_found)):
+                                best_node = NODE( -1, msg_back[1])
+                                best_node.start()
+                                self.node_list.append( best_node)
                     else:
                         best_free = 0
                         cur_time = time()
@@ -592,6 +620,7 @@ def format_job( job):
     job_str = str( job.ID) + ' (' + job_status[job.status] + '):' + job.info[0] + ' (wd: ' + job.info[1] + ')\n'
     return job_str
 
+
 # return string with information on required jobs, defined by pattern
 def check_jobs( jobs, pattern):
     asked_jobs = []
@@ -610,6 +639,7 @@ def check_jobs( jobs, pattern):
 
     return req_jobs
 
+
 # Kill job
 def job_kill( job, sub_ctrl):
     kill_command = 'source ~/.bash_profile; qpy --jobkill ' + str( job.ID)
@@ -627,15 +657,6 @@ def job_kill( job, sub_ctrl):
     if (multiuser):
         multiuser_args = (user, job.ID, sub_ctrl.jobs.queue_size)
         msg_back = send_multiuser_arguments( MULTIUSER_REMOVE_JOB, multiuser_args)
-
-        if (msg_back == None):
-            skip_job_sub = 300
-        if (msg_back[0] == 0):
-            pass
-        elif (msg_back[0] == -1): # user does not exist in multiuser
-            pass
-        else:
-            print "WARNING in removing a job: ", msg_back[1]
         if (verbose):
             print 'Multiuser message (killing a job): ', msg_back[1]
         sub_ctrl.multiuser_cur_jobs.remove( [job.ID, job.node.node_id])
@@ -709,9 +730,9 @@ def handle_client( sub_ctrl, jobId):
                 while (st in arguments):
                     arguments.remove( st)
 
-            n_kill_q = 0
-            sub_ctrl.jobs.Q_lock.acquire()
             sub_ctrl.jobs.lock.acquire()
+            sub_ctrl.jobs.Q_lock.acquire()
+            n_kill_q = 0
             to_remove = []
             for job in sub_ctrl.jobs.queue:
                 if (job.ID in arguments or kill_q):
@@ -723,30 +744,18 @@ def handle_client( sub_ctrl, jobId):
                 sub_ctrl.jobs.undone.append( job)
                 sub_ctrl.jobs.Q.remove( job)
                 n_kill_q += 1
-            sub_ctrl.jobs.lock.release()
             sub_ctrl.jobs.Q_lock.release()
-
             n_kill_r = 0
-            if (kill_r):
-                sub_ctrl.jobs.lock.acquire()
-                for job in sub_ctrl.jobs.running:
-                    job_kill( job, sub_ctrl)
-                    sub_ctrl.jobs.running.remove( job)
-                    sub_ctrl.jobs.killed.append( job)
-                    n_kill_r += 1
-                sub_ctrl.jobs.lock.release()
-            else:
-                for i in arguments:
-                    job_to_kill = None
-                    sub_ctrl.jobs.lock.acquire()
-                    for job in sub_ctrl.jobs.running:
-                        if (job.ID == i):
-                            job_kill( job, sub_ctrl)
-                            sub_ctrl.jobs.running.remove( job)
-                            sub_ctrl.jobs.killed.append( job)
-                            n_kill_r += 1
-                            break
-                    sub_ctrl.jobs.lock.release()
+            to_remove = []
+            for job in sub_ctrl.jobs.running:
+                if (job.ID in arguments or kill_r):
+                    to_remove.append( job)
+            for job in to_remove:
+                job_kill( job, sub_ctrl)
+                sub_ctrl.jobs.running.remove( job)
+                sub_ctrl.jobs.killed.append( job)
+                n_kill_r += 1
+            sub_ctrl.jobs.lock.release()
 
             msg = ''
             if (n_kill_q):
@@ -934,7 +943,8 @@ def handle_client( sub_ctrl, jobId):
         # arguments: no arguments
         elif (job_type == JOBTYPE_CONFIG):
             cur_conf = ''
-            cur_conf += 'max_jobs         = ' + str( sub_ctrl.max_jobs_default) + '\n'
+            if (not( multiuser)):
+                cur_conf += 'max_jobs         = ' + str( sub_ctrl.max_jobs_default) + '\n'
             if (dyn_nodes):
                 cur_conf += 'using dynamic node allocation\n'
                 cur_conf += 'max_nodes        = ' + str( sub_ctrl.max_nodes) + '\n'
@@ -943,6 +953,13 @@ def handle_client( sub_ctrl, jobId):
                 cur_conf += 'max_working_time = ' + str( max_working_time) + '\n'
             if (multiuser):
                 cur_conf += 'Nodes under multiuser control.\n'
+                cur_conf += 'Last multiuser messages:\n'
+                if (saveMessages):
+                    for msg in multiuser_messages:
+                        cur_conf += ' ' + str( msg[0][0][0]) + ', ' + str( msg[0][0][1]) + ': ' + str( msg[0][1][0]) + ', ' + repr( msg[0][1][1])
+                        if (msg[1] > 1):
+                            cur_conf += ' (' + str(msg[1]) + 'x)'
+                        cur_conf += '\n'
 
             client_master.send( cur_conf)
 

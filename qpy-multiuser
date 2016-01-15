@@ -3,14 +3,12 @@
 #
 # 26 December 2015 - Pradipta and Yuri
 # 06 January 2016 - Pradipta and Yuri
-from multiprocessing.connection import Client
 from multiprocessing.connection import Listener
 from time import sleep
 import os
 import sys
 import subprocess
 import re
-import threading
 import math
 from optparse import OptionParser
 
@@ -20,18 +18,18 @@ from qpy_general_variables import *
 # Important variables
 nodes_file = '/home/linux4_i2/aoto/Codes/qpy/multiuser_nodes'
 allowed_users_file = '/home/linux4_i2/aoto/Codes/qpy/multiuser_allowed_users'
-nodes_distribution_file = '/home/linux4_i2/aoto/Codes/qpy/multiuser_distribution_rules'
+cores_distribution_file = '/home/linux4_i2/aoto/Codes/qpy/multiuser_distribution_rules'
 
 nodes = {}
 users = {}
 N_cores = 0
 N_min_cores = 0
-N_jobs  = 0
-N_min_jobs = 0
+N_used_cores  = 0
+N_used_min_cores = 0
 
 multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
-multiuser_port = 9998
+multiuser_port = 9995
 
 parser = OptionParser()
 parser.add_option("-v", "--verbose",
@@ -43,34 +41,40 @@ verbose = options.verbose
 
 # Node informations
 class NODE():
-    def __init__( self, max_jobs):
-        self.max_jobs = max_jobs
-        self.n_jobs = 0
+    def __init__( self, max_cores):
+        self.max_cores = max_cores
+        self.n_cores = 0
 
 
 # User informations
+# self.min_cores   -> only for the user
+# self.extra_cores -> preferably for the user
+# self.max_cores   -> maximum that can be used: N_cores - min_cores (of other users)
+# self.n_cores     -> current number of used cores
+#
 class USER():
     def __init__( self, name):
         self.name = name
         self.min_cores = 0
         self.extra_cores = 0
         self.max_cores = 0
-        self.cur_jobs = []
-        self.n_jobs = 0
+        self.n_cores = 0
         self.n_queue = 0
+        self.cur_jobs = [] # each job = (jobID, best_node, num_cores)
 
-    def add_job( self, jobID, num_cores):
-        global N_jobs, N_min_jobs
+    # Add a job, if possible
+    def add_job( self, jobID, num_cores, mem):
+        global N_used_cores, N_used_min_cores
         space_available = False
         
-        N_free_cores = (N_cores - N_jobs) - (N_min_cores - N_min_jobs)
+        N_free_cores = (N_cores - N_used_cores) - (N_min_cores - N_used_min_cores)
         free_cores = N_free_cores >= num_cores
 
-        if (self.n_jobs + num_cores <= self.min_cores):
+        if (self.n_cores + num_cores <= self.min_cores):
             space_available = True
 
         else:
-            use_others_resource = self.n_jobs >= self.min_cores + self.extra_cores
+            use_others_resource = self.n_cores >= self.min_cores + self.extra_cores
             if (use_others_resource):
 
                 N_users_with_queue = 1
@@ -79,14 +83,14 @@ class USER():
                     if (user == self.name):
                         continue
                 
-                    if (info.n_queue > 1 and info.n_jobs >= info.min_cores + info.extra_cores):
+                    if (info.n_queue > 1 and info.n_cores >= info.min_cores + info.extra_cores):
                         N_users_with_queue += 1
 
                     elif (info.n_queue == 0):
-                        N_extra += min(info.extra_cores + info.min_cores - info.n_jobs, info.extra_cores)
+                        N_extra += min(info.extra_cores + info.min_cores - info.n_cores, info.extra_cores)
 
                 N_extra_per_user = N_extra/N_users_with_queue
-                if (self.n_jobs + num_cores <= self.min_cores + self.extra_cores + N_extra_per_user and free_cores):
+                if (self.n_cores + num_cores <= self.min_cores + self.extra_cores + N_extra_per_user and free_cores):
                     space_available = True
                     
             else:
@@ -98,94 +102,107 @@ class USER():
                     if (user == self.name):
                         continue
                     
-                    n_extra_user = info.n_jobs - info.min_cores - info.extra_cores
+                    n_extra_user = info.n_cores - info.min_cores - info.extra_cores
                     if (n_extra_user > 0):
                         N_used_extra += n_extra_user
                     elif (n_extra_user < 0 and info.n_queue > 0):
                         N_extra_cores_per_user_free += info.extra_cores
                         N_users_free += 1
 
-
                 N_free_per_user = (N_extra_cores_per_user_free - N_used_extra)/N_users_free
-                if (self.n_jobs + num_cores <= self.min_cores + N_free_per_user and free_cores):
+                if (self.n_cores + num_cores <= self.min_cores + N_free_per_user and free_cores):
                     space_available = True
-
 
         if (space_available):
             best_node = None
             best_free = 0
             for node, info in nodes.iteritems():
                 # Evenly distributing
-                #free = info.max_jobs - info.n_jobs
+                #free = info.max_cores - info.n_cores
                 #if (free > best_free and free >= num_cores):
                 #    best_node = node
                 #    best_free = free
                 # first nodes first
-                if (info.max_jobs - info.n_jobs  >= num_cores):
+                if (info.max_cores - info.n_cores  >= num_cores):
                     best_node = node
 
             if (best_node == None):
-                return (1, 'No node with this requirement.')
+                return 1
 
-            self.cur_jobs.append( [jobID, best_node, num_cores])
-            self.n_jobs += num_cores
-            nodes[best_node].n_jobs += num_cores
-            N_jobs += num_cores
+            self.cur_jobs.append( (jobID, best_node, num_cores))
+            self.n_cores += num_cores
+            nodes[best_node].n_cores += num_cores
+            N_used_cores += num_cores
 
-            if (self.n_jobs < self.min_cores):
-                N_min_jobs += num_cores
-            if (self.n_jobs < self.min_cores + num_cores):
-                N_min_jobs += num_cores + self.min_cores - self.n_jobs
+            if (self.n_cores < self.min_cores):
+                N_used_min_cores += num_cores
+            if (self.n_cores < self.min_cores + num_cores):
+                N_used_min_cores += num_cores + self.min_cores - self.n_cores
 
-            return (0, best_node)
+            return best_node
 
-        return (2, 'No free cores.')
+        return 2
 
+    # Remove the job
     def remove_job( self, jobID):
-        global N_jobs, N_min_jobs
-        removed = False
-        for j in self.cur_jobs:
-            if (j[0] == jobID):
-                self.n_jobs -= j[2]
-                nodes[j[1]].n_jobs -= j[2]
-                N_jobs -= j[2]
-                if (self.n_jobs < self.min_cores):
-                    N_min_jobs -= j[2] + self.min_cores - self.n_jobs
-                self.cur_jobs.remove( j)
-                return (0, 'Job removed.')
-        return (1, 'Job not found.')
+        global N_used_cores, N_used_min_cores
+        for job in self.cur_jobs:
+            if (job[0] == jobID):
+                self.n_cores -= job[2]
+                nodes[job[1]].n_cores -= job[2]
+                N_used_cores -= job[2]
+                if (self.n_cores < self.min_cores):
+                    N_used_min_cores -= min( job[2], self.min_cores - self.n_cores)
+                self.cur_jobs.remove( job)
+                return 0
+        return 1
 
 
 # Load nodes file
 def load_nodes():
     global N_cores
-    if (os.path.isfile( nodes_file)):
+    try:
         f = open( nodes_file, 'r')
-        nodes_in_file = []
-        for line in f:
-            line_spl = line.split()
-            name = line_spl[0]
-            cores = int( line_spl[1])
-            nodes_in_file.append( name)
-            if (name in nodes):
-                N_cores += cores - nodes[name].max_jobs
-                nodes[name].max_jobs = cores
-            else:
-                new_node = NODE( cores)
-                nodes[name] = new_node
-                N_cores += new_node.max_jobs
-        f.close()
-        not_in_file = []
-        for node in nodes:
-            if (not( node in nodes_in_file)):
-                not_in_file.append(node)
-        for node in not_in_file:
-            nodes.pop( node)
+    except:
+        return -1
+    nodes_in_file = []
+    cores_in_file = []
+    for line in f:
+        line_spl = line.split() # [<node_name>, <max_jobs>]
+        try:
+            nodes_in_file.append( line_spl[0])
+            cores_in_file.append( int( line_spl[1]))
+        except:
+            f.close()
+            return -2
+    f.close()
+    if (verbose):
+        print "load_nodes:"
+        print "nodes: ", nodes_in_file
+        print "cores: ", cores_in_file
+    for n, c in zip( nodes_in_file, cores_in_file):
+        if (n in nodes):
+            N_cores += c - nodes[n].max_cores
+            nodes[n].max_cores = c
+        else:
+            new_node = NODE( c)
+            nodes[n] = new_node
+            N_cores += new_node.max_cores
+    nodes_to_remove = []
+    for n in nodes:
+        if (not( n in nodes_in_file)):
+            nodes_to_remove.append( n)
+    for n in nodes_to_remove:
+        nodes.pop( n)
+    return 0
 
 
 # Distribute cores
 def distribute_cores( ):
-    f = open( nodes_distribution_file, 'r')
+    try:
+        f = open( cores_distribution_file, 'r')
+    except:
+        return -1
     line = f.readline()
     line_spl = line.split()
     dist_type = line_spl[0]
@@ -193,23 +210,23 @@ def distribute_cores( ):
     users_min = {}
     users_extra = {}
     if (verbose):
-        print "distribute_cores:"
+        print 'distribute_cores:'
         print 'dist_type: ' + dist_type
     if (len( line_spl) > 1):
         if (line_spl[1] != 'minimum'):
-            return -1
+            return -2
         try:
             min_cores = int(line_spl[2])
         except:
-            return -1
-
+            return -2
+    # General minimum cores
     left_cores = N_cores
     for user in users:
         users_min[user] = min_cores
         left_cores -= min_cores
     if (left_cores < 0):
-        return -2
-
+        return -3
+    # Even distribution
     if (dist_type == 'even'):
         n_users = len( users)
         if (n_users == 0):
@@ -218,7 +235,7 @@ def distribute_cores( ):
         for user in users:
             users_extra[user] = N_per_user
         left_cores = left_cores - N_per_user*n_users
-
+    # Explicit distribution
     elif (dist_type == 'explicit'):
         for line in f:
             line_spl = line.split()
@@ -227,7 +244,7 @@ def distribute_cores( ):
                 continue
             value = line_spl[1].split('+') 
             if (len( value) > 2 or len( value) == 0):
-                return -1
+                return -2
             if (len( value) == 2):
                 try:
                     min_cores = int(value[0])
@@ -238,9 +255,7 @@ def distribute_cores( ):
                     return -1
             users_extra[user] = value[0]
         if (left_cores < 0):
-            return -2
-
-
+            return -3
         left_cores_original = left_cores
         for user,info in users_extra.iteritems():
             try:
@@ -250,26 +265,25 @@ def distribute_cores( ):
                 else:
                     N_per_user = int(info)
             except:
-                return -1
-
+                return -2
             add_cores = N_per_user
             left_cores -= add_cores
             users_extra[user] = add_cores
-
+    # Unknown type of distribution
     else:
-        return -3
-
+        return -2
+    f.close()
+    # Equally share left cores
     while (left_cores != 0):
         for user in users_extra:
             if (left_cores == 0):
                 break
             users_extra[user] += int(math.copysign(1,left_cores))
             left_cores += math.copysign(1,-left_cores)
-
-    if(verbose):
-        print "users_min: ", users_min
-        print "users_extra: ", users_extra
-
+    if (verbose):
+        print 'users_min:   ', users_min
+        print 'users_extra: ', users_extra
+    # Finally put into the users variable
     global N_min_cores
     N_min_cores = 0
     for user in users:
@@ -282,28 +296,30 @@ def distribute_cores( ):
             users[user].extra_cores = users_extra[user]
         except:
             users[user].extra_cores = 0
-        
     for user in users:
         users[user].max_cores = N_cores - N_min_cores + users[user].min_cores
-
-    f.close()
     return 0
-
 
 
 # Get action from client and execute it
 # message from client must be:
+#
+#    int          tuple
 #   (action_type, arguments)
 #              
-#   The arguments are option dependent. See below
+#  'arguments' is option dependent. See below.
+#  Message sent back:
+#
+#    int     str
+#   (status, msg)
 #
 def handle_client( ):
-    global N_cores
+    global N_cores, N_used_cores
     if (verbose):
         print "handle_client: ready"
-    server = Listener(( multiuser_address, multiuser_port), authkey = multiuser_key)
+    conn = Listener(( multiuser_address, multiuser_port), authkey = multiuser_key)
     while True:
-        client = server.accept()
+        client = conn.accept()
         (action_type, arguments) = client.recv()
         if (verbose):
             print "Received: " + str(action_type) + " -> " + str(arguments)
@@ -312,33 +328,53 @@ def handle_client( ):
         # Reload the nodes
         # arguments = ()
         if (action_type == MULTIUSER_NODES):
-            load_nodes()
-            try:
-                msg = (0, 'Nodes loaded.')
-            except:
-                msg = (1, 'Problem when loading nodes. Is this the correct file: ' + nodes_file + '?')
-            client.send( msg)
+            status = load_nodes()
+            if (status == 0):
+                msg = 'Nodes loaded.'
+            elif (status == -1):
+                msg = 'Nodes loading failed. Problem when openning ' + nodes_file + '.'
+            elif (status == -2):
+                msg = 'Nodes loading failed. Check ' + nodes_file + '.'
+            else:
+                msg = 'Nodes loading failed.'
 
 
         # Redistribute cores
         # arguments = ()
         elif (action_type == MULTIUSER_DISTRIBUTE):
             status = distribute_cores()
-            if (status != 0):
-                msg = (1, 'Cores distribution failed.')
+            if (status == 0):
+                msg = 'Cores distributed.'
+            elif (status == -1):
+                msg = 'Cores distribution failed. Problem when openning ' + cores_distribution_file + '.'
+            elif (status == -2):
+                msg = 'Cores distribution failed. Check ' + cores_distribution_file + '.'
+            elif (status == -3):
+                msg = 'Cores distribution failed. Not enough cores.'
             else:
-                msg = (0, 'Cores distributed.')
-            client.send( msg)
+                msg = 'Cores distribution failed.'
+
+
+        # Show important variables
+        # arguments = ()
+        elif (action_type == MULTIUSER_SHOW_VARIABLES):
+            status = 0
+            msg = ''
+            msg += 'N_cores          = ' + str( N_cores)          + '\n'
+            msg += 'N_min_cores      = ' + str( N_min_cores)      + '\n'
+            msg += 'N_used_cores     = ' + str( N_used_cores)     + '\n'
+            msg += 'N_used_min_cores = ' + str( N_used_min_cores) + '\n'
 
 
         # Show status
         # arguments = ()
         elif (action_type == MULTIUSER_STATUS):
+            status = 0
             Umsg = ''
             for user, info in users.iteritems():
-                Umsg += '  ' + user + ': ' + str( info.n_jobs) + '+' + str( info.n_queue) + '/' + str( info.min_cores)
+                Umsg += '  ' + user + ': ' + str( info.n_cores) + '+' + str( info.n_queue) + '/' + str( info.min_cores)
                 if (info.extra_cores > 0):
-                    Umsg += '+' + str(info.extra_cores) + '\n'
+                    Umsg += '+' + str( info.extra_cores) + '\n'
                 else:
                     Umsg += '\n'
             if (Umsg):
@@ -347,14 +383,13 @@ def handle_client( ):
                 Umsg = 'No users.\n'
             Nmsg = ''
             for node, info in nodes.iteritems():
-                Nmsg += '  ' + node + ': ' + str( info.n_jobs) + '/' + str( info.max_jobs) + '\n'
+                Nmsg += '  ' + node + ': ' + str( info.n_cores) + '/' + str( info.max_cores) + '\n'
             if (Nmsg):
                 Nmsg = 'Nodes:\n' + Nmsg
             else:
                 Nmsg = 'No nodes.\n'
             msg = Umsg + Nmsg
-            msg = msg + 'Cores: ' + str(N_jobs) + '/' + str( N_cores)
-            client.send( (0, msg))
+            msg = msg + 'Cores: ' + str( N_used_cores) + '/' + str( N_cores)
 
 
         # Finish qpy-multiuser
@@ -367,89 +402,107 @@ def handle_client( ):
         # Add a user
         # arguments = (user_name, cur_jobs)
         elif (action_type == MULTIUSER_USER):
-            user = arguments[0]
+            user         = arguments[0] # str
+            new_cur_jobs = arguments[1] # list (as USER.cur_jobs)
             if (user in users):
-                if (arguments[1]):
-                    if (verbose):
-                        print "Adding cur_jobs to user."
-                    users[user].cur_jobs = arguments[1]
-                    users[user].n_jobs = 0
-                    for job in users[user].cur_jobs:
-                        nodes[job[1]].n_jobs += job[2]
-                        N_cores += job[2]
-                        users[user].n_jobs += job[2]
-                msg = (0, 'User exists.')
+                status = 0
+                msg = 'User exists.'
             else:
                 # Add allowed users
                 allowed_users = []
-                if (os.path.isfile( allowed_users_file)):
+                try:
                     f = open( allowed_users_file, 'r')
                     for line in f:
                         allowed_users.append( line.strip())
                     f.close()
+                except:
+                    pass
                 if (user in allowed_users):
+                    status = 0
                     new_user = USER( user)
                     users[user] = new_user
-                    if (arguments[1]):
-                        if (verbose):
-                            print "Adding cur_jobs to user."
-                        users[user].cur_jobs = arguments[1]
-                        users[user].n_jobs = 0
-                        for job in users[user].cur_jobs:
-                            nodes[job[1]].n_jobs += job[2]
-                            N_cores += job[2]
-                            users[user].n_jobs += job[2]
-                    status = distribute_cores()
-                    if (status != 0):
-                        msg = (0, 'User added. Cores distribution failed.')
+                    if (distribute_cores() != 0):
+                        msg = 'User added. Cores distribution failed.'
                     else:
-                        msg = (0, 'User added.')
+                        msg = 'User added.'
                 else:
-                    msg = (1, 'Not allowed user.')
-                print msg
-            client.send( (msg, nodes_file))
+                    status = 1
+                    msg = 'Not allowed user.'
+            # replace the cur_jobs list
+            if (user in users and new_cur_jobs):
+                N_used_cores -= users[user].n_cores
+                N_used_min_cores -= min( users[user].min_cores, users[user].n_cores)
+                for job in users[user].cur_jobs:
+                    nodes[job[1]].n_cores -= job[2]
+                users[user].cur_jobs = new_cur_jobs
+                users[user].n_cores = 0
+                for job in users[user].cur_jobs:
+                    nodes[job[1]].n_cores += job[2]
+                    users[user].n_jobs += job[2]
+                N_used_cores += users[user].n_cores
+                N_used_min_cores += min( users[user].min_cores, users[user].n_cores)
 
 
-        # Require a core
-        # arguments = (user_name, jobID, n_cores, queue_size)
+        # Add a job
+        # arguments = (user_name, jobID, n_cores, mem, queue_size)
         elif (action_type == MULTIUSER_REQ_CORE):
+            user       = arguments[0] # str
+            jobID      = arguments[1] # int
+            n_cores    = arguments[2] # int
+            mem        = arguments[3] # float
+            queue_size = arguments[4] # int
             try:
-                alloc_status = users[arguments[0]].add_job( int(arguments[1]), int(arguments[2]))
-                client.send( alloc_status)
-                if ( alloc_status[0] == 0):
-                    users[arguments[0]].n_queue = int(arguments[3]) - 1
+                status = users[user].add_job( jobID, n_cores, mem)
+                if (isinstance( status, str)): # The node name
+                    msg = status
+                    status = 0
+                    users[user].n_queue = queue_size - 1
                 else:
-                    users[arguments[0]].n_queue = int(arguments[3])
+                    users[user].n_queue = queue_size
+                    if (status == 1):
+                        msg = 'No node with this requirement.'
+                    elif (status == 2):
+                        msg = 'No free cores.'
             except KeyError:
-                client.send( (-1, 'User does not exists.'))
+                status = -1
+                msg = 'User does not exists.'
             except Exception as ex:
-                template = "An exception of type {0} occured - require a core.\nArguments:\n{1!r}"
+                status = -2
+                template = "WARNING: An exception of type {0} occured - add a job.\nArguments:\n{1!r}\nContact the qpy-team."
                 msg = template.format(type(ex).__name__, ex.args)
-                if (verbose):
-                    print msg
-                client.send( (-2, 'Exception raised:\n' + msg + '\nContact the qpy-team.'))
 
 
         # Remove a job
         # arguments = (user_name, jobID, queue_size)
         elif (action_type == MULTIUSER_REMOVE_JOB):
+            user       = arguments[0] # str
+            jobID      = arguments[1] # int
+            queue_size = arguments[2] # int
             try:
-                rem_status = users[arguments[0]].remove_job( arguments[1])
-                users[arguments[0]].n_queue = int(arguments[2])
-                client.send( rem_status)
+                status = users[user].remove_job( jobID)
+                users[user].n_queue = queue_size
+                if (status == 0):
+                    msg = 'Job removed.'
+                elif (status == 1):
+                    msg = 'Job not found.'
             except KeyError:
-                client.send( (-1, 'User does not exists.'))
+                status = -1
+                msg = 'User does not exists.'
             except Exception as ex:
-                template = "An exception of type {0} occured - free a core.\nArguments:\n{1!r}"
+                status = -2
+                template = "WARNING: An exception of type {0} occured - remove a job.\nArguments:\n{1!r}\nContact the qpy-team."
                 msg = template.format(type(ex).__name__, ex.args)
-                if (verbose):
-                    print msg
-                client.send( (-2, 'Exception raised:\n' + msg + '\nContact the qpy-team.'))
 
 
         # Unknown option
         else:
-            client.send( (-1, 'Unknown option: ' + str( action_type)))
+            status = -1
+            msg = 'Unknown option: ' + str( action_type)
+
+
+        # Send message back
+        client.send( (status, msg))
+
 
 load_nodes()
 handle_client()

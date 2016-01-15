@@ -15,17 +15,17 @@ from qpy_general_variables import *
 # Important variables
 multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
-multiuser_port = 9998
+multiuser_port = 9995
 
-keywords={'nodes':        (MULTIUSER_NODES,      'Reaload nodes file. No arguments'),
-          'distribute':   (MULTIUSER_DISTRIBUTE, 'Distribute cores: No arguments'),
-          'status' :      (MULTIUSER_STATUS,     'Show status. No arguments'),
-          'finish':       (MULTIUSER_FINISH,     'Finish the multiuser execution. No arguments'),
-          '__user':       (MULTIUSER_USER,       'Add user. Arguments: user_name'),
-          '__req_core':   (MULTIUSER_REQ_CORE,   'Require a core: Arguments: user_name, jobID, n_cores, queue_size'),
-          '__remove_job': (MULTIUSER_REMOVE_JOB, 'Remove a job: Arguments: user_name, job_ID, queue_size'),
+keywords={'nodes':        (MULTIUSER_NODES,          'Reaload nodes file. No arguments'),
+          'distribute':   (MULTIUSER_DISTRIBUTE,     'Distribute cores: No arguments'),
+          'status' :      (MULTIUSER_STATUS,         'Show status. No arguments'),
+          'variables' :   (MULTIUSER_SHOW_VARIABLES, 'Show variables. No arguments'),
+          'finish':       (MULTIUSER_FINISH,         'Finish the multiuser execution. No arguments'),
+          '__user':       (MULTIUSER_USER,           'Add user. Arguments: user_name'),
+          '__req_core':   (MULTIUSER_REQ_CORE,       'Require a core: Arguments: user_name, jobID, n_cores, mem, queue_size'),
+          '__remove_job': (MULTIUSER_REMOVE_JOB,     'Remove a job: Arguments: user_name, job_ID, queue_size'),
           }
-
 
 try:
     option = keywords[sys.argv[1]][0]
@@ -65,23 +65,22 @@ if (option == MULTIUSER_REQ_CORE):
         usage_msg = 'Usage: ' + sys.argv[0] +  ' __req_core <user_name> <jobID> <n_cores> <queue_size>.'
         sys.exit( usage_msg)
 
-
 # remove a job
 if (option == MULTIUSER_REMOVE_JOB):
     try:
-        arguments = [sys.argv[2], int( sys.argv[3]), int(sys.argv[4])]
+        arguments = [sys.argv[2], int( sys.argv[3]), int(sys.argv[4]), float(sys.argv[5])]
     except:
         usage_msg = 'Usage: ' + sys.argv[0] +  ' __remove_job <user_name> <job_ID> <queue_size>.'
         sys.exit( usage_msg)
 
 
+# Try to connect in a thread, to test the connection
 class try_connection( threading.Thread):
     def __init__( self):
         threading.Thread.__init__( self)
-        self.master = None
+        self.conn = None
     def run( self):
-        self.master = Client( (multiuser_address, multiuser_port), authkey=multiuser_key)
-
+        self.conn = Client( (multiuser_address, multiuser_port), authkey=multiuser_key)
 
 M = try_connection()
 M.daemon = True
@@ -93,14 +92,8 @@ while (M.is_alive()):
     if (n == waiting):
         sys.exit( 'Time for connection exceeded. Are you sure that qpy-master is running?')
     sleep( 0.05)
-
-master = M.master
-master.send( (option, arguments))
-message_back = master.recv()
-if (isinstance( message_back[0], tuple)):
-    message_back = message_back[0][1]
-else:
-    message_back = message_back[1]
-sys.stdout.write( message_back + '\n')
-
-master.close()
+conn = M.conn
+conn.send( (option, arguments))
+message_back = conn.recv()
+sys.stdout.write( str(message_back[0]) + ": " + message_back[1] + '\n')
+conn.close()
