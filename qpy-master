@@ -953,8 +953,8 @@ def handle_client( sub_ctrl, jobId):
                 cur_conf += 'max_working_time = ' + str( max_working_time) + '\n'
             if (multiuser):
                 cur_conf += 'Nodes under multiuser control.\n'
-                cur_conf += 'Last multiuser messages:\n'
                 if (saveMessages):
+                    cur_conf += 'Last multiuser messages:\n'
                     for msg in multiuser_messages:
                         cur_conf += ' ' + str( msg[0][0][0]) + ', ' + str( msg[0][0][1]) + ': ' + str( msg[0][1][0]) + ', ' + repr( msg[0][1][1])
                         if (msg[1] > 1):

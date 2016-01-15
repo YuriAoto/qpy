@@ -47,17 +47,15 @@ class NODE():
         self.n_used_cores = 0
         self.free_mem = 0
 
-    def memory():
+    def memory( self):
         command="free -g"
         mem_details = subprocess.Popen(["ssh", self.name , command],
-                               shell=False,
-                               stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE)
-
-        mem_stdout = mem.stdout.readlines()
-
+                                       shell=False,
+                                       stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE)
+        
+        mem_stdout = mem_details.stdout.readlines()
         self.free_mem = float(mem_stdout[2].split()[3])
-
         return self.free_mem
 
 # User informations
@@ -94,8 +92,8 @@ class USER():
                 N_users_with_queue = 1
                 N_extra = 0
                 for user,info in users.iteritems():
-                    #if (user == self.name):
-                        #continue
+                    if (user == self.name):
+                        continue
                 
                     if (info.n_queue > 0 and info.n_used_cores >= info.min_cores + info.extra_cores):
                         N_users_with_queue += 1
@@ -108,7 +106,6 @@ class USER():
                     space_available = True
                     
             else:
-
                 space_available = free_cores 
 
         if (space_available):
@@ -120,7 +117,8 @@ class USER():
                         free_34 = info.max_cores - info.n_used_cores > 0
                         continue
                     free = info.max_cores - info.n_used_cores
-                    if (free > best_free and info.memory() > mem):
+                    free_mem = info.memory()
+                    if (free > best_free and free_mem > mem):
                         best_node = node
                         best_free = free
                 if (best_node == None and free_34):
@@ -129,7 +127,6 @@ class USER():
                 free_34 = nodes['orpheus34'].max_cores - nodes['orpheus34'].n_used_cores >= num_cores
                 if (free_34 and nodes['orpheus34'].memory() > mem ):
                     best_node = 'orpheus34'
-
 
             if (best_node == None):
                 return 1
@@ -141,7 +138,7 @@ class USER():
 
             if (self.n_used_cores < self.min_cores):
                 N_used_min_cores += num_cores
-            if (self.n_used_cores < self.min_cores + num_cores):
+            elif (self.n_used_cores < self.min_cores + num_cores):
                 N_used_min_cores += num_cores + self.min_cores - self.n_used_cores
 
             return best_node
@@ -320,6 +317,7 @@ def distribute_cores( ):
 #
 def handle_client( ):
     global N_cores, N_used_cores
+    global N_min_cores, N_used_min_cores
     if (verbose):
         print "handle_client: ready"
     conn = Listener(( multiuser_address, multiuser_port), authkey = multiuser_key)
