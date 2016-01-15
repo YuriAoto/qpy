@@ -41,16 +41,30 @@ verbose = options.verbose
 
 # Node informations
 class NODE():
-    def __init__( self, max_cores):
+    def __init__( self, name, max_cores):
+        self.name = name
         self.max_cores = max_cores
-        self.n_cores = 0
+        self.n_used_cores = 0
+        self.free_mem = 0
 
+    def memory():
+        command="free -g"
+        mem_details = subprocess.Popen(["ssh", self.name , command],
+                               shell=False,
+                               stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE)
+
+        mem_stdout = mem.stdout.readlines()
+
+        self.free_mem = float(mem_stdout[2].split()[3])
+
+        return self.free_mem
 
 # User informations
 # self.min_cores   -> only for the user
 # self.extra_cores -> preferably for the user
 # self.max_cores   -> maximum that can be used: N_cores - min_cores (of other users)
-# self.n_cores     -> current number of used cores
+# self.n_used_cores     -> current number of used cores
 #
 class USER():
     def __init__( self, name):
@@ -58,7 +72,7 @@ class USER():
         self.min_cores = 0
         self.extra_cores = 0
         self.max_cores = 0
-        self.n_cores = 0
+        self.n_used_cores = 0
         self.n_queue = 0
         self.cur_jobs = [] # each job = (jobID, best_node, num_cores)
 
@@ -70,74 +84,65 @@ class USER():
         N_free_cores = (N_cores - N_used_cores) - (N_min_cores - N_used_min_cores)
         free_cores = N_free_cores >= num_cores
 
-        if (self.n_cores + num_cores <= self.min_cores):
+        if (self.n_used_cores + num_cores <= self.min_cores):
             space_available = True
 
         else:
-            use_others_resource = self.n_cores >= self.min_cores + self.extra_cores
+            use_others_resource = self.n_used_cores + num_cores > self.min_cores + self.extra_cores
             if (use_others_resource):
 
                 N_users_with_queue = 1
                 N_extra = 0
                 for user,info in users.iteritems():
-                    if (user == self.name):
-                        continue
+                    #if (user == self.name):
+                        #continue
                 
-                    if (info.n_queue > 1 and info.n_cores >= info.min_cores + info.extra_cores):
+                    if (info.n_queue > 0 and info.n_used_cores >= info.min_cores + info.extra_cores):
                         N_users_with_queue += 1
 
                     elif (info.n_queue == 0):
-                        N_extra += min(info.extra_cores + info.min_cores - info.n_cores, info.extra_cores)
+                        N_extra += min(info.extra_cores + info.min_cores - info.n_used_cores, info.extra_cores)
 
                 N_extra_per_user = N_extra/N_users_with_queue
-                if (self.n_cores + num_cores <= self.min_cores + self.extra_cores + N_extra_per_user and free_cores):
+                if (self.n_used_cores + num_cores <= self.min_cores + self.extra_cores + N_extra_per_user and free_cores):
                     space_available = True
                     
             else:
 
-                N_users_free = 1
-                N_used_extra = 0
-                N_extra_cores_per_user_free = self.extra_cores
-                for user,info in users.iteritems():
-                    if (user == self.name):
-                        continue
-                    
-                    n_extra_user = info.n_cores - info.min_cores - info.extra_cores
-                    if (n_extra_user > 0):
-                        N_used_extra += n_extra_user
-                    elif (n_extra_user < 0 and info.n_queue > 0):
-                        N_extra_cores_per_user_free += info.extra_cores
-                        N_users_free += 1
-
-                N_free_per_user = (N_extra_cores_per_user_free - N_used_extra)/N_users_free
-                if (self.n_cores + num_cores <= self.min_cores + N_free_per_user and free_cores):
-                    space_available = True
+                space_available = free_cores 
 
         if (space_available):
             best_node = None
             best_free = 0
-            for node, info in nodes.iteritems():
-                # Evenly distributing
-                #free = info.max_cores - info.n_cores
-                #if (free > best_free and free >= num_cores):
-                #    best_node = node
-                #    best_free = free
-                # first nodes first
-                if (info.max_cores - info.n_cores  >= num_cores):
-                    best_node = node
+            if (num_cores == 1):
+                for node, info in nodes.iteritems():
+                    if (node == 'orpheus34'):
+                        free_34 = info.max_cores - info.n_used_cores > 0
+                        continue
+                    free = info.max_cores - info.n_used_cores
+                    if (free > best_free and info.memory() > mem):
+                        best_node = node
+                        best_free = free
+                if (best_node == None and free_34):
+                    best_node = 'orpheus34'
+            else:
+                free_34 = nodes['orpheus34'].max_cores - nodes['orpheus34'].n_used_cores >= num_cores
+                if (free_34 and nodes['orpheus34'].memory() > mem ):
+                    best_node = 'orpheus34'
+
 
             if (best_node == None):
                 return 1
 
             self.cur_jobs.append( (jobID, best_node, num_cores))
-            self.n_cores += num_cores
-            nodes[best_node].n_cores += num_cores
+            self.n_used_cores += num_cores
+            nodes[best_node].n_used_cores += num_cores
             N_used_cores += num_cores
 
-            if (self.n_cores < self.min_cores):
+            if (self.n_used_cores < self.min_cores):
                 N_used_min_cores += num_cores
-            if (self.n_cores < self.min_cores + num_cores):
-                N_used_min_cores += num_cores + self.min_cores - self.n_cores
+            if (self.n_used_cores < self.min_cores + num_cores):
+                N_used_min_cores += num_cores + self.min_cores - self.n_used_cores
 
             return best_node
 
@@ -148,11 +153,11 @@ class USER():
         global N_used_cores, N_used_min_cores
         for job in self.cur_jobs:
             if (job[0] == jobID):
-                self.n_cores -= job[2]
-                nodes[job[1]].n_cores -= job[2]
+                self.n_used_cores -= job[2]
+                nodes[job[1]].n_used_cores -= job[2]
                 N_used_cores -= job[2]
-                if (self.n_cores < self.min_cores):
-                    N_used_min_cores -= min( job[2], self.min_cores - self.n_cores)
+                if (self.n_used_cores < self.min_cores):
+                    N_used_min_cores -= min( job[2], self.min_cores - self.n_used_cores)
                 self.cur_jobs.remove( job)
                 return 0
         return 1
@@ -185,7 +190,7 @@ def load_nodes():
             N_cores += c - nodes[n].max_cores
             nodes[n].max_cores = c
         else:
-            new_node = NODE( c)
+            new_node = NODE( n, c)
             nodes[n] = new_node
             N_cores += new_node.max_cores
     nodes_to_remove = []
@@ -372,7 +377,7 @@ def handle_client( ):
             status = 0
             Umsg = ''
             for user, info in users.iteritems():
-                Umsg += '  ' + user + ': ' + str( info.n_cores) + '+' + str( info.n_queue) + '/' + str( info.min_cores)
+                Umsg += '  ' + user + ': ' + str( info.n_used_cores) + '+' + str( info.n_queue) + '/' + str( info.min_cores)
                 if (info.extra_cores > 0):
                     Umsg += '+' + str( info.extra_cores) + '\n'
                 else:
@@ -383,7 +388,7 @@ def handle_client( ):
                 Umsg = 'No users.\n'
             Nmsg = ''
             for node, info in nodes.iteritems():
-                Nmsg += '  ' + node + ': ' + str( info.n_cores) + '/' + str( info.max_cores) + '\n'
+                Nmsg += '  ' + node + ': ' + str( info.n_used_cores) + '/' + str( info.max_cores) + '\n'
             if (Nmsg):
                 Nmsg = 'Nodes:\n' + Nmsg
             else:
@@ -430,17 +435,17 @@ def handle_client( ):
                     msg = 'Not allowed user.'
             # replace the cur_jobs list
             if (user in users and new_cur_jobs):
-                N_used_cores -= users[user].n_cores
-                N_used_min_cores -= min( users[user].min_cores, users[user].n_cores)
+                N_used_cores -= users[user].n_used_cores
+                N_used_min_cores -= min( users[user].min_cores, users[user].n_used_cores)
                 for job in users[user].cur_jobs:
-                    nodes[job[1]].n_cores -= job[2]
+                    nodes[job[1]].n_used_cores -= job[2]
                 users[user].cur_jobs = new_cur_jobs
-                users[user].n_cores = 0
+                users[user].n_used_cores = 0
                 for job in users[user].cur_jobs:
-                    nodes[job[1]].n_cores += job[2]
+                    nodes[job[1]].n_used_cores += job[2]
                     users[user].n_jobs += job[2]
-                N_used_cores += users[user].n_cores
-                N_used_min_cores += min( users[user].min_cores, users[user].n_cores)
+                N_used_cores += users[user].n_used_cores
+                N_used_min_cores += min( users[user].min_cores, users[user].n_used_cores)
 
 
         # Add a job
