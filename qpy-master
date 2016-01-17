@@ -468,6 +468,7 @@ class submission_control( threading.Thread):
             self.max_jobs_default = 20
         self.jobs = job_collection()
         self.multiuser_cur_jobs = []
+        self.skip_job_sub = 0
 
     def write_nodes( self):
         f = open( cur_nodes_file, 'w')
@@ -487,7 +488,6 @@ class submission_control( threading.Thread):
             f.close()
             
     def run( self):
-        skip_job_sub = 0
         if (not( multiuser)):
             self.write_nodes()
         n_time_multiuser = 0
@@ -520,8 +520,8 @@ class submission_control( threading.Thread):
                     job.status = 2
                     self.jobs.running.remove( job)
                     self.jobs.done.append( job)
-                    job.node.n_jobs -= 1
-                    skip_job_sub = 0
+                    job.node.n_jobs -= job.n_cores
+                    self.skip_job_sub = 0
 
                     if (multiuser and multiuser_is_alive):
                         self.multiuser_cur_jobs.remove( [job.ID, job.node.node_id])
@@ -546,7 +546,7 @@ class submission_control( threading.Thread):
 
 
             # Send a job, if there is space
-            if (skip_job_sub <= 0):
+            if (self.skip_job_sub <= 0):
                 self.jobs.Q_lock.acquire()
                 queue_has_jobs = len( self.jobs.Q) != 0
                 if (queue_has_jobs):
@@ -574,6 +574,8 @@ class submission_control( threading.Thread):
                                 best_node = NODE( -1, msg_back[1])
                                 best_node.start()
                                 self.node_list.append( best_node)
+                        else:
+                            self.skip_job_sub = 300
                     else:
                         best_free = 0
                         cur_time = time()
@@ -592,13 +594,13 @@ class submission_control( threading.Thread):
                                 best_node.start()
                                 best_node.queue.put( 'kill')
                                 best_node = None
-                                skip_job_sub = 100
+                                self.skip_job_sub = 180
                     if (best_node != None):
                         if (verbose):
                             print "submission_control: putting job"
                         job = self.jobs.Q.pop()
                         best_node.queue.put( job)
-                        best_node.n_jobs += 1
+                        best_node.n_jobs += job.n_cores
                         self.jobs.lock.acquire()
                         self.jobs.queue.remove( job)
                         self.jobs.queue_size -= 1
@@ -607,9 +609,9 @@ class submission_control( threading.Thread):
                 self.jobs.Q_lock.release()
 
             else:
-                skip_job_sub = skip_job_sub - 1
+                self.skip_job_sub -= 1
                 if (verbose):
-                    print "Skipping job submission: " + str( skip_job_sub)
+                    print "Skipping job submission: " + str( self.skip_job_sub)
 
             sleep( 1)
 
@@ -648,7 +650,7 @@ def job_kill( job, sub_ctrl):
                               stdout=subprocess.PIPE,
                               stderr=subprocess.PIPE)
     job.status = 3
-    job.node.n_jobs -= 1
+    job.node.n_jobs -= job.n_cores
     if (verbose):
         print "Killing job " + str( job.ID) + ' on node ' + job.node.node_id
         print "job_kill stdout: ", kill_p.stdout.readlines()
@@ -756,6 +758,9 @@ def handle_client( sub_ctrl, jobId):
                 sub_ctrl.jobs.killed.append( job)
                 n_kill_r += 1
             sub_ctrl.jobs.lock.release()
+
+            if (n_kill_q + n_kill_r):
+                sub_ctrl.skip_job_sub = 0
 
             msg = ''
             if (n_kill_q):

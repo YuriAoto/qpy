@@ -20,6 +20,7 @@ nodes_file = '/home/linux4_i2/aoto/Codes/qpy/multiuser_nodes'
 allowed_users_file = '/home/linux4_i2/aoto/Codes/qpy/multiuser_allowed_users'
 cores_distribution_file = '/home/linux4_i2/aoto/Codes/qpy/multiuser_distribution_rules'
 
+nodes_list = []
 nodes = {}
 users = {}
 N_cores = 0
@@ -46,6 +47,7 @@ class NODE():
         self.max_cores = max_cores
         self.n_used_cores = 0
         self.free_mem = 0
+        self.pref_multicores = False
 
     def memory( self):
         command="free -g"
@@ -59,10 +61,10 @@ class NODE():
         return self.free_mem
 
 # User informations
-# self.min_cores   -> only for the user
-# self.extra_cores -> preferably for the user
-# self.max_cores   -> maximum that can be used: N_cores - min_cores (of other users)
-# self.n_used_cores     -> current number of used cores
+# self.min_cores    -> only for the user
+# self.extra_cores  -> preferably for the user
+# self.max_cores    -> maximum that can be used: N_cores - min_cores (of other users)
+# self.n_used_cores -> current number of used cores
 #
 class USER():
     def __init__( self, name):
@@ -113,20 +115,15 @@ class USER():
             best_free = 0
             if (num_cores == 1):
                 for node, info in nodes.iteritems():
-                    if (node == 'orpheus34'):
-                        free_34 = info.max_cores - info.n_used_cores > 0
-                        continue
                     free = info.max_cores - info.n_used_cores
-                    free_mem = info.memory()
-                    if (free > best_free and free_mem > mem):
+                    if (not(info.pref_multicores) and free > best_free and info.memory() > mem):
                         best_node = node
                         best_free = free
-                if (best_node == None and free_34):
-                    best_node = 'orpheus34'
-            else:
-                free_34 = nodes['orpheus34'].max_cores - nodes['orpheus34'].n_used_cores >= num_cores
-                if (free_34 and nodes['orpheus34'].memory() > mem ):
-                    best_node = 'orpheus34'
+            if (best_node == None):
+                for node in nodes_list:
+                    if (nodes[node].max_cores - nodes[node].n_used_cores >= num_cores and nodes[node].memory() > mem):
+                        best_node = node
+                        break
 
             if (best_node == None):
                 return 1
@@ -169,19 +166,23 @@ def load_nodes():
         return -1
     nodes_in_file = []
     cores_in_file = []
+    nodes_for_multicores = []
     for line in f:
-        line_spl = line.split() # [<node_name>, <max_jobs>]
+        line_spl = line.split() # [<node_name>, <max_jobs>, [M]]
         try:
             nodes_in_file.append( line_spl[0])
             cores_in_file.append( int( line_spl[1]))
         except:
             f.close()
             return -2
+        if ('M' in line_spl[2:]):
+            nodes_for_multicores.append( line_spl[0])
     f.close()
     if (verbose):
         print "load_nodes:"
         print "nodes: ", nodes_in_file
         print "cores: ", cores_in_file
+        print "nodes for multi: ", nodes_for_multicores
     for n, c in zip( nodes_in_file, cores_in_file):
         if (n in nodes):
             N_cores += c - nodes[n].max_cores
@@ -191,9 +192,19 @@ def load_nodes():
             nodes[n] = new_node
             N_cores += new_node.max_cores
     nodes_to_remove = []
+    global nodes_list
+    nodes_list = []
     for n in nodes:
-        if (not( n in nodes_in_file)):
+        if (n in nodes_in_file):
+            if (n in nodes_for_multicores):
+                nodes[n].pref_multicores = True
+                nodes_list.insert(0, n)
+            else:
+                nodes[n].pref_multicores = False
+                nodes_list.append( n)
+        else:
             nodes_to_remove.append( n)
+
     for n in nodes_to_remove:
         nodes.pop( n)
     return 0
