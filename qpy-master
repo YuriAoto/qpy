@@ -496,7 +496,7 @@ class submission_control( threading.Thread):
 
             # Connect with qpy-multiuser
             if (multiuser and n_time_multiuser == 0):
-                msg_back = send_multiuser_arguments( MULTIUSER_USER, (user, []))
+                msg_back = send_multiuser_arguments( MULTIUSER_USER, (user))
                 if (msg_back == None):
                     multiuser_is_alive = False
                     continue
@@ -880,16 +880,20 @@ def handle_client( sub_ctrl, jobId):
             else:
                 if (multiuser):
                     msg = 'Nodes under multiuser control:\n'
-                    msg_back = send_multiuser_arguments( MULTIUSER_STATUS, ())
-                    if (msg_back == None):
-                        msg += 'qpy-multiuser seems not to be running. Contact the qpy-team.\n'
+                    if (arguments and arguments[0]=='full'):
+                        msg_back = send_multiuser_arguments( MULTIUSER_STATUS, ())
+                        if (msg_back == None):
+                            msg += 'qpy-multiuser seems not to be running. Contact the qpy-team.\n'
+                        else:
+                            msg += msg_back[1] + '\n'
+                        for node in sub_ctrl.node_list:
+                            msg = msg.replace(node.node_id + ': ', node.node_id + ': ' + str( node.n_jobs) + '/')
                     else:
-                        msg += msg_back[1] + '\n'
-                    for node in sub_ctrl.node_list:
-                        msg = msg.replace(node.node_id + ': ', node.node_id + ': ' + str( node.n_jobs) + '/')
+                        for node in sub_ctrl.node_list:
+                            msg += node.node_id + ': ' + str( node.n_jobs) + '\n'
                 else:
                     for node in sub_ctrl.node_list:
-                        msg += node.node_id + ' ' + str( node.n_jobs) + '/' + str( node.max_jobs) + '\n'
+                        msg += node.node_id + ': ' + str( node.n_jobs) + '/' + str( node.max_jobs) + '\n'
 
             client_master.send( msg)
 

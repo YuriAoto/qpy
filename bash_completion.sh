@@ -10,7 +10,7 @@ _qpy()
 
     opts="sub check kill finish nodes maxJobs config clean tutorial"
 
-    opts_nodes="add remove forceRemove"
+    opts_nodes="add remove forceRemove full"
 
     jobID="__job_ID__"
     newnode="__new_node__"

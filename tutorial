@@ -6,17 +6,30 @@ Some general statements about the program
 
 How to initialize qpy-master
 
-qpy-master needs to be initialized before submitting any job using qpy. The command to initilize it is: 'qpy-master --cluster=' and the name of the cluster. qpy can only be used in the 'linux4' and 'hlrs' now. So use either of these two keywords for cluster. It is always best to make this command running in background. 
+qpy-master needs to be initialized before submitting any job using qpy. 
+
+The necessary command to initilize qpy-master is: 'qpy-master --cluster=' and the name of the cluster. qpy can only be used in the 'linux4' and 'hlrs' now. So use either of these two keywords for cluster. It is always best to make this command running in background. 
+
+There are two different environment in which qpy can be used. The simpler one is to use the 'single-user' environment. This is the default one, so no different keywords to be used during the initialization of qpy-master. Here the user will be using the queing system alone without sharing the number of nodes that the user would assign for himself/herserlf.
+
+The 'multiuser' environment can be used by initializing qpy-master with the option 'm' or '--multiuser'. This environment only works for linux4. Within this environment, some of the cores among the different 'orpheus' machines will be assigned to every users. So the user do not have to add nodes and assign maxJob to that node. Everything will be taken care by this 'multiuser' environment. 
+
+Here are the different options that can be used while running qpy-master:
+-v or --verbose :- to have some useful messages printed;
+-m or --multiuser :- to set the multiuser environment;
+-c or --cluster :- to specify the cluster (mandatory, there is no default);
+-i or --initJobID :- to set the jod id for the first job
+
 
 -> Using qpy
 
-qpy is used to submit jobs from the main server (say linux4 and hlrs) and then the jobs are distributed to different nodes according the availability or the choices given by the user. For the time being, it can only handle jobs running in single processors. The distribution of jobs are different for linux4 and hlrs cluter. For linux 4, the submitted jobs are distributed to the defferent 'orpheus' nodes. The user, however, has to add the nodes and the number of cores the user wants to use on that particular node before submitting the first job. The user, on the other hand, does not have to add any nodes or corersponding number of cores while using hlrs cluster. qpy allot a node itself along with the avaliable cores in it whenever it needs to submit any new job. 
+qpy is used to submit jobs from the main server (say 'linux4' and 'hlrs') and then the jobs are distributed to different nodes according the availability or the choices given by the user. It can handle jobs running in both single and multi processors. The distribution of jobs are different for 'linux4' and 'hlrs' cluter. For 'linux4', the submitted jobs are distributed to the defferent 'orpheus' nodes. The user, while using the 'single-user' environment , has to add the nodes and the number of cores he/she wants to use on that particular node before submitting the first job. The user, on the other hand, does not have to add any nodes or corersponding number of cores while using 'hlrs' cluster. qpy allot a node itself along with the avaliable cores in it whenever it needs to submit any new job. 
 
 The followings are the commands that are necessary to use qpy. While qoy-master is already running in the background, the user can user any of these commands as 'qpy [cmd]'
 
 # sub
 
-Submit any script after the command 'qpy sub'. The output and the error file of running that particular script will be written in a single file 'job_[jodid].outerr'.
+Submit any script after the command 'qpy sub'. The output and the error file of running that particular script will be written in the files 'job_[jodid].out' and 'job_[jodid].err' respectively.
 
 # check
 
@@ -32,20 +45,24 @@ If you feel like done using qpy or want to update the version and rerun it, plea
 
 # nodes
 
-Check all the nodes that are working and also the number of cores being used. For linux4, add or remove any node by adding the node after 'qpy nodes add/remove'.
+It gives the number of cores being used by the user for each of the nodes that the user has added to use. For linux4, while working as a 'single user', it also provide the way to add or remove node by simple adding the name of the node after 'qpy nodes add/remove'.
 
 # maxJobs
 
-
+This command set the maxJobs. The default of maxJobs is 20 for both linux4 (for single-user, not necessary at all for multiuser) and hlrs. The user can change the maxJobs for a particular node (any orpheus in linux4) by adding the name of a specific node at the end. e.g. 'qpy maxJobs 10 orpheus34' will change the maxJobs to 10 for orpheus34.
 
 # config
 
-Bla bla
+This command gives informations about some of the variables in qpy. Feel free to check. It is quite self explanatory.
 
 # clean
 
-Bla bla
+It cleane the list of jobs that one can see using 'qpy check'. The user can clean some specific jobs by adding the job id or the specific status of the job i.e. 'running', 'done', 'killed', 'undone' and 'queue' along with the command. User has to clean all the list before finishing qpy. 
 
 # tutorial
 
-Bla bla
+This helps the user to understand a command. One can get the informations about any of the commands by adding its name after 'qpy tutorial'. 
+
+-----------
+
+Every command in qpy can be completed automatically by using the tab key. It also gives the possible next arguments which, we hope, would be very helpful for all the users :)

@@ -1,0 +1,15 @@
+*****  qpy jump
+
+qpy jump 25-30,34 20 {Jobs 25,26,27,28,29,30 and 34 would jump the que to go before 20}
+
+***** adding time 
+
+JOB.
+self.start_time
+self.finish_time
+
+running time for a running job and total time for a finished job need to be shown in the job info
+
+*****  positioning job info
+
+%j (%s):%c (wd: %d) %t

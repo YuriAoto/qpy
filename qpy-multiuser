@@ -417,7 +417,10 @@ def handle_client( ):
         # arguments = (user_name, cur_jobs)
         elif (action_type == MULTIUSER_USER):
             user         = arguments[0] # str
-            new_cur_jobs = arguments[1] # list (as USER.cur_jobs)
+            if (len(arguments) == 2):
+                new_cur_jobs = arguments[1] # list (as USER.cur_jobs)
+            else: 
+                new_cur_jobs = None
             if (user in users):
                 status = 0
                 msg = 'User exists.'
@@ -443,7 +446,7 @@ def handle_client( ):
                     status = 1
                     msg = 'Not allowed user.'
             # replace the cur_jobs list
-            if (user in users and new_cur_jobs):
+            if (user in users and new_cur_jobs != None ):
                 N_used_cores -= users[user].n_used_cores
                 N_used_min_cores -= min( users[user].min_cores, users[user].n_used_cores)
                 for job in users[user].cur_jobs:
