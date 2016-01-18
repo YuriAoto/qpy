@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # qpy - control the nodes distribution for several users
 #
 # 26 December 2015 - Pradipta and Yuri
@@ -30,7 +29,7 @@ N_used_min_cores = 0
 
 multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
-multiuser_port = 9995
+multiuser_port = 9999
 
 parser = OptionParser()
 parser.add_option("-v", "--verbose",
@@ -74,7 +73,7 @@ class USER():
         self.max_cores = 0
         self.n_used_cores = 0
         self.n_queue = 0
-        self.cur_jobs = [] # each job = (jobID, best_node, num_cores)
+        self.cur_jobs = [] # each job = (jobID, node, num_cores)
 
     # Add a job, if possible
     def add_job( self, jobID, num_cores, mem):
@@ -414,17 +413,18 @@ def handle_client( ):
 
 
         # Add a user
-        # arguments = (user_name, cur_jobs)
+        # arguments = (user_name[, cur_jobs])
         elif (action_type == MULTIUSER_USER):
-            user         = arguments[0] # str
-            if (len(arguments) == 2):
+            user = arguments[0] # str
+            if (len( arguments) == 2):
                 new_cur_jobs = arguments[1] # list (as USER.cur_jobs)
             else: 
                 new_cur_jobs = None
             if (user in users):
                 status = 0
-                msg = 'User exists.'
+                msg = users[user].cur_jobs
             else:
+                print user
                 # Add allowed users
                 allowed_users = []
                 try:
@@ -455,7 +455,7 @@ def handle_client( ):
                 users[user].n_used_cores = 0
                 for job in users[user].cur_jobs:
                     nodes[job[1]].n_used_cores += job[2]
-                    users[user].n_jobs += job[2]
+                    users[user].n_used_cores += job[2]
                 N_used_cores += users[user].n_used_cores
                 N_used_min_cores += min( users[user].min_cores, users[user].n_used_cores)
 

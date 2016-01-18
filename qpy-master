@@ -90,7 +90,7 @@ jobID_file = qpy_dir + '/.next_jobID'
 
 multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
-multiuser_port = 9995
+multiuser_port = 9999
 
 if (saveMessages):
     multiuser_messages = deque(maxlen=25)
@@ -114,14 +114,6 @@ f.write( str( port))
 f.close()
 
 
-# Kill the attempt to connect to qpy-multiuser
-class kill_multiuser_connection( threading.Thread):
-    def __init__( self):
-        threading.Thread.__init__( self)
-        self.conn = None
-    def run( self):
-        self.conn = Listener(( multiuser_address, multiuser_port), authkey = multiuser_key)
-        client = self.conn.accept()
 
 # Attempt to connect to qpy-multiuser
 class try_multiuser_connection( threading.Thread):
@@ -141,8 +133,9 @@ def send_multiuser_arguments( option, arguments):
     while (M.is_alive()):
         n += 1
         if (n == waiting):
-            L = kill_multiuser_connection()
-            L.start()
+            kill_conn = Listener(( multiuser_address, multiuser_port), authkey = multiuser_key)
+            client = kill_conn.accept()
+            kill_conn.close()
             return None
         sleep( 0.05)
     conn = M.conn
@@ -155,22 +148,6 @@ def send_multiuser_arguments( option, arguments):
         elif (multiuser_messages[-1][1] < 10):
             multiuser_messages[-1][1] += 1
     return msg_back
-
-
-# add as new user to qpy-multiuser
-def add_user_to_multiuser( sub_ctrl):
-    if (verbose):
-        print "Adding user to qpy-multiuser."
-    msg = send_multiuser_arguments( MULTIUSER_USER, (user, []))
-    if (msg == None):
-        sub_ctrl.live = False
-        os.remove( port_file)
-        sys.exit( 'Time for connection exceeded. Are you sure that qpy-multiuser is running?')
-    if (msg[0] == 1):
-        sys.exit( 'You are not allowed to use qpy-multiuser. Contact the qpy-team.')
-    if (verbose):
-        print 'Multiuser message:', msg
-    return True
 
 
 # Check if the <command> sent by ssh to <address> return the <exp_out> message without errors
@@ -496,16 +473,15 @@ class submission_control( threading.Thread):
 
             # Connect with qpy-multiuser
             if (multiuser and n_time_multiuser == 0):
-                msg_back = send_multiuser_arguments( MULTIUSER_USER, (user))
+                msg_back = send_multiuser_arguments( MULTIUSER_USER, [user])
                 if (msg_back == None):
                     multiuser_is_alive = False
-                    continue
                 else:
                     multiuser_is_alive = True
+                    if (not( isinstance( msg_back[1], list))):
+                        msg_back = send_multiuser_arguments( MULTIUSER_USER, (user, self.multiuser_cur_jobs))
                 if (verbose):
                     print "Checking multiuser: ", msg_back
-                if (msg_back[1] != 'User exists.'):
-                    msg_back = send_multiuser_arguments( MULTIUSER_USER, (user, self.multiuser_cur_jobs))
                 n_time_multiuser = conn_multiuser_at
             else:
                 n_time_multiuser -= 1
@@ -524,7 +500,7 @@ class submission_control( threading.Thread):
                     self.skip_job_sub = 0
 
                     if (multiuser and multiuser_is_alive):
-                        self.multiuser_cur_jobs.remove( [job.ID, job.node.node_id])
+                        self.multiuser_cur_jobs.remove( [job.ID, job.node.node_id, job.n_cores])
                         multiuser_args = (user, job.ID, self.jobs.queue_size)
                         msg_back = send_multiuser_arguments( MULTIUSER_REMOVE_JOB, multiuser_args)
                         if (msg_back == None):
@@ -563,7 +539,7 @@ class submission_control( threading.Thread):
                         if (verbose):
                             print 'Multiuser message (sending job): ', msg_back
                         if (msg_back[0] == 0):
-                            self.multiuser_cur_jobs.append( [next_jobID, msg_back[1]])
+                            self.multiuser_cur_jobs.append( [next_jobID, msg_back[1], next_Ncores])
                             node_found = False
                             for node in self.node_list:
                                 if (msg_back[1] == node.node_id):
@@ -660,9 +636,11 @@ def job_kill( job, sub_ctrl):
         multiuser_args = (user, job.ID, sub_ctrl.jobs.queue_size)
         msg_back = send_multiuser_arguments( MULTIUSER_REMOVE_JOB, multiuser_args)
         if (verbose):
-            print 'Multiuser message (killing a job): ', msg_back[1]
-        sub_ctrl.multiuser_cur_jobs.remove( [job.ID, job.node.node_id])
-
+            if (msg_back == None):
+                print 'Multiuser seems not to be running.'
+            else:
+                print 'Multiuser message (killing a job): ', msg_back[1]
+        sub_ctrl.multiuser_cur_jobs.remove( [job.ID, job.node.node_id, job.n_cores])
 
 # Get job from client and send it for submission
 # message from client must be:
@@ -1014,9 +992,6 @@ if (ini_job_ID == None):
 
 sub_ctrl = submission_control()
 sub_ctrl.start()
-
-if (multiuser):
-    add_user_to_multiuser( sub_ctrl)
 
 handle_client( sub_ctrl, ini_job_ID)
 os.remove( port_file)

@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # qpy - user interface to the qpy-multiuser
 #
 # 31 Dec 2015 - Pradipta and Yuri
@@ -15,7 +14,7 @@ from qpy_general_variables import *
 # Important variables
 multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
-multiuser_port = 9995
+multiuser_port = 9999
 
 keywords={'nodes':        (MULTIUSER_NODES,          'Reaload nodes file. No arguments'),
           'distribute':   (MULTIUSER_DISTRIBUTE,     'Distribute cores: No arguments'),
@@ -68,7 +67,7 @@ if (option == MULTIUSER_REQ_CORE):
 # remove a job
 if (option == MULTIUSER_REMOVE_JOB):
     try:
-        arguments = [sys.argv[2], int( sys.argv[3]), int(sys.argv[4]), float(sys.argv[5])]
+        arguments = [sys.argv[2], int( sys.argv[3]), int(sys.argv[4])]
     except:
         usage_msg = 'Usage: ' + sys.argv[0] +  ' __remove_job <user_name> <job_ID> <queue_size>.'
         sys.exit( usage_msg)

@@ -13,3 +13,47 @@ running time for a running job and total time for a finished job need to be show
 *****  positioning job info
 
 %j (%s):%c (wd: %d) %t
+
+
+*****  make qpy-master get the job informations from qpy-multiuser, if qpy-master has clashed
+
+Use the obsolete code below
+
+# add as new user to qpy-multiuser
+# OBSOLETE!
+def add_user_to_multiuser( sub_ctrl):
+    if (verbose):
+        print "Adding user to qpy-multiuser."
+    msg = send_multiuser_arguments( MULTIUSER_USER, (user, []))
+    print "aaa",msg
+#    msg = send_multiuser_arguments( MULTIUSER_USER, (user)) FOR GETTING THE JOBS AND PUT AS FAKE
+    if (msg == None):
+        sub_ctrl.live = False
+        os.remove( port_file)
+        sys.exit( 'Time for connection exceeded. Are you sure that qpy-multiuser is running?')
+    if (msg[0] == 1):
+        sys.exit( 'You are not allowed to use qpy-multiuser. Contact the qpy-team.')
+    if (isinstance( msg[1], list)):
+        pass
+        # Put as a fake job.
+        # needs a run in JOB that just ckecks if the job is running
+        # for job in msg[1]:
+        #     node_found = False
+        #     for node in sub_ctrl.node_list:
+        #         if (job[1] == node.node_id):
+        #             best_node = node
+        #             node_found = True
+        #             break
+        #     if (not( node_found)):
+        #         best_node = NODE( -1, job[1])
+        #         best_node.start()
+        #         self.node_list.append( best_node)
+        #     new_job = JOB( job[0], ['NOT AVAILABLE', 'NOT AVAILABLE'])
+        #     new_job.node = best_node
+        #     new_job.n_cores = job[2]
+        #     new_job.status = 1
+        #     sub_ctrl.jobs.running.append( new_job)
+
+    if (verbose):
+        print 'Multiuser message:', msg
+    return True
