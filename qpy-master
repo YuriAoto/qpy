@@ -172,23 +172,38 @@ def is_ssh_working( address, command, exp_out):
     return success and not( error)
 
 
-# Cosmetic: get the plural
 def get_plural( word_s, stuff):
-    if (isinstance(stuff, list) and stuff):
-        final_list = stuff[0]
-        if (len( stuff) > 1):
-            for i in range(1, len( stuff)-1):
-                final_list += ', ' + stuff[i]
-            final_list += ' and ' + stuff[-1]
-            return (word_s[1], final_list)
-        else:
-            return (word_s[0], final_list)
-    if (isinstance(stuff, int)):
-        if ( stuff == 0):
+    """ Cosmetic function: get the plural
+
+    @param word_s touple or list with (singular_case, plural_case)
+    @param stuff list of strings or a positive int
+    @return tuple (correct_case, Predicate or listing)
+    example: get_plural(("job","jobs"),0) =>("jobs", "No")
+             get_plural(("job","jobs"),["queued", "running", "killed"]) =>("jobs", "queued, running and killed")
+    """
+    if (isinstance(stuff,list)):
+        if (len(stuff)==0):
             return (word_s[1], 'No')
-        if ( stuff > 1):
-            return (word_s[1], str( stuff))
-        return (word_s[0], str( stuff))
+        elif (len(stuff)==1): 
+            return (word_s[0], str(stuff[0]))
+        elif (len(stuff) > 1):
+            ret=", ".join(stuff[:-1])+" and "+stuff[-1]
+            return (word_s[1], ret)
+        else:
+            #Ok, this case would be really weird
+            raise Exception("get_plural: negative list length??  ????????"+str(word_s)+str(stuff))
+    elif (isinstance(stuff, int)):
+        if (stuff == 0 ):
+            return (word_s[1], 'No')
+        elif (stuff == 1):
+            return (word_s[0], str(stuff))
+        elif (stuff > 1):
+            return (word_s[1], str(stuff))
+        else:
+            raise Exception("get_plural: negative amount??"+str(word_s)+str(stuff))
+    else:
+        raise Exception("get_plural:stuff neither int nor list??"str(type(stuff)))
+
 
 
 # Allocate a node. Specific for ASES
