@@ -733,15 +733,9 @@ def handle_client( sub_ctrl, jobId):
         # arguments = a list of jobIDs and status (all, queue, running)
         elif (job_type == JOBTYPE_KILL):
 
-            kill_q = False
-            kill_r = False
-            if ('all' in arguments):
-                kill_q = True
-                kill_r = True
-            if ('queue' in arguments):
-                kill_q = True
-            if ('running' in arguments):
-                kill_r = True
+            kill_q = (( 'all' in arguments) or ('queue' in arguments))
+            kill_r = (( 'all' in arguments) or ('running' in arguments))
+
 
             for st in ['all', 'queue', 'running']:
                 while (st in arguments):
