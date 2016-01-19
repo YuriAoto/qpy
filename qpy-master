@@ -483,21 +483,19 @@ class submission_control( threading.Thread):
         self.skip_job_sub = 0
 
     def write_nodes( self):
-        f = open( cur_nodes_file, 'w')
-        for node in self.node_list:
-            f.write( node.node_id + '\n')
-        f.close()
+        with  open( cur_nodes_file, 'w') as f:
+            for node in self.node_list:
+                f.write( node.node_id + '\n')
 
     def write_new_known_node( self, new_node):
-        f = open( known_nodes_file, 'r')
-        known_nodes = []
-        for node in f:
-            known_nodes.append( node.strip())
-        f.close()
+        with open( known_nodes_file, 'r') as f:
+            known_nodes = []
+            for node in f:
+                known_nodes.append( node.strip())
+
         if (not( new_node in known_nodes)):
-            f = open( known_nodes_file, 'a')
-            f.write( new_node + '\n')
-            f.close()
+            with open( known_nodes_file, 'a') as f:
+                f.write( new_node + '\n')
             
     def run( self):
         if (not( multiuser)):
