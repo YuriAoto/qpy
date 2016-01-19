@@ -13,9 +13,12 @@ import subprocess
 import sys
 import os
 import random
-from optparse import OptionParser
+from optparse import OptionParser,OptionError
 
 from qpy_general_variables import *
+
+class ParseError(Exception):
+    pass
 
 parser = OptionParser()
 parser.add_option("-v", "--verbose",
@@ -284,6 +287,9 @@ job_status = ['queue',   # 0
               'done',    # 2
               'killed',  # 3
               'undone']  # 4
+
+    
+
 # A Job
 #
 class JOB( threading.Thread):
@@ -297,6 +303,17 @@ class JOB( threading.Thread):
         self.node = None
         self.status = 0
         self.err_msg = ''
+        self.set_parser()
+
+    def set_parser(self):
+        """creates a parser for the flags that can be set for a job"""
+        #I would like to supply a help option, but at the moment I don't know, how to let it print, where I want
+        parser=OptionParser(add_help_option=False)
+        parser.add_option("-n","--cores", dest="cores", help="set the number of cores", default="1")
+        parser.add_option("-m","--mem","--memory",dest="memory",help="set the memory in GB", default="5")
+        #    parser.add_option("-h","--help"...)
+        self.parser=parser
+ 
 
     def run( self):
         command =  'export QPY_JOB_ID=' + str( self.ID) + '; '
@@ -311,8 +328,12 @@ class JOB( threading.Thread):
                                stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE)
 
-        f_out = open( self.info[1] + '/job_' + str(self.ID) + '.out', 'w', 0)
-        f_err = open( self.info[1] + '/job_' + str(self.ID) + '.err', 'w', 0)
+        def out_or_err_name(job, postfix):
+            assert(postfix in ['.out', '.err'])
+            return '{dir}/job_{id}{postfix}'.format(dir=job.info[1], id=str(job.ID), postfix=postfix )
+
+        f_out = open( out_or_err_name(self, '.out'), 'w', 0)
+        f_err = open( out_or_err_name(self, '.err'), 'w', 0)
 
         err_chk = out_err_check( ssh, False, f_err)
         err_chk.start()
@@ -326,50 +347,49 @@ class JOB( threading.Thread):
         f_out.close()
 
     def parse_options( self):
+        
+        options,command=self.parser.parse_args( self.info[0].split())
+        try:
+            self.n_cores=int(options.cores)
+            self.mem = int(options.memory)
+        except AttributeError, TypeError as ex:
+            raise ParseError("something went wrong. please contact the qpy-team\n"+ex.message)
+        except ValueError:
+            raise ParseError("please supply only full numbers for memory or number of cores")
+        self.info[0] = ' '.join(command)
 
-        command = self.info[0].split()
-        while True:
-            if (command[0] == '-n'):
-                try:
-                    self.n_cores = int(command[1])
-                    command.pop(0)
-                    command.pop(0)
-                except:
-                    break
-            elif (command[0] == '-m'):
-                try:
-                    self.mem = int(command[1])
-                    command.pop(0)
-                    command.pop(0)
-                except:
-                    break
-            else:
-                break
-        
-        self.info[0] = ''
-        for c in command:
-            self.info[0] += c + ' '
-        
         first_arg = command[0]
         if (first_arg[0] == '/'):
             script_name = first_arg
         else:
             script_name = self.info[1] + '/' + first_arg
+
         if (os.path.isfile( script_name)):
-            f = open( script_name, 'r')
-            for line in f:
-                if (re.match( '#QPY', line)):
-                    re_res = re.search( 'n_cores=(\d+)', line)
-                    try:
-                        self.n_cores = int(re_res.group(1))
-                    except:
-                        pass
-                    re_res = re.search( 'mem=(\d+)', line)
-                    try:
-                        self.mem = float(re_res.group(1))
-                    except:
-                        pass
-            f.close()
+            with open( script_name, 'r') as f:
+                for line in f:
+                    if (re.match( '#QPY', line)):
+                        option_found=False
+                        re_res = re.search( 'n_cores=(\d+)', line)
+                        try:
+                            self.n_cores = int(re_res.group(1))
+                            option_found=True
+                        except TypeError:
+                            pass
+                        except ValueError:
+                            raise ParseError("Invalid Value for n_cores found")
+                        re_res = re.search( 'mem=(\d+)', line)
+                        try:
+                            self.mem = int(re_res.group(1))
+                            option_found=True
+                        except TypeError:
+                            pass
+                        except ValueError:
+                            raise ParseError("Invalid Value for mem found")
+                        if (not option_found):
+                            raise ParseError("QPY directive found, but no options supplied."/
+                                             "Please remove the #QPY directive if you don't want to supply a valid option")
+        else:
+            raise ParseError("Submission script seems not to exist")
 
     # return a boolean, indicating whether this job obbeys the dictionary pattern or not
     # empty pattern means that everthing is required
@@ -687,20 +707,24 @@ def handle_client( sub_ctrl, jobId):
         # arguments = the job info (see JOB.info)
         if (job_type == JOBTYPE_SUB):
             new_job = JOB( jobId, arguments)
-            new_job.parse_options()
-            sub_ctrl.jobs.lock.acquire()
-            sub_ctrl.jobs.all.append( new_job)
-            sub_ctrl.jobs.queue.append( new_job)
-            sub_ctrl.jobs.queue_size += 1
-            sub_ctrl.jobs.lock.release()
-            sub_ctrl.jobs.Q_lock.acquire()
-            sub_ctrl.jobs.Q.appendleft( new_job)
-            sub_ctrl.jobs.Q_lock.release()
-            client_master.send( 'Job ' + str(jobId) + ' received.\n')
-            jobId += 1
-            f = open( jobID_file, 'w')
-            f.write( str( jobId))
-            f.close()
+            try:
+                new_job.parse_options()
+                sub_ctrl.jobs.lock.acquire()
+                sub_ctrl.jobs.all.append( new_job)
+                sub_ctrl.jobs.queue.append( new_job)
+                sub_ctrl.jobs.queue_size += 1
+                sub_ctrl.jobs.lock.release()
+                sub_ctrl.jobs.Q_lock.acquire()
+                sub_ctrl.jobs.Q.appendleft( new_job)
+                sub_ctrl.jobs.Q_lock.release()
+                client_master.send( 'Job ' + str(jobId) + ' received.\n')
+                jobId += 1
+                with open( jobID_file, 'w') as f:
+                    f.write( str( jobId))
+            except ParseError as ex:
+                client_master.send( 'Job ' + str(jobId) + ' rejected.\n'+ex.message)
+                
+                
 
         # Check jobs
         # arguments: a dictionary, indicating patterns (see JOB.asked)
