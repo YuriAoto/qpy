@@ -205,7 +205,7 @@ def get_plural( word_s, stuff):
         else:
             raise Exception("get_plural: negative amount??"+str(word_s)+str(stuff))
     else:
-        raise Exception("get_plural:stuff neither int nor list??"str(type(stuff)))
+        raise Exception("get_plural:stuff neither int nor list??"+str(type(stuff)))
 
 
 
