@@ -314,7 +314,6 @@ class JOB( threading.Thread):
         #    parser.add_option("-h","--help"...)
         self.parser=parser
  
-
     def run( self):
         command =  'export QPY_JOB_ID=' + str( self.ID) + '; '
         command += 'export QPY_NODE=' + str( self.node.node_id) + '; '
@@ -346,10 +345,41 @@ class JOB( threading.Thread):
         f_err.close()
         f_out.close()
 
-    def parse_options( self):
+    def _scanline(self,line,option_list):
+        """ Parses the lines for qpy directives and options"""
+        if (re.match( '#QPY', line)):
+            option_found=False
+            for attr,regexp in option_list:
+                re_res = regexp.search(line )
+                if ( re_res is not None ):
+                    try:
+                        self.__setattr__(attr, int(re_res.group(1)) )
+                        option_found=True
+                    except ValueError:
+                        raise ParseError("Invalid Value for {atr} found".format(atr=attr))
+            if ( not option_found ):
+                raise ParseError("QPY directive found, but no options supplied."\
+                             "Please remove the #QPY directive if you don't want to supply a valid option")
+
+    def _parse_file_for_options(self,file_name):
+        """ parses a submission script file for options set in the script
         
-        options,command=self.parser.parse_args( self.info[0].split())
+        @param file_name
+        """
+        option_list=[("n_cores", re.compile('n_cores[= ]?(\d*)') ),
+                     ("mem"   , re.compile('mem[= ]?(\d*)'    ) )
+                 ]
+        if (os.path.isfile( file_name)):
+            with open( file_name, 'r') as f:
+                for line in f:
+                    self._scanline(line,option_list)
+        else:
+            raise ParseError("Submission script seems not to exist")
+
+    def parse_options( self):
+        """ Parses the input and the submission script for options"""
         try:
+            options,command=self.parser.parse_args( self.info[0].split())
             self.n_cores=int(options.cores)
             self.mem = int(options.memory)
         except AttributeError, TypeError as ex:
@@ -363,33 +393,7 @@ class JOB( threading.Thread):
             script_name = first_arg
         else:
             script_name = self.info[1] + '/' + first_arg
-
-        if (os.path.isfile( script_name)):
-            with open( script_name, 'r') as f:
-                for line in f:
-                    if (re.match( '#QPY', line)):
-                        option_found=False
-                        re_res = re.search( 'n_cores=(\d+)', line)
-                        try:
-                            self.n_cores = int(re_res.group(1))
-                            option_found=True
-                        except TypeError:
-                            pass
-                        except ValueError:
-                            raise ParseError("Invalid Value for n_cores found")
-                        re_res = re.search( 'mem=(\d+)', line)
-                        try:
-                            self.mem = int(re_res.group(1))
-                            option_found=True
-                        except TypeError:
-                            pass
-                        except ValueError:
-                            raise ParseError("Invalid Value for mem found")
-                        if (not option_found):
-                            raise ParseError("QPY directive found, but no options supplied."/
-                                             "Please remove the #QPY directive if you don't want to supply a valid option")
-        else:
-            raise ParseError("Submission script seems not to exist")
+        self._parse_file_for_options(script_name)
 
     # return a boolean, indicating whether this job obbeys the dictionary pattern or not
     # empty pattern means that everthing is required
@@ -399,6 +403,10 @@ class JOB( threading.Thread):
             if (k == 'status'):
                 req = job_status[self.status] in pattern[k]
         return req
+
+
+
+
 
 class job_collection():
     
@@ -720,7 +728,7 @@ def handle_client( sub_ctrl, jobId):
                 with open( jobID_file, 'w') as f:
                     f.write( str( jobId))
             except ParseError as ex:
-                client_master.send( 'Job ' + str(jobId) + ' rejected.\n'+ex.message)
+                client_master.send( 'Job  rejected.\n'+ex.message)
                 
                 
 
