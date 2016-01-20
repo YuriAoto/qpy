@@ -310,7 +310,7 @@ class JobParser(OptionParser):
     def print_version(self):
         pass
     def print_help(self):
-        raise HelpException(self.format_help()):
+        raise HelpException(self.format_help())
 # A Job
 #
 class JOB( threading.Thread):
