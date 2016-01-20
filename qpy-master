@@ -17,9 +17,14 @@ from optparse import OptionParser,OptionError
 
 from qpy_general_variables import *
 
-class ParseError(Exception):
+class MyError(Exception)
     def __init__(self,msg):
         self.message=msg
+
+class ParseError(MyError):
+    pass
+class HelpException(MyError):
+    pass
 
 
 
@@ -298,9 +303,14 @@ class JobParser(OptionParser):
     """An Option Parser that does not exit the program but just raises a ParseError"""
     def exit(self,prog='',message=''):
         raise ParseError(message)
-    
-
-
+    def error(self,message):
+        raise ParseError(message)
+    def print_usage(self):
+        pass
+    def print_version(self):
+        pass
+    def print_help(self):
+        raise HelpException(self.format_help()):
 # A Job
 #
 class JOB( threading.Thread):
@@ -736,6 +746,8 @@ def handle_client( sub_ctrl, jobId):
                 jobId += 1
                 with open( jobID_file, 'w') as f:
                     f.write( str( jobId))
+            except HelpException,ex :
+                client_master.send( ex.message)
             except ParseError, ex:
                 client_master.send( 'Job  rejected.\n'+ex.message+'\n')
                 
