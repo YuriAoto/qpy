@@ -292,7 +292,10 @@ job_status = ['queue',   # 0
               'killed',  # 3
               'undone']  # 4
 
+#TODO Let "-h" raise a Help exception with the important message. 
+#So we can differentiate between a rejected job and a help request
 class JobParser(OptionParser):
+    """An Option Parser that does not exit the program but just raises a ParseError"""
     def exit(self,prog='',message=''):
         raise ParseError(message)
     
@@ -315,7 +318,6 @@ class JOB( threading.Thread):
 
     def set_parser(self):
         """creates a parser for the flags that can be set for a job"""
-        #I would like to supply a help option, but at the moment I don't know, how to let it print, where I want
         parser=JobParser()
         parser.add_option("-n","--cores", dest="cores", help="set the number of cores", default="1")
         parser.add_option("-m","--mem","--memory",dest="memory",help="set the memory in GB", default="5")
