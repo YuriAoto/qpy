@@ -17,7 +17,7 @@ from optparse import OptionParser,OptionError
 
 from qpy_general_variables import *
 
-class MyError(Exception)
+class MyError(Exception):
     def __init__(self,msg):
         self.message=msg
 
