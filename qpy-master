@@ -331,6 +331,7 @@ class JOB( threading.Thread):
         parser=JobParser()
         parser.add_option("-n","--cores", dest="cores", help="set the number of cores", default="1")
         parser.add_option("-m","--mem","--memory",dest="memory",help="set the memory in GB", default="5")
+        parser.disable_interspersed_args()
         self.parser=parser
  
     def run( self):
