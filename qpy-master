@@ -382,7 +382,7 @@ class JOB( threading.Thread):
             options,command=self.parser.parse_args( self.info[0].split())
             self.n_cores=int(options.cores)
             self.mem = int(options.memory)
-        except AttributeError, TypeError as ex:
+        except (AttributeError, TypeError), ex:
             raise ParseError("something went wrong. please contact the qpy-team\n"+ex.message)
         except ValueError:
             raise ParseError("please supply only full numbers for memory or number of cores")
@@ -727,7 +727,7 @@ def handle_client( sub_ctrl, jobId):
                 jobId += 1
                 with open( jobID_file, 'w') as f:
                     f.write( str( jobId))
-            except ParseError as ex:
+            except ParseError, ex:
                 client_master.send( 'Job  rejected.\n'+ex.message)
                 
                 
