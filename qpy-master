@@ -13,6 +13,7 @@ import subprocess
 import sys
 import os
 import random
+import glob
 from optparse import OptionParser,OptionError
 
 from qpy_general_variables import *
@@ -300,7 +301,7 @@ job_status = ['queue',   # 0
 class JobParser(OptionParser):
     """An Option Parser that does not exit the program but just raises a ParseError
 
-    NOTE:optparse is depreciated and the overwritten functions are just somewhat mentioned in the documentation.
+    NOTE:optparse is depreciated and the overwritten functions are somewhat mentioned in the documentation.
     """
     def exit(self,prog='',message=''):
         raise ParseError(message)
@@ -335,6 +336,7 @@ class JOB( threading.Thread):
         parser.add_option("-m","--mem","--memory",dest="memory",help="set the memory in GB", default="5")
         parser.disable_interspersed_args()
         self.parser=parser
+
 #------------------------------------------------------------------------------
 #run 
     def run( self):
@@ -384,6 +386,7 @@ class JOB( threading.Thread):
                 raise ParseError("QPY directive found, but no options supplied."\
                              "Please remove the #QPY directive if you don't want to supply a valid option.")
 
+
     def _parse_file_for_options(self,file_name):
         """ parses a submission script file for options set in the script
         
@@ -399,6 +402,7 @@ class JOB( threading.Thread):
         else:
             raise ParseError("Submission script seems not to exist.")
 
+
     def _parse_command_for_options(self, command):
         try:
             options,command=self.parser.parse_args( command.split())
@@ -408,21 +412,36 @@ class JOB( threading.Thread):
             raise ParseError("Something went wrong. please contact the qpy-team\n"+ex.message)
         except ValueError:
             raise ParseError("Please supply only full numbers for memory or number of cores")
-        return ' '.join(command) 
+        return ' '.join(command) , command[0]
+
     
+    def _expand_script_name(self, file_name):
+        """Expands a filename to its absolute name, UNIX only"""
+        if ( file_name[0] == '/'):
+            #assuming its the absolute Path
+            script_name = first_arg
+        elif( file_name[0] == '~'):
+            #relative to home directory
+            os.getenv("HOME")+file_name[1:]
+        else:
+            #in or relative to working directory
+            script_name = self.info[1] + '/' + first_arg
+        script_list=glob.glob(script_name)
+        if ( len(script_list) == 1):
+            return_script_list[0]
+        else:
+            raise ParseError('Nonexitstent or ambigous script name')
+
+
     def parse_options( self):
         """ Parses the input and the submission script for options"""
 
         self.info[0]=self._parse_command_for_options(self.info[0])
-    
-        first_arg = self.info[0].split()[0]
-        if (first_arg[0] == '/'):
-            script_name = first_arg
-        else:
-            script_name = self.info[1] + '/' + first_arg
-        
+        first_arg = self.info.split()[0]
+        script_name= self._expand_script_name(first_arg)
         self._parse_file_for_options(script_name)
 
+#-----------------------------------------------------------------------------------
     # return a boolean, indicating whether this job obbeys the dictionary pattern or not
     # empty pattern means that everthing is required
     def asked( self, pattern):
@@ -431,7 +450,6 @@ class JOB( threading.Thread):
             if (k == 'status'):
                 req = job_status[self.status] in pattern[k]
         return req
-
 
 
 
@@ -1053,9 +1071,8 @@ def handle_client( sub_ctrl, jobId):
 
 if (ini_job_ID == None):
     try:
-        f = open( jobID_file, 'r')
-        ini_job_ID = int( f.read())
-        f.close()
+        with open( jobID_file, 'r') as f:
+            ini_job_ID = int( f.read())
     except:
         sys.exit( 'Problem to get initial jobID. Please, report this bug.')
 
