@@ -10,6 +10,7 @@ import subprocess
 import re
 import math
 from optparse import OptionParser
+import threading
 
 from qpy_general_variables import *
 
@@ -26,6 +27,8 @@ N_cores = 0
 N_min_cores = 0
 N_used_cores  = 0
 N_used_min_cores = 0
+outsiders_lock = threading.RLock()
+outsiders_alive = True
 
 multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
@@ -45,6 +48,7 @@ class NODE():
         self.name = name
         self.max_cores = max_cores
         self.n_used_cores = 0
+        self.n_outsiders = 0
         self.free_mem = 0
         self.pref_multicores = False
 
@@ -112,17 +116,19 @@ class USER():
         if (space_available):
             best_node = None
             best_free = 0
+            outsiders_lock.acquire()
             if (num_cores == 1):
                 for node, info in nodes.iteritems():
-                    free = info.max_cores - info.n_used_cores
+                    free = info.max_cores - info.n_outsiders - info.n_used_cores
                     if (not(info.pref_multicores) and free > best_free and info.memory() > mem):
                         best_node = node
                         best_free = free
             if (best_node == None):
                 for node in nodes_list:
-                    if (nodes[node].max_cores - nodes[node].n_used_cores >= num_cores and nodes[node].memory() > mem):
+                    if (nodes[node].max_cores  - nodes[node].n_outsiders - nodes[node].n_used_cores >= num_cores and nodes[node].memory() > mem):
                         best_node = node
                         break
+            outsiders_lock.release()
 
             if (best_node == None):
                 return 1
@@ -395,8 +401,13 @@ def handle_client( ):
             else:
                 Umsg = 'No users.\n'
             Nmsg = ''
+            outsiders_lock.acquire()
             for node, info in nodes.iteritems():
-                Nmsg += '  ' + node + ': ' + str( info.n_used_cores) + '/' + str( info.max_cores) + '\n'
+                Nmsg += '  ' + node + ': ' + str( info.n_used_cores) + '/' + str( info.max_cores)
+                if (info.n_outsiders > 0):
+                    Nmsg += '-' + str(info.n_outsiders)
+                Nmsg += '\n'
+            outsiders_lock.release()
             if (Nmsg):
                 Nmsg = 'Nodes:\n' + Nmsg
             else:
@@ -408,7 +419,9 @@ def handle_client( ):
         # Finish qpy-multiuser
         # arguments = ()
         elif (action_type == MULTIUSER_FINISH):
+            outsiders_alive = False
             client.send( (0, 'Finishing qpy-multiuser.'))
+            client.close()
             break
 
 
@@ -521,5 +534,39 @@ def handle_client( ):
         client.send( (status, msg))
 
 
+# Attempt to connect to qpy-multiuser
+class check_outsiders( threading.Thread):
+    def __init__( self):
+        threading.Thread.__init__( self)
+
+    def run( self):
+        command = "top -b -n1 | sed -n '8,50p'"
+        while outsiders_alive:
+            for node in nodes:
+                try:
+                    ssh = subprocess.Popen(["ssh", node, command],
+                                           shell=False,
+                                           stdout=subprocess.PIPE)
+
+                    ssh_stdout = ssh.stdout.readlines()
+                    n_jobs = 0
+                    for i in range( 0, 40):
+                        if float(ssh_stdout[i][47:53]) > 80:
+                            n_jobs += 1
+                        else:
+                            break
+                
+                    outsiders_lock.acquire()
+                    nodes[node].n_outsiders = n_jobs - nodes[node].n_used_cores
+                    outsiders_lock.release()
+                except:
+                    pass
+
+            sleep( 300)
+
 load_nodes()
+c = check_outsiders()
+c.daemon = True
+c.start()
+
 handle_client()
