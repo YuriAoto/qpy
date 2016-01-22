@@ -297,10 +297,11 @@ job_status = ['queue',   # 0
               'killed',  # 3
               'undone']  # 4
 
-#TODO Let "-h" raise a Help exception with the important message. 
-#So we can differentiate between a rejected job and a help request
 class JobParser(OptionParser):
-    """An Option Parser that does not exit the program but just raises a ParseError"""
+    """An Option Parser that does not exit the program but just raises a ParseError
+
+    NOTE:optparse is depreciated and the overwritten functions are just somewhat mentioned in the documentation.
+    """
     def exit(self,prog='',message=''):
         raise ParseError(message)
     def error(self,message):
@@ -311,6 +312,7 @@ class JobParser(OptionParser):
         pass
     def print_help(self):
         raise HelpException(self.format_help())
+
 # A Job
 #
 class JOB( threading.Thread):
@@ -333,7 +335,8 @@ class JOB( threading.Thread):
         parser.add_option("-m","--mem","--memory",dest="memory",help="set the memory in GB", default="5")
         parser.disable_interspersed_args()
         self.parser=parser
- 
+#------------------------------------------------------------------------------
+#run 
     def run( self):
         command =  'export QPY_JOB_ID=' + str( self.ID) + '; '
         command += 'export QPY_NODE=' + str( self.node.node_id) + '; '
@@ -396,23 +399,28 @@ class JOB( threading.Thread):
         else:
             raise ParseError("Submission script seems not to exist.")
 
-    def parse_options( self):
-        """ Parses the input and the submission script for options"""
+    def _parse_command_for_options(self, command):
         try:
-            options,command=self.parser.parse_args( self.info[0].split())
+            options,command=self.parser.parse_args( command.split())
             self.n_cores=int(options.cores)
             self.mem = int(options.memory)
         except (AttributeError, TypeError), ex:
             raise ParseError("Something went wrong. please contact the qpy-team\n"+ex.message)
         except ValueError:
             raise ParseError("Please supply only full numbers for memory or number of cores")
-        self.info[0] = ' '.join(command)
+        return ' '.join(command) 
+    
+    def parse_options( self):
+        """ Parses the input and the submission script for options"""
 
-        first_arg = command[0]
+        self.info[0]=self._parse_command_for_options(self.info[0])
+    
+        first_arg = self.info[0].split()[0]
         if (first_arg[0] == '/'):
             script_name = first_arg
         else:
             script_name = self.info[1] + '/' + first_arg
+        
         self._parse_file_for_options(script_name)
 
     # return a boolean, indicating whether this job obbeys the dictionary pattern or not
