@@ -28,8 +28,6 @@ class HelpException(MyError):
     pass
 
 
-
-
 parser = OptionParser()
 parser.add_option("-v", "--verbose",
                   action="store_true", dest="verbose", default=False,
@@ -188,7 +186,7 @@ def is_ssh_working( address, command, exp_out):
 def get_plural( word_s, stuff):
     """ Cosmetic function: get the plural
 
-    @param word_s touple or list with (singular_case, plural_case)
+    @param word_s tuple or list with (singular_case, plural_case)
     @param stuff list of strings or a positive int
     @return tuple (correct_case, Predicate or listing)
     example: get_plural(("job","jobs"),0) =>("jobs", "No")
@@ -204,7 +202,7 @@ def get_plural( word_s, stuff):
             return (word_s[1], ret)
         else:
             #Ok, this case would be really weird
-            raise Exception("get_plural: negative list length??  ????????"+str(word_s)+str(stuff))
+            raise Exception("get_plural: negative list length? " + str(word_s) + str(stuff) + "\n Contact the qpy-team.")
     elif (isinstance(stuff, int)):
         if (stuff == 0 ):
             return (word_s[1], 'No')
@@ -213,9 +211,9 @@ def get_plural( word_s, stuff):
         elif (stuff > 1):
             return (word_s[1], str(stuff))
         else:
-            raise Exception("get_plural: negative amount??"+str(word_s)+str(stuff))
+            raise Exception("get_plural: negative amount?" + str(word_s) + str(stuff) + "\n Contact the qpy-team.")
     else:
-        raise Exception("get_plural:stuff neither int nor list??"+str(type(stuff)))
+        raise Exception("get_plural:stuff neither int nor list?" + str(type(stuff)) + "\n Contact the qpy-team.")
 
 
 
@@ -395,13 +393,12 @@ class JOB( threading.Thread):
         option_list=[("n_cores", re.compile('n_cores[= ]?(\d*)') ),
                      ("mem"   , re.compile('mem[= ]?(\d*)'    ) )
                  ]
-        if (os.path.isfile( file_name)):
+        try:
             with open( file_name, 'r') as f:
                 for line in f:
                     self._scanline(line,option_list)
-        else:
-            raise ParseError("Submission script seems not to exist.")
-
+        except:
+            pass # Is an executable or file_name=None
 
     def _parse_command_for_options(self, command):
         try:
@@ -422,13 +419,15 @@ class JOB( threading.Thread):
             script_name = file_name
         elif( file_name[0] == '~'):
             #relative to home directory
-            os.getenv("HOME")+file_name[1:]
+            script_name = os.getenv("HOME")+file_name[1:]
         else:
             #in or relative to working directory
             script_name = self.info[1] + '/' + file_name
-        script_list=glob.glob(script_name)
+        script_list = glob.glob( script_name)
         if ( len(script_list) == 1):
             return script_list[0]
+        elif (len(script_list)==0):
+            return
         else:
             raise ParseError('Nonexitstent or ambigous script name')
 
@@ -436,9 +435,9 @@ class JOB( threading.Thread):
     def parse_options( self):
         """ Parses the input and the submission script for options"""
 
-        self.info[0]=self._parse_command_for_options(self.info[0])
+        self.info[0] = self._parse_command_for_options( self.info[0])
         first_arg = self.info[0].split()[0]
-        script_name= self._expand_script_name(first_arg)
+        script_name = self._expand_script_name(first_arg)
         self._parse_file_for_options(script_name)
 
 #-----------------------------------------------------------------------------------
@@ -450,8 +449,6 @@ class JOB( threading.Thread):
             if (k == 'status'):
                 req = job_status[self.status] in pattern[k]
         return req
-
-
 
 
 class job_collection():
