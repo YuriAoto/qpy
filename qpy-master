@@ -104,6 +104,10 @@ multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
 multiuser_port = 9999
 
+job_fmt_pattern_def = '%j (%s):%c (wd: %d)\n'
+job_fmt_pattern = job_fmt_pattern_def
+
+
 if (saveMessages):
     multiuser_messages = deque(maxlen=25)
 
@@ -288,6 +292,7 @@ class JobParser(OptionParser):
     def print_help(self):
         raise HelpException(self.format_help())
 
+#---------------------------------------------------------------
 # A Job
 #
 class JOB():
@@ -303,15 +308,25 @@ class JOB():
         self.set_parser()
 
 
-    def fmt_job( self):
-        fmtjob = str( self.ID) + ' ' + str( self.status) + ' ' + str( self.n_cores) + ' ' + str( self.mem) + '\n'
+    def fmt_for_log( self):
+        job_str = str( self.ID) + ' ' + str( self.status) + ' ' + str( self.n_cores) + ' ' + str( self.mem) + '\n'
         if (self.node == None):
-            fmtjob += 'None\n'
+            job_str += 'None\n'
         else:
-            fmtjob += self.node.node_id + '\n'
-        fmtjob += self.info[0] + '\n'
-        fmtjob += self.info[1] + '\n'
-        return fmtjob
+            job_str += self.node.node_id + '\n'
+        job_str += self.info[0] + '\n'
+        job_str += self.info[1] + '\n'
+        return job_str
+
+    def fmt( self):
+        job_str = job_fmt_pattern
+        for pattern, info in (('%j', str( self.ID)),
+                              ('%s', job_status[self.status]),
+                              ('%c', self.info[0]),
+                              ('%d', self.info[1])
+                              ):
+            job_str = job_str.replace( pattern, info)
+        return job_str
 
 
     def set_parser(self):
@@ -454,7 +469,7 @@ class job_collection():
         self.lock.acquire()
         f = open( all_jobs_file, 'w')
         for job in self.all:
-            f.write( job.fmt_job())
+            f.write( job.fmt_for_log())
         f.close()
         self.lock.release()
 
@@ -725,11 +740,6 @@ class submission_control( threading.Thread):
                 jobs_modification = False
 
 
-# formating a list of jobs:
-# TODO: implement an option that gives the user supplied informations
-def format_job( job):
-    job_str = str( job.ID) + ' (' + job_status[job.status] + '):' + job.info[0] + ' (wd: ' + job.info[1] + ')\n'
-    return job_str
 
 
 # return string with information on required jobs, defined by pattern
@@ -745,7 +755,7 @@ def check_jobs( jobs, pattern):
 
     req_jobs = ''
     for job in asked_jobs:
-        j_str = format_job( job)
+        j_str = job.fmt()
         req_jobs += j_str
 
     return req_jobs
@@ -1057,28 +1067,42 @@ def handle_client( sub_ctrl, jobId):
             client_master.send( msg)
 
         # Show current configuration
-        # arguments: no arguments
+        # arguments: optionally, a pair to change the configuration: (<key>, <value>)
         elif (job_type == JOBTYPE_CONFIG):
-            cur_conf = ''
-            if (not( multiuser)):
-                cur_conf += 'max_jobs         = ' + str( sub_ctrl.max_jobs_default) + '\n'
-            if (dyn_nodes):
-                cur_conf += 'using dynamic node allocation\n'
-                cur_conf += 'max_nodes        = ' + str( sub_ctrl.max_nodes) + '\n'
-                cur_conf += 'max_node_time    = ' + str( max_node_time) + '\n'
-                cur_conf += 'min_working_time = ' + str( min_working_time) + '\n'
-                cur_conf += 'max_working_time = ' + str( max_working_time) + '\n'
-            if (multiuser):
-                cur_conf += 'Nodes under multiuser control.\n'
-                if (saveMessages):
-                    cur_conf += 'Last multiuser messages:\n'
-                    for msg in multiuser_messages:
-                        cur_conf += ' ' + str( msg[0][0][0]) + ', ' + str( msg[0][0][1]) + ': ' + str( msg[0][1][0]) + ', ' + repr( msg[0][1][1])
-                        if (msg[1] > 1):
-                            cur_conf += ' (' + str(msg[1]) + 'x)'
-                        cur_conf += '\n'
+            global job_fmt_pattern
+            if (arguments):
+                k = arguments[0]
+                v = arguments[1]
+                if (k == 'checkFMT'):
+                    if (v == 'default'):
+                        job_fmt_pattern = job_fmt_pattern_def
+                        msg = 'Check pattern restored to the default value: ' + repr( job_fmt_pattern) + '.\n'
+                    else:
+                        job_fmt_pattern = v.decode('string_escape')
+                        msg = 'Check pattern modified to ' + repr( job_fmt_pattern) + '.\n'
+                else:
+                    msg = 'Unkown key: ' + k + '\n'
+            else:
+                msg = 'Check pattern: ' + repr( job_fmt_pattern) + '\n'
+                if (not( multiuser)):
+                    msg += 'max_jobs         = ' + str( sub_ctrl.max_jobs_default) + '\n'
+                if (dyn_nodes):
+                    msg += 'using dynamic node allocation\n'
+                    msg += 'max_nodes        = ' + str( sub_ctrl.max_nodes) + '\n'
+                    msg += 'max_node_time    = ' + str( max_node_time) + '\n'
+                    msg += 'min_working_time = ' + str( min_working_time) + '\n'
+                    msg += 'max_working_time = ' + str( max_working_time) + '\n'
+                if (multiuser):
+                    msg += 'Nodes under multiuser control.\n'
+                    if (saveMessages):
+                        msg += 'Last multiuser messages:\n'
+                        for msg in multiuser_messages:
+                            msg += ' ' + str( msg[0][0][0]) + ', ' + str( msg[0][0][1]) + ': ' + str( msg[0][1][0]) + ', ' + repr( msg[0][1][1])
+                            if (msg[1] > 1):
+                                msg += ' (' + str(msg[1]) + 'x)'
+                            msg += '\n'
 
-            client_master.send( cur_conf)
+            client_master.send( msg)
 
         # Clean finished jobs
         # arguments = a list of jobIDs and status (all, done, killed, undone)

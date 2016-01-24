@@ -180,6 +180,13 @@ elif (option == JOBTYPE_MAXJOBS):
             sys.exit( 'maxJobs require an integer as argument.')
     arguments.extend( sys.argv[3:])
 
+# Config
+elif (option == JOBTYPE_CONFIG):
+    if (len( sys.argv) == 4):
+        arguments = ( sys.argv[2], sys.argv[3])
+    elif (len( sys.argv) != 2):
+        sys.exit( 'Give, optionally, a pair <key> <value> for the config option')
+
 # Kill jobs or clean list
 elif (option == JOBTYPE_KILL or option == JOBTYPE_CLEAN):
     if option == JOBTYPE_KILL:

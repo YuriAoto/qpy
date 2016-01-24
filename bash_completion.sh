@@ -16,11 +16,13 @@ _qpy()
     newnode="__new_node__"
     maxJ="__max_jobs__"
     pattern="__pattern__"
+    check_fmt="__quoted_fmt__"
     noArg="__no_arguments__"
 
     keys_all="all"
     keys_maxJob_default="maxJob_default"
     keys_status="queue running done killed undone"
+    keys_config="checkFMT"
     keys_unfinished="queue running"
     keys_finished="done killed undone"
 
@@ -230,7 +232,16 @@ _qpy()
 	# ==========
 	config)
 
-	    COMPREPLY=( $(compgen -W ": ${noArg}") )
+	    COMPREPLY=( $(compgen -W "${keys_config}") )
+
+	    action="${COMP_WORDS[2]}"
+
+	    if [[ ${action} == 'checkFMT' ]] ; then
+		COMPREPLY=( $(compgen -W "default ${check_fmt}" ${cur}) )
+		if [[ -z "${COMPREPLY}" ]] ; then
+		    COMPREPLY=( $(compgen -W ": ${check_fmt}") )
+		fi
+	    fi  
 
 	    compopt +o nospace
 	    return 0;;
