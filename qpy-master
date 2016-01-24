@@ -98,6 +98,7 @@ port_file = qpy_dir + '/.port'
 cur_nodes_file = qpy_dir + '/.current_nodes'
 known_nodes_file = qpy_dir + '/.known_nodes'
 jobID_file = qpy_dir + '/.next_jobID'
+all_jobs_file = qpy_dir + '/.all_jobs'
 
 multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
@@ -265,31 +266,6 @@ def node_dealloc( node_id, alloc_id):
         print 'Node ' + node_id + ' deallocated.'
 
 
-# Check output
-#
-class out_err_check( threading.Thread):
-    
-    def __init__( self, ssh, out_or_err, out_err_file):
-        threading.Thread.__init__( self)
-        self.ssh = ssh
-        self.out_or_err = out_or_err
-        self.file = out_err_file
-        self.file_lock = threading.RLock()
-
-    def run( self):
-
-        if (self.out_or_err):
-            for c in iter( lambda: self.ssh.stdout.read(1), ''):
-                self.file_lock.acquire()
-                self.file.write(c)
-                self.file_lock.release()
-        else:
-            for c in iter( lambda: self.ssh.stderr.read(1), ''):
-                self.file_lock.acquire()
-                self.file.write(c)
-                self.file_lock.release()
-
-
 job_status = ['queue',   # 0
               'running', # 1
               'done',    # 2
@@ -324,8 +300,18 @@ class JOB( threading.Thread):
         self.mem = 5.0
         self.node = None
         self.status = 0
-        self.err_msg = ''
+        self.re_run = False
         self.set_parser()
+
+    def fmt_job( self):
+        fmtjob = str( self.ID) + ' ' + str( self.status) + ' ' + str( self.n_cores) + ' ' + str( self.mem) + '\n'
+        if (self.node == None):
+            fmtjob += 'None\n'
+        else:
+            fmtjob += self.node.node_id + '\n'
+        fmtjob += self.info[0] + '\n'
+        fmtjob += self.info[1] + '\n'
+        return fmtjob
 
     def set_parser(self):
         """creates a parser for the flags that can be set for a job"""
@@ -338,35 +324,38 @@ class JOB( threading.Thread):
 #------------------------------------------------------------------------------
 #run 
     def run( self):
-        command =  'export QPY_JOB_ID=' + str( self.ID) + '; '
-        command += 'export QPY_NODE=' + str( self.node.node_id) + '; '
-        command += 'export QPY_N_CORES=' + str( self.n_cores) + '; '
-        for sf in source_these_files:
-            command += 'source ' + sf + '; '
-        command += 'cd ' + self.info[1] + '; ' 
-        command += self.info[0]
-        ssh = subprocess.Popen(["ssh", self.node.node_id, command],
-                               shell=False,
-                               stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE)
 
-        def out_or_err_name(job, postfix):
-            assert(postfix in ['.out', '.err'])
-            return '{dir}/job_{id}{postfix}'.format(dir=job.info[1], id=str(job.ID), postfix=postfix )
-
-        f_out = open( out_or_err_name(self, '.out'), 'w', 0)
-        f_err = open( out_or_err_name(self, '.err'), 'w', 0)
-
-        err_chk = out_err_check( ssh, False, f_err)
-        err_chk.start()
-        out_chk = out_err_check( ssh, True, f_out)
-        out_chk.start()
-
-        err_chk.join()
-        out_chk.join()
-
-        f_err.close()
-        f_out.close()
+        if (run_it):
+             def out_or_err_name(job, postfix):
+                 assert(postfix in ['.out', '.err'])
+                 return '{dir}/job_{id}{postfix}'.format(dir=job.info[1], id=str(job.ID), postfix=postfix )
+             command =  'export QPY_JOB_ID=' + str( self.ID) + '; '
+             command += 'export QPY_NODE=' + str( self.node.node_id) + '; '
+             command += 'export QPY_N_CORES=' + str( self.n_cores) + '; '
+             for sf in source_these_files:
+                 command += 'source ' + sf + '; '
+             command += 'cd ' + self.info[1] + '; ' 
+             command += self.info[0]
+             command += ' > ' + out_or_err_name(self, '.out') + ' 2> ' + out_or_err_name(self, '.err')
+             ssh = subprocess.Popen(["ssh", self.node.node_id, command],
+                                    shell=False)
+        while True:
+             print "checking_rerun"
+             command = 'ssh ' + self.node.node_id + ' ps -fu ' + user
+             check_ps = subprocess.Popen(command,
+                                         shell = True,
+                                         stdout = subprocess.PIPE)
+             ps_out = check_ps.stdout.readlines()
+             found = False
+             for l in ps_out:
+                 re_res = re.search('export QPY_JOB_ID=' + str( self.ID) + ';', l)
+                 if (re_res):
+                     found = True
+                     break
+             if (not( found)):
+                 break
+             sleep( 10)
+        self.node.n_jobs -= self.n_cores
 
     def _scanline(self,line,option_list):
         """ Parses the lines for qpy directives and options"""
@@ -402,8 +391,8 @@ class JOB( threading.Thread):
 
     def _parse_command_for_options(self, command):
         try:
-            options,command=self.parser.parse_args( command.split())
-            self.n_cores=int(options.cores)
+            options,command = self.parser.parse_args( command.split())
+            self.n_cores = int(options.cores)
             self.mem = int(options.memory)
         except (AttributeError, TypeError), ex:
             raise ParseError("Something went wrong. please contact the qpy-team\n"+ex.message)
@@ -467,6 +456,67 @@ class job_collection():
         self.Q = deque()
         self.Q_lock = threading.RLock()
 
+    def write_all_jobs( self):
+        self.lock.acquire()
+        f = open( all_jobs_file, 'w')
+        for job in self.all:
+            f.write( job.fmt_job())
+        f.close()
+        self.lock.release()
+
+    def initialize_old_jobs( self, sub_ctrl):
+        self.lock.acquire()
+        self.Q_lock.acquire()
+        if (os.path.isfile( all_jobs_file)):
+            with open( all_jobs_file, 'r') as f:
+                i = 0
+                for line in f:
+                    i += 1
+                    if (i%4 == 1):
+                        (new_id, new_status, new_n_cores, new_mem) = line.split()
+                    elif (i%4 == 2):
+                        new_node = line.strip()
+                    elif (i%4 == 3):
+                        new_command = line.strip()
+                    else:
+                        new_wd = line.strip()
+                        new_job = JOB( int( new_id), [new_command, new_wd])
+                        new_job.n_cores = int( new_n_cores)
+                        new_job.mem = float( new_mem)
+                        if (new_node == 'None'):
+                            new_job.node = None
+                        else:
+                            node_found = False
+                            for node in sub_ctrl.node_list:
+                                if (new_node == node.node_id):
+                                    new_job.node = node
+                                    node_found = True
+                                    break
+                            if (not( node_found)):
+                                new_job.node = NODE( -1, new_node)
+                                new_job.node.start()
+                                sub_ctrl.node_list.append( new_job.node)
+                        new_job.status = int( new_status)
+                        self.all.append( new_job)
+                        if (new_job.status == 0):
+                            self.queue.append( new_job)
+                            self.Q.appendleft( new_job)
+                        elif (new_job.status == 1):
+                            sub_ctrl.multiuser_cur_jobs.append( [new_job.ID, new_job.node.node_id, new_job.n_cores])
+                            self.running.append( new_job)
+                            new_job.re_run = True
+                            new_job.start()
+                        elif (new_job.status == 2):
+                            self.done.append( new_job)
+                        elif (new_job.status == 3):
+                            self.killed.append( new_job)
+                        elif (new_job.status == 4):
+                            self.undone.append( new_job)
+
+        self.Q_lock.release()
+        self.lock.release()
+
+
 # A node.
 #
 class NODE( threading.Thread):
@@ -506,8 +556,9 @@ class NODE( threading.Thread):
             new_job.node = self
             new_job.status = 1
             new_job.start()
+            self.n_jobs += new_job.n_cores
                 
-            sleep(1)
+            sleep(1) # needed?
 
         if ( self.alloc_id != None):
             node_dealloc( self.node_id, self.alloc_id)
@@ -552,7 +603,9 @@ class submission_control( threading.Thread):
         if (not( multiuser)):
             self.write_nodes()
         n_time_multiuser = 0
+        self.jobs.initialize_old_jobs( self)
         multiuser_is_alive = True
+        jobs_modification = False
         while self.live:
 
             # Connect with qpy-multiuser
@@ -578,9 +631,9 @@ class submission_control( threading.Thread):
                 job = self.jobs.running[i]
                 if (not job.is_alive()):
                     job.status = 2
+                    jobs_modification = True
                     self.jobs.running.remove( job)
                     self.jobs.done.append( job)
-                    job.node.n_jobs -= job.n_cores
                     self.skip_job_sub = 0
 
                     if (multiuser and multiuser_is_alive):
@@ -660,12 +713,12 @@ class submission_control( threading.Thread):
                             print "submission_control: putting job"
                         job = self.jobs.Q.pop()
                         best_node.queue.put( job)
-                        best_node.n_jobs += job.n_cores
                         self.jobs.lock.acquire()
                         self.jobs.queue.remove( job)
                         self.jobs.queue_size -= 1
                         self.jobs.running.append( job)
                         self.jobs.lock.release()
+                        jobs_modification = True
                 self.jobs.Q_lock.release()
 
             else:
@@ -674,6 +727,9 @@ class submission_control( threading.Thread):
                     print "Skipping job submission: " + str( self.skip_job_sub)
 
             sleep( 1)
+            if (jobs_modification):
+                self.jobs.write_all_jobs()
+                jobs_modification = False
 
 
 # formating a list of jobs:
@@ -710,7 +766,6 @@ def job_kill( job, sub_ctrl):
                               stdout=subprocess.PIPE,
                               stderr=subprocess.PIPE)
     job.status = 3
-    job.node.n_jobs -= job.n_cores
     if (verbose):
         print "Killing job " + str( job.ID) + ' on node ' + job.node.node_id
         print "job_kill stdout: ", kill_p.stdout.readlines()
@@ -834,21 +889,18 @@ def handle_client( sub_ctrl, jobId):
 
             if (not( msg)):
                 msg = 'Nothing to do: required jobs not found.\n'
+            else:
+                sub_ctrl.jobs.write_all_jobs()
             client_master.send( msg)
 
         # Finish the master execution
         # argumets: no arguments
         if (job_type == JOBTYPE_FINISH):
-            sub_ctrl.jobs.lock.acquire()
-            if (sub_ctrl.jobs.all):
-                client_master.send( 'There are unfinished or unanalysed jobs.\n')
-            else:
-                for node in sub_ctrl.node_list:
-                    node.queue.put( 'kill')
-                client_master.send( 'Stopping qpy-master driver.\n')
-                sub_ctrl.live = False
-                break
-            sub_ctrl.jobs.lock.release()
+            for node in sub_ctrl.node_list:
+                node.queue.put( 'kill')
+            client_master.send( 'Stopping qpy-master driver.\n')
+            sub_ctrl.live = False
+            break
 
         # Change maximum number of nodes or add/remove nodes
         # arguments: empty list, to show the nodes
@@ -1057,6 +1109,7 @@ def handle_client( sub_ctrl, jobId):
                 sub_ctrl.jobs.lock.release()
 
             if (n_jobs):
+                sub_ctrl.jobs.write_all_jobs()
                 plural = get_plural( ('job', 'jobs'), n_jobs)
                 msg = plural[1] + ' finished ' + plural[0] + ' removed.\n'
             else:
