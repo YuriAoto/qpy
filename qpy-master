@@ -290,10 +290,9 @@ class JobParser(OptionParser):
 
 # A Job
 #
-class JOB( threading.Thread):
+class JOB():
     
     def __init__( self, jobID, job_info):
-        threading.Thread.__init__( self)
         self.ID = jobID
         self.info = job_info
         self.n_cores = 1
@@ -302,6 +301,7 @@ class JOB( threading.Thread):
         self.status = 0
         self.re_run = False
         self.set_parser()
+
 
     def fmt_job( self):
         fmtjob = str( self.ID) + ' ' + str( self.status) + ' ' + str( self.n_cores) + ' ' + str( self.mem) + '\n'
@@ -313,6 +313,7 @@ class JOB( threading.Thread):
         fmtjob += self.info[1] + '\n'
         return fmtjob
 
+
     def set_parser(self):
         """creates a parser for the flags that can be set for a job"""
         parser=JobParser()
@@ -321,41 +322,34 @@ class JOB( threading.Thread):
         parser.disable_interspersed_args()
         self.parser=parser
 
-#------------------------------------------------------------------------------
-#run 
-    def run( self):
 
-        if (run_it):
-             def out_or_err_name(job, postfix):
-                 assert(postfix in ['.out', '.err'])
-                 return '{dir}/job_{id}{postfix}'.format(dir=job.info[1], id=str(job.ID), postfix=postfix )
-             command =  'export QPY_JOB_ID=' + str( self.ID) + '; '
-             command += 'export QPY_NODE=' + str( self.node.node_id) + '; '
-             command += 'export QPY_N_CORES=' + str( self.n_cores) + '; '
-             for sf in source_these_files:
-                 command += 'source ' + sf + '; '
-             command += 'cd ' + self.info[1] + '; ' 
-             command += self.info[0]
-             command += ' > ' + out_or_err_name(self, '.out') + ' 2> ' + out_or_err_name(self, '.err')
-             ssh = subprocess.Popen(["ssh", self.node.node_id, command],
-                                    shell=False)
-        while True:
-             print "checking_rerun"
-             command = 'ssh ' + self.node.node_id + ' ps -fu ' + user
-             check_ps = subprocess.Popen(command,
-                                         shell = True,
-                                         stdout = subprocess.PIPE)
-             ps_out = check_ps.stdout.readlines()
-             found = False
-             for l in ps_out:
-                 re_res = re.search('export QPY_JOB_ID=' + str( self.ID) + ';', l)
-                 if (re_res):
-                     found = True
-                     break
-             if (not( found)):
-                 break
-             sleep( 10)
-        self.node.n_jobs -= self.n_cores
+    def run( self):
+        def out_or_err_name( job, postfix):
+            assert( postfix in ['.out', '.err'])
+            return '{dir}/job_{id}{postfix}'.format(dir=job.info[1], id=str(job.ID), postfix=postfix )
+        command =  'export QPY_JOB_ID=' + str( self.ID) + '; '
+        command += 'export QPY_NODE=' + str( self.node.node_id) + '; '
+        command += 'export QPY_N_CORES=' + str( self.n_cores) + '; '
+        for sf in source_these_files:
+           command += 'source ' + sf + '; '
+        command += 'cd ' + self.info[1] + '; ' 
+        command += self.info[0]
+        command += ' > ' + out_or_err_name( self, '.out') + ' 2> ' + out_or_err_name( self, '.err')
+        ssh = subprocess.Popen(["ssh", self.node.node_id, command], shell = False)
+
+
+    def is_running( self):
+        command = 'ssh ' + self.node.node_id + ' ps -fu ' + user
+        check_ps = subprocess.Popen(command,
+                                    shell = True,
+                                    stdout = subprocess.PIPE)
+        ps_out = check_ps.stdout.readlines()
+        for l in ps_out:
+            re_res = re.search('export QPY_JOB_ID=' + str( self.ID) + ';', l)
+            if (re_res):
+                return True
+        return False
+
 
     def _scanline(self,line,option_list):
         """ Parses the lines for qpy directives and options"""
@@ -387,7 +381,7 @@ class JOB( threading.Thread):
                 for line in f:
                     self._scanline(line,option_list)
         except:
-            pass # Is an executable or file_name=None
+            pass # Is an executable or file_name = None
 
     def _parse_command_for_options(self, command):
         try:
@@ -505,7 +499,6 @@ class job_collection():
                             sub_ctrl.multiuser_cur_jobs.append( [new_job.ID, new_job.node.node_id, new_job.n_cores])
                             self.running.append( new_job)
                             new_job.re_run = True
-                            new_job.start()
                         elif (new_job.status == 2):
                             self.done.append( new_job)
                         elif (new_job.status == 3):
@@ -555,7 +548,7 @@ class NODE( threading.Thread):
 
             new_job.node = self
             new_job.status = 1
-            new_job.start()
+            new_job.run()
             self.n_jobs += new_job.n_cores
                 
             sleep(1) # needed?
@@ -629,13 +622,13 @@ class submission_control( threading.Thread):
             i = 0
             while (i < len( self.jobs.running)):
                 job = self.jobs.running[i]
-                if (not job.is_alive()):
+                if (not job.is_running()):
                     job.status = 2
                     jobs_modification = True
                     self.jobs.running.remove( job)
                     self.jobs.done.append( job)
                     self.skip_job_sub = 0
-
+                    job.node.n_jobs -= job.n_cores
                     if (multiuser and multiuser_is_alive):
                         self.multiuser_cur_jobs.remove( [job.ID, job.node.node_id, job.n_cores])
                         multiuser_args = (user, job.ID, self.jobs.queue_size)
@@ -766,6 +759,7 @@ def job_kill( job, sub_ctrl):
                               stdout=subprocess.PIPE,
                               stderr=subprocess.PIPE)
     job.status = 3
+    job.node.n_jobs -= job.n_cores
     if (verbose):
         print "Killing job " + str( job.ID) + ' on node ' + job.node.node_id
         print "job_kill stdout: ", kill_p.stdout.readlines()
