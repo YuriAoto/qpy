@@ -211,6 +211,7 @@ def load_nodes():
             nodes_to_remove.append( n)
 
     for n in nodes_to_remove:
+        N_cores -= nodes[n].max_cores
         nodes.pop( n)
     return 0
 

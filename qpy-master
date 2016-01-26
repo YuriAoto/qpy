@@ -514,6 +514,7 @@ class job_collection():
                             self.queue_size += 1
                         elif (new_job.status == 1):
                             sub_ctrl.multiuser_cur_jobs.append( [new_job.ID, new_job.node.node_id, new_job.n_cores])
+                            new_job.node.n_jobs += new_job.n_cores
                             self.running.append( new_job)
                             new_job.re_run = True
                         elif (new_job.status == 2):
