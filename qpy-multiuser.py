@@ -552,13 +552,13 @@ class check_outsiders( threading.Thread):
                     ssh_stdout = ssh.stdout.readlines()
                     n_jobs = 0
                     for i in range( 0, 40):
-                        if float(ssh_stdout[i][47:53]) > 80:
+                        if float(ssh_stdout[i][47:53]) > 50:
                             n_jobs += 1
                         else:
                             break
                 
                     outsiders_lock.acquire()
-                    nodes[node].n_outsiders = n_jobs - nodes[node].n_used_cores
+                    nodes[node].n_outsiders = max(n_jobs - nodes[node].n_used_cores, 0)
                     outsiders_lock.release()
                 except:
                     pass
