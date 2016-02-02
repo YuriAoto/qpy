@@ -8,9 +8,9 @@ _qpy()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    opts="sub check kill finish nodes maxJobs config clean tutorial"
+    opts="sub check kill finish nodes status maxJobs config clean tutorial"
 
-    opts_nodes="add remove forceRemove full"
+    opts_nodes="add remove forceRemove"
 
     jobID="__job_ID__"
     newnode="__new_node__"

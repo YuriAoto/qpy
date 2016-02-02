@@ -745,6 +745,68 @@ class submission_control( threading.Thread):
                 jobs_modification = False
 
 
+def analise_multiuser_status( info, check_n, check_u):
+    lines = info.split('\n')
+    do_users = False
+    do_nodes = False
+    users_info = []
+    nodes_info = []
+    total_cores = '0'
+    used_cores = '0'
+    for l in lines:
+        if (l == 'Users:'):
+            do_users = True
+            do_nodes = False
+        elif (l == 'Nodes:'):
+            do_users = False
+            do_nodes = True
+        elif (l[0:6] == 'Cores:'):
+            re_res = re.match( 'Cores:\s+(\d+)\+(\d+)/(\d+)', l)
+            if (re_res):
+                used_cores = str( int( re_res.group(1)) + int( re_res.group(2)))
+                total_cores = re_res.group(3)
+        elif (do_users):
+            re_res = re.match( '\s*([a-z,A-Z]+):\s+(\d+)\+(\d+)/(\d+)\+(\d+)', l)
+            if (re_res):
+                a = ( re_res.group(1), re_res.group(2), re_res.group(3), re_res.group(4), re_res.group(5))
+            else:
+                a = ( 'error', '-1', '-1', '-1', '-1')
+            users_info.append( a)
+        elif (do_nodes):
+            re_res = re.match( '\s*([a-z,A-Z,0-9]+):\s+(\d+)/(\d+)-(\d+)', l)
+            if (re_res):
+                a = ( re_res.group(1), re_res.group(2), re_res.group(3), re_res.group(4))
+            else:
+                a = ( 'error', '-1', '-1', '-1', '-1')
+            nodes_info.append( a)
+
+    msgU = ''
+    if (check_u):
+        max_len = 0
+        format_spec = '{0:17s} {1:15s} {2:4s}\n'
+        for u in users_info:
+            msgU += format_spec.format( u[0], u[1], u[2])
+        if (msgU):
+            msgU = 'user' + ' '*10 + 'using cores' + ' '*5 + 'queue size\n' + '-'*50 + '\n' + msgU + '='*50 + '\n'
+
+    msgN = ''
+    if (check_n):
+        max_len = 0
+        format_spec = '{0:17s} {1:15s} {2:4s}\n'
+        for n in nodes_info:
+            msgN += format_spec.format( n[0], str(int(n[1])+int(n[3])), n[2])
+        if (msgN):
+            msgN = 'node' + ' '*10 + 'used cores' + ' '*5 + 'total cores\n' + '-'*50 + '\n' + msgN + '='*50 + '\n'
+
+    msg = ''
+    if (check_u):
+        msg += msgU
+    if (check_n):
+        msg += msgN
+    if (check_u or check_n):
+        msg += 'There are ' + used_cores + ' out of a total of ' + total_cores + ' cores being used.\n'
+
+    return msg
 
 
 # return string with information on required jobs, defined by pattern
@@ -1003,35 +1065,41 @@ def handle_client( sub_ctrl, jobId):
             else:
                 if (multiuser):
                     msg = 'Nodes under multiuser control:\n'
-                    if (arguments and arguments[0]=='full'):
-                        msg_back = send_multiuser_arguments( MULTIUSER_STATUS, ())
-                        if (msg_back == None):
-                            msg += 'qpy-multiuser seems not to be running. Contact the qpy-team.\n'
-                        else:
-                            msg += msg_back[1] + '\n'
-                        for node in sub_ctrl.node_list:
-                            msg = msg.replace(node.node_id + ': ', node.node_id + ': ' + str( node.n_jobs) + '/')
+                    msg_back = send_multiuser_arguments( MULTIUSER_STATUS, ())
+                    if (msg_back == None):
+                        msg += 'qpy-multiuser seems not to be running. Contact the qpy-team.\n'
                     else:
-                        for node in sub_ctrl.node_list:
-                            msg += node.node_id + ': ' + str( node.n_jobs) + '\n'
+                        msg += msg_back[1] + '\n'
+                    for node in sub_ctrl.node_list:
+                        msg = msg.replace(node.node_id + ': ', node.node_id + ': ' + str( node.n_jobs) + '/')
                 else:
                     for node in sub_ctrl.node_list:
                         msg += node.node_id + ': ' + str( node.n_jobs) + '/' + str( node.max_jobs) + '\n'
 
             client_master.send( msg)
 
+
+
+        # Show status
+        # No arguments (yet)
+        elif (job_type == JOBTYPE_STATUS):
+            if (multiuser):
+                msg_back = send_multiuser_arguments( MULTIUSER_STATUS, ())
+                if (msg_back == None):
+                    msg = 'qpy-multiuser seems not to be running. Contact the qpy-team.\n'
+                else:
+                    msg = analise_multiuser_status( msg_back[1], True, True)
+            else:
+                msg = 'qpy is not under multiuser contrl.\n'
+
+            client_master.send( msg)
+
+
         # Change maximum number of jobs
         # arguments: a list: [<new_maxJob>, <node_1>, <node_2>, ...]. Change all nodes if no nodes were given
         elif (job_type == JOBTYPE_MAXJOBS):
             if (multiuser):
-                msg = 'Nodes under multiuser control:\n'
-                msg_back = send_multiuser_arguments( MULTIUSER_STATUS, ())
-                if (msg_back == None):
-                    msg += 'qpy-multiuser seems not to be running. Contact the qpy-team.\n'
-                else:
-                    msg += msg_back[1] + '\n'
-                    for node in sub_ctrl.node_list:
-                        msg = msg.replace(node.node_id + ': ', node.node_id + ': ' + str( node.n_jobs) + '/')
+                msg = 'Nodes under multiuser control. Try "qpy status"\n'
             else:
                 new_maxJob = arguments[0]
                 if (len( arguments) == 1):
@@ -1137,6 +1205,7 @@ def handle_client( sub_ctrl, jobId):
                 msg = plural[1] + ' finished ' + plural[0] + ' removed.\n'
             else:
                 msg = 'Nothing to do: required jobs not found.\n'
+
             client_master.send( msg)
 
         else:

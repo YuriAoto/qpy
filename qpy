@@ -118,7 +118,8 @@ keywords={'sub':     (JOBTYPE_SUB     , 'Submit a job. Arguments: the job comman
           'maxJobs': (JOBTYPE_MAXJOBS , 'Change the maximum number of jobs per node. Argument: the desired value'),
           'config':  (JOBTYPE_CONFIG  , 'Show the current configuration. No arguments'),
           'clean':   (JOBTYPE_CLEAN   , 'Remove finished jobs from the list. Arguments: the jobs id'),
-          'tutorial':(JOBTYPE_TUTORIAL, 'Run the qpy tutorial. Arguments: optional: a qpy option')
+          'tutorial':(JOBTYPE_TUTORIAL, 'Run the qpy tutorial. Arguments: optional: a qpy option'),
+          'status':  (JOBTYPE_STATUS  , 'Show current status. No arguments')
           }
 
 

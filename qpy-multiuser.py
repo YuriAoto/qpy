@@ -27,6 +27,7 @@ N_cores = 0
 N_min_cores = 0
 N_used_cores  = 0
 N_used_min_cores = 0
+N_outsiders = 0
 outsiders_lock = threading.RLock()
 outsiders_alive = True
 
@@ -387,16 +388,12 @@ def handle_client( ):
 
 
         # Show status
-        # arguments = ()
+        # arguments = () or (user_name)
         elif (action_type == MULTIUSER_STATUS):
             status = 0
             Umsg = ''
             for user, info in users.iteritems():
-                Umsg += '  ' + user + ': ' + str( info.n_used_cores) + '+' + str( info.n_queue) + '/' + str( info.min_cores)
-                if (info.extra_cores > 0):
-                    Umsg += '+' + str( info.extra_cores) + '\n'
-                else:
-                    Umsg += '\n'
+                Umsg += '  ' + user + ': ' + str( info.n_used_cores) + '+' + str( info.n_queue) + '/' + str( info.min_cores) + '+' + str( info.extra_cores) + '\n'
             if (Umsg):
                 Umsg = 'Users:\n' + Umsg
             else:
@@ -404,17 +401,14 @@ def handle_client( ):
             Nmsg = ''
             outsiders_lock.acquire()
             for node, info in nodes.iteritems():
-                Nmsg += '  ' + node + ': ' + str( info.n_used_cores) + '/' + str( info.max_cores)
-                if (info.n_outsiders > 0):
-                    Nmsg += '-' + str(info.n_outsiders)
-                Nmsg += '\n'
+                Nmsg += '  ' + node + ': ' + str( info.n_used_cores) + '/' + str( info.max_cores) + '-' + str(info.n_outsiders) + '\n'
             outsiders_lock.release()
             if (Nmsg):
                 Nmsg = 'Nodes:\n' + Nmsg
             else:
                 Nmsg = 'No nodes.\n'
             msg = Umsg + Nmsg
-            msg = msg + 'Cores: ' + str( N_used_cores) + '/' + str( N_cores)
+            msg = msg + 'Cores: ' + str( N_used_cores) + '+' + str( N_outsiders) + '/' + str( N_cores)
 
 
         # Finish qpy-multiuser
@@ -542,6 +536,7 @@ class check_outsiders( threading.Thread):
 
     def run( self):
         command = "top -b -n1 | sed -n '8,50p'"
+        global N_outsiders
         while outsiders_alive:
             for node in nodes:
                 try:
@@ -558,7 +553,9 @@ class check_outsiders( threading.Thread):
                             break
                 
                     outsiders_lock.acquire()
+                    N_outsiders -= nodes[node].n_outsiders
                     nodes[node].n_outsiders = max(n_jobs - nodes[node].n_used_cores, 0)
+                    N_outsiders += nodes[node].n_outsiders
                     outsiders_lock.release()
                 except:
                     pass
