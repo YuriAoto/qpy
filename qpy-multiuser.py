@@ -42,6 +42,7 @@ parser.add_option("-v", "--verbose",
 (options, args) = parser.parse_args()
 verbose = options.verbose
 
+check_outsiders_time = 120
 
 # Node informations
 class NODE():
@@ -431,9 +432,8 @@ def handle_client( ):
                 new_cur_jobs = None
             if (user in users):
                 status = 0
-                msg = users[user].cur_jobs
+                msg = ['User exists.']
             else:
-                print user
                 # Add allowed users
                 allowed_users = []
                 try:
@@ -563,7 +563,7 @@ class check_outsiders( threading.Thread):
                 except:
                     pass
 
-            sleep( 120)
+            sleep( check_outsiders_time)
 
 load_nodes()
 c = check_outsiders()

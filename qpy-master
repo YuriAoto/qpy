@@ -77,10 +77,17 @@ if (multiuser and cluster == "hlrs"):
 
 dyn_nodes = cluster == "hlrs"
 
+# Times, all in seconds
+sleep_time_sub_ctrl = 1
+
+# dynamical nodes allocation
 max_node_time = 1814400
 min_working_time = 600
 max_working_time = 604800
+wait_initialization_time = 10
 
+# multiuser
+check_multiuser_time = 30
 multiuser_waiting_time = 15
 conn_multiuser_at = 300
 conn_multiuser_at_not_working = 10
@@ -146,7 +153,7 @@ def send_multiuser_arguments( option, arguments):
     M = try_multiuser_connection()
     M.start()
     n = 0
-    waiting = 60
+    waiting = check_multiuser_time
     while (M.is_alive()):
         n += 1
         if (n == waiting):
@@ -154,7 +161,7 @@ def send_multiuser_arguments( option, arguments):
             client = kill_conn.accept()
             kill_conn.close()
             return None
-        sleep( 0.05)
+        sleep( 1)
     conn = M.conn
     conn.send( (option, arguments))
     msg_back = conn.recv()
@@ -251,12 +258,12 @@ def node_alloc():
         saloc_stdout = squeue.stdout.readline().split()
         saloc_stderr = squeue.stderr.readline().split()
         node = saloc_stdout[-1]
-        sleep (1)
+        sleep ( wait_initialization_time)
 
     while (not( is_ssh_working( node, 'source ~/.bash_profile; qpy --init', 'Success on qpy init!'))):
         if (verbose):
             print "Waiting node initialization: " + node
-        sleep( 10)
+        sleep( wait_initialization_time)
     if (verbose):
         print 'Node ' + node + ' allocated.'
     return (job_id, node)
@@ -583,8 +590,6 @@ class NODE( threading.Thread):
             new_job.status = 1
             new_job.run()
             self.n_jobs += new_job.n_cores
-                
-            sleep(1) # needed?
 
         if ( self.alloc_id != None):
             node_dealloc( self.node_id, self.alloc_id)
@@ -641,7 +646,7 @@ class submission_control( threading.Thread):
                     multiuser_is_alive = False
                 else:
                     multiuser_is_alive = True
-                    if (not( isinstance( msg_back[1], list))):
+                    if ( isinstance( msg_back[1], str) and msg_back[1] != 'User exists.'):
                         msg_back = send_multiuser_arguments( MULTIUSER_USER, (user, self.multiuser_cur_jobs))
                 if (verbose):
                     print "Checking multiuser: ", msg_back
@@ -757,7 +762,7 @@ class submission_control( threading.Thread):
                 if (verbose):
                     print "Skipping job submission: " + str( self.skip_job_sub)
 
-            sleep( 1)
+            sleep( sleep_time_sub_ctrl)
             if (jobs_modification):
                 self.jobs.write_all_jobs()
                 jobs_modification = False
