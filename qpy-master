@@ -233,6 +233,8 @@ def node_alloc():
                               stderr=subprocess.PIPE)
     salloc_stderr = salloc.stderr.readline()
     re_res = re.match('salloc: Granted job allocation (\d+)', salloc_stderr)
+    if (re_res == None):
+        re_res = re.match('salloc: Pending job allocation (\d+)', salloc_stderr)
     try:
         job_id = re_res.group(1)
     except:
@@ -240,13 +242,17 @@ def node_alloc():
             print 'Error in node allocation: ' + salloc_stderr
         return None
     command = 'squeue | grep ' + job_id
-    squeue = subprocess.Popen(command,
-                              shell=True,
-                              stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE)
-    saloc_stderr = squeue.stderr.readline().split()
-    saloc_stdout = squeue.stdout.readline().split()
-    node = saloc_stdout[-1]
+    node='a'
+    while (node[0] != 'n'):
+        squeue = subprocess.Popen(command,
+                                  shell=True,
+                                  stdout=subprocess.PIPE,
+                                  stderr=subprocess.PIPE)
+        saloc_stdout = squeue.stdout.readline().split()
+        saloc_stderr = squeue.stderr.readline().split()
+        node = saloc_stdout[-1]
+        sleep (1)
+
     while (not( is_ssh_working( node, 'source ~/.bash_profile; qpy --init', 'Success on qpy init!'))):
         if (verbose):
             print "Waiting node initialization: " + node
