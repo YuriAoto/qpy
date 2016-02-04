@@ -59,7 +59,7 @@ class NODE():
                                        shell=False,
                                        stdout=subprocess.PIPE,
                                        stderr=subprocess.PIPE)
-        
+        mem_stderr = mem_details.stderr.readlines()
         mem_stdout = mem_details.stdout.readlines()
         self.free_mem = float(mem_stdout[2].split()[3])
         return self.free_mem
@@ -93,6 +93,7 @@ class USER():
 
         else:
             use_others_resource = self.n_used_cores + num_cores > self.min_cores + self.extra_cores
+
             if (use_others_resource):
 
                 N_users_with_queue = 1
@@ -542,12 +543,14 @@ class check_outsiders( threading.Thread):
                 try:
                     ssh = subprocess.Popen(["ssh", node, command],
                                            shell=False,
-                                           stdout=subprocess.PIPE)
-
+                                           stdout=subprocess.PIPE,
+                                           stderr=subprocess.PIPE)
+                    ssh_stderr = ssh.stderr.readlines()
                     ssh_stdout = ssh.stdout.readlines()
                     n_jobs = 0
-                    for i in range( 0, 40):
-                        if float(ssh_stdout[i][47:53]) > 50:
+                    for line in ssh_stdout:
+                        line_spl = line.split()
+                        if float(line_spl[8]) > 50:
                             n_jobs += 1
                         else:
                             break
@@ -560,7 +563,7 @@ class check_outsiders( threading.Thread):
                 except:
                     pass
 
-            sleep( 300)
+            sleep( 120)
 
 load_nodes()
 c = check_outsiders()

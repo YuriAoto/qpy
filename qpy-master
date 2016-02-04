@@ -83,6 +83,7 @@ max_working_time = 604800
 
 multiuser_waiting_time = 15
 conn_multiuser_at = 300
+conn_multiuser_at_not_working = 10
 
 max_nodes_default = -1
 if (dyn_nodes):
@@ -243,6 +244,7 @@ def node_alloc():
                               shell=True,
                               stdout=subprocess.PIPE,
                               stderr=subprocess.PIPE)
+    saloc_stderr = squeue.stderr.readline().split()
     saloc_stdout = squeue.stdout.readline().split()
     node = saloc_stdout[-1]
     while (not( is_ssh_working( node, 'source ~/.bash_profile; qpy --init', 'Success on qpy init!'))):
@@ -350,15 +352,22 @@ class JOB():
         command += 'cd ' + self.info[1] + '; ' 
         command += self.info[0]
         command += ' > ' + out_or_err_name( self, '.out') + ' 2> ' + out_or_err_name( self, '.err')
-        ssh = subprocess.Popen(["ssh", self.node.node_id, command], shell = False)
+        ssh = subprocess.Popen(["ssh", self.node.node_id, command],
+                               shell = False,
+                               stdout = subprocess.PIPE,
+                               stderr = subprocess.PIPE)
+        sshout= ssh.stdout.readline()
+        ssherr= ssh.stderr.readline()
 
 
     def is_running( self):
         command = 'ssh ' + self.node.node_id + ' ps -fu ' + user
         check_ps = subprocess.Popen(command,
                                     shell = True,
-                                    stdout = subprocess.PIPE)
+                                    stdout = subprocess.PIPE,
+                                    stderr = subprocess.PIPE)
         ps_out = check_ps.stdout.readlines()
+        ps_err = check_ps.stderr.readlines()
         for l in ps_out:
             re_res = re.search('export QPY_JOB_ID=' + str( self.ID) + ';', l)
             if (re_res):
@@ -630,7 +639,10 @@ class submission_control( threading.Thread):
                         msg_back = send_multiuser_arguments( MULTIUSER_USER, (user, self.multiuser_cur_jobs))
                 if (verbose):
                     print "Checking multiuser: ", msg_back
-                n_time_multiuser = conn_multiuser_at
+                if (multiuser_is_alive):
+                    n_time_multiuser = conn_multiuser_at
+                else:
+                    n_time_multiuser = conn_multiuser_at_not_working
             else:
                 n_time_multiuser -= 1
 
