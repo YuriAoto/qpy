@@ -13,12 +13,15 @@ import threading
 from qpy_general_variables import *
 
 home_dir = os.environ['HOME']
-qpy_dir = os.path.dirname(os.path.abspath(__file__))
 user = os.environ['USER']
+qpy_dir = os.path.expanduser( '~/.qpy/')
+qpy_source_dir = os.path.dirname( os.path.abspath( __file__)) + '/'
+port_file = qpy_dir + '/port'
+tutorial_file = qpy_source_dir + '/tutorial'
+
 scr_dir = '/scratch/'+ user
 
-port_file = qpy_dir + '/.port'
-tutorial_file = qpy_dir + '/tutorial'
+qpy_master_command = ['python', qpy_source_dir+'qpy-master.py', '-c', 'linux4', '-m', '>', '/dev/null', '2>', '/dev/null']
 
 # Return a list with all children and grand-children from pid
 # The dict parent_of shows the parents of all processes
@@ -119,7 +122,8 @@ keywords={'sub':     (JOBTYPE_SUB     , 'Submit a job. Arguments: the job comman
           'config':  (JOBTYPE_CONFIG  , 'Show the current configuration. No arguments'),
           'clean':   (JOBTYPE_CLEAN   , 'Remove finished jobs from the list. Arguments: the jobs id'),
           'tutorial':(JOBTYPE_TUTORIAL, 'Run the qpy tutorial. Arguments: optional: a qpy option'),
-          'status':  (JOBTYPE_STATUS  , 'Show current status. No arguments')
+          'status':  (JOBTYPE_STATUS  , 'Show current status. No arguments'),
+          'start':   (JOBTYPE_START   , 'Start qpy-master. No arguments')
           }
 
 
@@ -226,6 +230,12 @@ elif (option == JOBTYPE_TUTORIAL):
         subprocess.call( command, shell = True)
     except:
         sys.exit( 'Error when loading the tutorial.')
+    exit()
+
+
+# Start qpy-master
+elif (option == JOBTYPE_START):
+    start = subprocess.Popen( qpy_master_command, shell = False)
     exit()
 
 try:

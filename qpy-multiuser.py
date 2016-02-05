@@ -14,11 +14,14 @@ import threading
 
 from qpy_general_variables import *
 
+qpy_multiuser_dir = os.path.expanduser( '~/.qpy-multiuser/')
 
-# Important variables
-nodes_file = '/home/linux4_i2/aoto/Codes/qpy/multiuser_nodes'
-allowed_users_file = '/home/linux4_i2/aoto/Codes/qpy/multiuser_allowed_users'
-cores_distribution_file = '/home/linux4_i2/aoto/Codes/qpy/multiuser_distribution_rules'
+if (not( os.path.isdir( qpy_multiuser_dir))):
+    os.makedirs( qpy_multiuser_dir)
+
+nodes_file = qpy_multiuser_dir + 'nodes'
+allowed_users_file = qpy_multiuser_dir + 'allowed_users'
+cores_distribution_file = qpy_multiuser_dir + 'distribution_rules'
 
 nodes_list = []
 nodes = {}

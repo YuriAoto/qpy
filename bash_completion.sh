@@ -8,7 +8,7 @@ _qpy()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    opts="sub check kill finish nodes status maxJobs config clean tutorial"
+    opts="sub check kill start finish nodes status maxJobs config clean tutorial"
 
     opts_nodes="add remove forceRemove"
 
@@ -60,6 +60,14 @@ _qpy()
  		kill)
 		    echo "Kill the required jobs."
 		    ;;
+                # ==========
+                status)
+                    echo "Show the multiuser status."
+                    ;;
+                # ==========
+                start)
+                    echo "Start qpy-master."
+                    ;;
                 # ==========
  		sub)
 		    echo "Submit a job."

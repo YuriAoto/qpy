@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # qpy-master - set the main driver for qpy
 #
 # 29 May 2015 - Pradipta and Yuri
@@ -97,16 +96,17 @@ if (dyn_nodes):
     max_nodes_default = 3
 
 home_dir = os.environ['HOME']
-qpy_dir = os.path.dirname( os.path.abspath( __file__))
 user = os.environ['USER']
+
+qpy_dir = os.path.expanduser( '~/.qpy/')
 
 source_these_files = ['~/.bash_profile']
 
-port_file = qpy_dir + '/.port'
-cur_nodes_file = qpy_dir + '/.current_nodes'
-known_nodes_file = qpy_dir + '/.known_nodes'
-jobID_file = qpy_dir + '/.next_jobID'
-all_jobs_file = qpy_dir + '/.all_jobs'
+port_file = qpy_dir + '/port'
+cur_nodes_file = qpy_dir + '/current_nodes'
+known_nodes_file = qpy_dir + '/known_nodes'
+jobID_file = qpy_dir + '/next_jobID'
+all_jobs_file = qpy_dir + '/all_jobs'
 
 multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
@@ -117,7 +117,10 @@ job_fmt_pattern = job_fmt_pattern_def
 
 
 if (saveMessages):
-    multiuser_messages = deque(maxlen=25)
+    multiuser_messages = deque( maxlen=25)
+
+if (not( os.path.isdir( qpy_dir))):
+    os.makedirs( qpy_dir)
 
 if (not( os.path.isfile( known_nodes_file))):
     f = open( known_nodes_file, 'w')
