@@ -990,7 +990,6 @@ def handle_qpy( sub_ctrl, check_run, check_multiuser, jobs_killer, jobs, jobId):
     while True:
         random.seed()
         port = random.randint( 10000, 20000 )
-        port=15555
         try:
             server_master = Listener(( "localhost", port), authkey = 'qwerty')
             break
