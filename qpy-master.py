@@ -815,7 +815,8 @@ class JOBS_KILLER( threading.Thread):
                                       stdout=subprocess.PIPE,
                                       stderr=subprocess.PIPE)
             std_outerr = kill_p.communicate()
-            job.process.communicate()
+            if (job.process != None):
+                job.process.communicate()
             job.status = 3
             job.node.n_jobs -= job.n_cores
             self.jobs.lock_running.acquire()
