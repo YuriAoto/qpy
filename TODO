@@ -9,3 +9,6 @@ self.start_time
 self.finish_time
 
 running time for a running job and total time for a finished job need to be shown in the job info
+
+
+***** sort the jobs in check as required by the user

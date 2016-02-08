@@ -17,6 +17,8 @@ from optparse import OptionParser,OptionError
 
 from qpy_general_variables import *
 
+DEVNULL = open(os.devnull, "w")
+
 class MyError(Exception):
     def __init__(self,msg):
         self.message=msg
@@ -26,7 +28,7 @@ class ParseError(MyError):
 class HelpException(MyError):
     pass
 
-
+# Parse command line options
 parser = OptionParser()
 parser.add_option("-v", "--verbose",
                   action="store_true", dest="verbose", default=False,
@@ -48,7 +50,6 @@ parser.add_option("-i", "--iniJobID",
                   dest="iniJobID",
                   help="the first jobID to be used")
 
-
 (options, args) = parser.parse_args()
 
 verbose = options.verbose
@@ -56,14 +57,6 @@ multiuser = options.multiuser
 saveMessages = options.saveMessages
 cluster = options.cl
 ini_job_ID = options.iniJobID
-
-if (ini_job_ID):
-    try:
-        ini_job_ID = int( ini_job_ID)
-    except:
-        sys.exit( 'The option --iniJobID receive an integer as argument.')
-else:
-    ini_job_ID = None
 
 if (not (cluster)):
     sys.exit( 'Give the --cluster option.')
@@ -74,10 +67,20 @@ if (cluster != "hlrs" and cluster != "linux4"):
 if (multiuser and cluster == "hlrs"):
     sys.exit( 'Multiuser not available on hlrs.')
 
+if (ini_job_ID):
+    try:
+        ini_job_ID = int( ini_job_ID)
+    except:
+        sys.exit( 'The option --iniJobID receive an integer as argument.')
+else:
+    ini_job_ID = None
+
 dyn_nodes = cluster == "hlrs"
+
 
 # Times, all in seconds
 sleep_time_sub_ctrl = 1
+sleep_time_check_run = 1
 
 # dynamical nodes allocation
 max_node_time = 1814400
@@ -86,7 +89,6 @@ max_working_time = 604800
 wait_initialization_time = 10
 
 # multiuser
-check_multiuser_time = 30
 multiuser_waiting_time = 15
 conn_multiuser_at = 300
 conn_multiuser_at_not_working = 10
@@ -95,13 +97,11 @@ max_nodes_default = -1
 if (dyn_nodes):
     max_nodes_default = 3
 
+# Some global variables
 home_dir = os.environ['HOME']
 user = os.environ['USER']
-
 qpy_dir = os.path.expanduser( '~/.qpy/')
-
 source_these_files = ['~/.bash_profile']
-
 port_file = qpy_dir + '/port'
 cur_nodes_file = qpy_dir + '/current_nodes'
 known_nodes_file = qpy_dir + '/known_nodes'
@@ -134,37 +134,31 @@ if (not( os.path.isfile( jobID_file))):
 if (os.path.isfile( port_file)):
     sys.exit( 'A port file was found. Is there a qpy-master instance running?')
 
-random.seed()
-port = random.randint( 10000, 20000 )
-f = open( port_file, 'w', 0)
-f.write( str( port))
-f.close()
-
-
 
 # Attempt to connect to qpy-multiuser
 class try_multiuser_connection( threading.Thread):
     def __init__( self):
         threading.Thread.__init__( self)
         self.conn = None
-    def run( self):
-        self.conn = Client( (multiuser_address, multiuser_port), authkey=multiuser_key)
+        self.done = threading.Event()
 
+    def run( self):
+        try:
+            self.conn = Client( (multiuser_address, multiuser_port), authkey=multiuser_key)
+            self.done.set()
+        except:
+            self.done.clear()
 
 # Send arguments to qpy-multiuser
 def send_multiuser_arguments( option, arguments):
     M = try_multiuser_connection()
     M.start()
-    n = 0
-    waiting = check_multiuser_time
-    while (M.is_alive()):
-        n += 1
-        if (n == waiting):
-            kill_conn = Listener(( multiuser_address, multiuser_port), authkey = multiuser_key)
-            client = kill_conn.accept()
-            kill_conn.close()
-            return None
-        sleep( 1)
+    M.done.wait( 5.0)
+    if (not( M.done.is_set())):
+        kill_conn = Listener(( multiuser_address, multiuser_port), authkey = multiuser_key)
+        client = kill_conn.accept()
+        kill_conn.close()
+        return None
     conn = M.conn
     conn.send( (option, arguments))
     msg_back = conn.recv()
@@ -183,11 +177,10 @@ def is_ssh_working( address, command, exp_out):
                              shell=False,
                              stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE)
-    ssh_stdout = ssh.stdout.readlines()
-    ssh_stderr = ssh.stderr.readlines()
+    std_outerr = ssh.communicate()
     if (verbose):
-        print "is_ssh_working stdout:", ssh_stdout
-        print "is_ssh_working stderr:", ssh_stderr
+        print "is_ssh_working stdout:", repr(std_outerr[0])
+        print "is_ssh_working stderr:", repr( std_outerr[1])
     error = False
     for i in ssh_stderr:
         if ('No route to host' in i or 'Connection refused' in i or 'Could not resolve hostname' in i):
@@ -241,10 +234,10 @@ def node_alloc():
                               shell=True,
                               stdout=subprocess.PIPE,
                               stderr=subprocess.PIPE)
-    salloc_stderr = salloc.stderr.readline()
-    re_res = re.match('salloc: Granted job allocation (\d+)', salloc_stderr)
+    std_outerr = salloc.communicate()
+    re_res = re.match('salloc: Granted job allocation (\d+)', std_outerr[1])
     if (re_res == None):
-        re_res = re.match('salloc: Pending job allocation (\d+)', salloc_stderr)
+        re_res = re.match('salloc: Pending job allocation (\d+)', std_outerr[1])
     try:
         job_id = re_res.group(1)
     except:
@@ -258,8 +251,8 @@ def node_alloc():
                                   shell=True,
                                   stdout=subprocess.PIPE,
                                   stderr=subprocess.PIPE)
-        saloc_stdout = squeue.stdout.readline().split()
-        saloc_stderr = squeue.stderr.readline().split()
+        std_outerr = squeue.communicate()
+        saloc_stdout = std_outerr[0].split()
         node = saloc_stdout[-1]
         sleep ( wait_initialization_time)
 
@@ -279,9 +272,10 @@ def node_dealloc( node_id, alloc_id):
                                shell=False,
                                stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE)
+    std_outerr = dealloc.communicate()
     if (verbose):
-        print "node_dealloc stdout:", dealloc.stdout.readlines()
-        print "node_dealloc stderr:", dealloc.stderr.readlines()
+        print "node_dealloc stdout:", repr( std_outerr[0])
+        print "node_dealloc stderr:", repr( std_outerr[1])
     command = 'scancel ' + alloc_id
     dealloc = subprocess.call( command, shell=True)
     if (verbose):
@@ -325,6 +319,7 @@ class JOB():
         self.re_run = False
         self.set_parser()
 
+        self.process = None
 
     def fmt_for_log( self):
         job_str = str( self.ID) + ' ' + str( self.status) + ' ' + str( self.n_cores) + ' ' + str( self.mem) + '\n'
@@ -368,13 +363,9 @@ class JOB():
         command += 'cd ' + self.info[1] + '; ' 
         command += self.info[0]
         command += ' > ' + out_or_err_name( self, '.out') + ' 2> ' + out_or_err_name( self, '.err')
-        ssh = subprocess.Popen(["ssh", self.node.node_id, command],
-                               shell = False,
-                               stdout = subprocess.PIPE,
-                               stderr = subprocess.PIPE)
-        sshout= ssh.stdout.readline()
-        ssherr= ssh.stderr.readline()
-
+        self.process = subprocess.Popen(["ssh", self.node.node_id, command],
+                                        shell = False)
+        self.status = 1
 
     def is_running( self):
         command = 'ssh ' + self.node.node_id + ' ps -fu ' + user
@@ -382,12 +373,12 @@ class JOB():
                                     shell = True,
                                     stdout = subprocess.PIPE,
                                     stderr = subprocess.PIPE)
-        ps_out = check_ps.stdout.readlines()
-        ps_err = check_ps.stderr.readlines()
-        for l in ps_out:
-            re_res = re.search('export QPY_JOB_ID=' + str( self.ID) + ';', l)
-            if (re_res):
-                return True
+        (std_out, std_err) = check_ps.communicate()
+        re_res = re.search( 'export QPY_JOB_ID=' + str( self.ID) + ';', std_out)
+        if (re_res):
+            return True
+        if (self.process != None):
+            self.process.communicate()
         return False
 
 
@@ -474,34 +465,53 @@ class JOB():
         return req
 
 
+#------------------------------------------------
+# Store information about the jobs
 class job_collection():
     
     def __init__( self):
-        self.lock = threading.RLock()        
-        self.lock_kill = threading.RLock()        
         self.all = []
-        self.queue = []
-        self.running = []
-        self.done = []
-        self.killed = []
-        self.undone = []
+        self.lock_all = threading.RLock()
 
+        self.queue = []
         self.queue_size = 0
+        self.lock_queue = threading.RLock()
+
+        self.running = []
+        self.lock_running = threading.RLock()
+
+        self.done = []
+        self.lock_done = threading.RLock()
+
+        self.killed = []
+        self.lock_killed = threading.RLock()
+
+        self.undone = []
+        self.lock_undone = threading.RLock()
 
         self.Q = deque()
-        self.Q_lock = threading.RLock()
+        self.lock_Q = threading.RLock()
+
+        self.lock_file = threading.RLock()
 
     def write_all_jobs( self):
-        self.lock.acquire()
+        self.lock_file.acquire()
+        self.lock_all.acquire()
         f = open( all_jobs_file, 'w')
         for job in self.all:
             f.write( job.fmt_for_log())
         f.close()
-        self.lock.release()
+        self.lock_file.release()
+        self.lock_all.release()
 
     def initialize_old_jobs( self, sub_ctrl):
-        self.lock.acquire()
-        self.Q_lock.acquire()
+        self.lock_all.acquire()
+        self.lock_queue.acquire()
+        self.lock_running.acquire()
+        self.lock_done.acquire()
+        self.lock_killed.acquire()
+        self.lock_undone.acquire()
+        self.lock_Q.acquire()
         if (os.path.isfile( all_jobs_file)):
             with open( all_jobs_file, 'r') as f:
                 i = 0
@@ -538,7 +548,6 @@ class job_collection():
                             self.Q.appendleft( new_job)
                             self.queue_size += 1
                         elif (new_job.status == 1):
-                            sub_ctrl.multiuser_cur_jobs.append( [new_job.ID, new_job.node.node_id, new_job.n_cores])
                             new_job.node.n_jobs += new_job.n_cores
                             self.running.append( new_job)
                             new_job.re_run = True
@@ -548,9 +557,13 @@ class job_collection():
                             self.killed.append( new_job)
                         elif (new_job.status == 4):
                             self.undone.append( new_job)
-
-        self.Q_lock.release()
-        self.lock.release()
+        self.lock_all.release()
+        self.lock_queue.release()
+        self.lock_running.release()
+        self.lock_done.release()
+        self.lock_killed.release()
+        self.lock_undone.release()
+        self.lock_Q.release()
 
 
 # A node.
@@ -581,196 +594,25 @@ class NODE( threading.Thread):
     def run( self):
 
         while True:
-            new_job = self.queue.get()
-            if (verbose):
-                print 'Node ' + str( self.node_id) + ': new job.'
-
-            if ( isinstance( new_job, str)):
-                if ( new_job == 'kill'):
+            job = self.queue.get()
+            if ( isinstance( job, str)):
+                if ( job == 'kill'):
                     break
 
-            new_job.node = self
-            new_job.status = 1
-            new_job.run()
-            self.n_jobs += new_job.n_cores
+            if (verbose):
+                print 'Node ' + str( self.node_id) + ':' + str( job.ID)
+
+            job.run()
+            self.n_jobs += job.n_cores
 
         if ( self.alloc_id != None):
             node_dealloc( self.node_id, self.alloc_id)
         
         if (verbose):
             print 'Node ' + str( self.node_id) + ' done.'
-            
-
-# Control jobs subimission
-# 
-#
-class submission_control( threading.Thread):
-    def __init__( self):
-        threading.Thread.__init__( self)
-        self.live = True
-        self.node_list = []
-        self.max_nodes = max_nodes_default
-        if (multiuser):
-            self.max_jobs_default = -1
-        else:
-            self.max_jobs_default = 20
-        self.jobs = job_collection()
-        self.multiuser_cur_jobs = []
-        self.skip_job_sub = 0
-
-    def write_nodes( self):
-        with  open( cur_nodes_file, 'w') as f:
-            for node in self.node_list:
-                f.write( node.node_id + '\n')
-
-    def write_new_known_node( self, new_node):
-        with open( known_nodes_file, 'r') as f:
-            known_nodes = []
-            for node in f:
-                known_nodes.append( node.strip())
-
-        if (not( new_node in known_nodes)):
-            with open( known_nodes_file, 'a') as f:
-                f.write( new_node + '\n')
-            
-    def run( self):
-        if (not( multiuser)):
-            self.write_nodes()
-        n_time_multiuser = 0
-        self.jobs.initialize_old_jobs( self)
-        multiuser_is_alive = True
-        jobs_modification = False
-        while self.live:
-
-            # Connect with qpy-multiuser
-            if (multiuser and n_time_multiuser == 0):
-                msg_back = send_multiuser_arguments( MULTIUSER_USER, [user])
-                if (msg_back == None):
-                    multiuser_is_alive = False
-                else:
-                    multiuser_is_alive = True
-                    if ( isinstance( msg_back[1], str) and msg_back[1] != 'User exists.'):
-                        msg_back = send_multiuser_arguments( MULTIUSER_USER, (user, self.multiuser_cur_jobs))
-                if (verbose):
-                    print "Checking multiuser: ", msg_back
-                if (multiuser_is_alive):
-                    n_time_multiuser = conn_multiuser_at
-                else:
-                    n_time_multiuser = conn_multiuser_at_not_working
-            else:
-                n_time_multiuser -= 1
-
-            
-            # Check finished jobs
-            i = 0
-            self.jobs.lock_kill.acquire()
-            while (i < len( self.jobs.running)):
-                job = self.jobs.running[i]
-                if (not job.is_running()):
-                    job.status = 2
-                    jobs_modification = True
-                    self.jobs.lock.acquire()
-                    self.jobs.running.remove( job)
-                    self.jobs.done.append( job)
-                    self.jobs.lock.release()
-                    self.skip_job_sub = 0
-                    job.node.n_jobs -= job.n_cores
-                    if (multiuser and multiuser_is_alive):
-                        self.multiuser_cur_jobs.remove( [job.ID, job.node.node_id, job.n_cores])
-                        multiuser_args = (user, job.ID, self.jobs.queue_size)
-                        msg_back = send_multiuser_arguments( MULTIUSER_REMOVE_JOB, multiuser_args)
-                        if (msg_back == None):
-                            multiuser_is_alive = False
-                        if (verbose):
-                            print 'Multiuser message (removing a job): ', msg_back
-                else:
-                    i += 1
-            self.jobs.lock_kill.release()
 
 
-            # Dealloc the non-used node
-            if (dyn_nodes):
-                cur_time = time()
-                for node in self.node_list:
-                    if (not( node.n_jobs) and (cur_time - node.init_time) > min_working_time):
-                        node.queue.put( 'kill')
-                        self.node_list.remove( node)
-
-
-            # Send a job, if there is space
-            if (self.skip_job_sub <= 0):
-                self.jobs.Q_lock.acquire()
-                queue_has_jobs = len( self.jobs.Q) != 0
-                if (queue_has_jobs):
-                    next_jobID = self.jobs.Q[-1].ID
-                    next_Ncores = self.jobs.Q[-1].n_cores
-                    next_mem = self.jobs.Q[-1].mem
-                    best_node = None
-                    if (multiuser and multiuser_is_alive):
-                        multiuser_args = (user, next_jobID, next_Ncores, next_mem, self.jobs.queue_size)
-                        msg_back = send_multiuser_arguments( MULTIUSER_REQ_CORE, multiuser_args)
-                        if (msg_back == None):
-                            multiuser_is_alive = False
-                            continue
-                        if (verbose):
-                            print 'Multiuser message (sending job): ', msg_back
-                        if (msg_back[0] == 0):
-                            self.multiuser_cur_jobs.append( [next_jobID, msg_back[1], next_Ncores])
-                            node_found = False
-                            for node in self.node_list:
-                                if (msg_back[1] == node.node_id):
-                                    best_node = node
-                                    node_found = True
-                                    break
-                            if (not( node_found)):
-                                best_node = NODE( -1, msg_back[1])
-                                best_node.start()
-                                self.node_list.append( best_node)
-                        else:
-                            self.skip_job_sub = 300
-                    else:
-                        best_free = 0
-                        cur_time = time()
-                        for node in self.node_list:
-                            free = node.max_jobs - node.n_jobs
-                            if (free > best_free):
-                                if (not( dyn_nodes) or (cur_time - node.init_time) < max_working_time):
-                                    best_node = node
-                                    best_free = free
-                        if (best_node == None and len( self.node_list) < self.max_nodes):
-                            best_node = NODE( self.max_jobs_default)
-                            if (best_node.node_id):
-                                best_node.start()
-                                sub_ctrl.node_list.append( best_node)
-                            else:
-                                best_node.start()
-                                best_node.queue.put( 'kill')
-                                best_node = None
-                                self.skip_job_sub = 180
-                    if (best_node != None):
-                        if (verbose):
-                            print "submission_control: putting job"
-                        job = self.jobs.Q.pop()
-                        best_node.queue.put( job)
-                        self.jobs.lock.acquire()
-                        self.jobs.queue.remove( job)
-                        self.jobs.queue_size -= 1
-                        self.jobs.running.append( job)
-                        self.jobs.lock.release()
-                        jobs_modification = True
-                self.jobs.Q_lock.release()
-
-            else:
-                self.skip_job_sub -= 1
-                if (verbose):
-                    print "Skipping job submission: " + str( self.skip_job_sub)
-
-            sleep( sleep_time_sub_ctrl)
-            if (jobs_modification):
-                self.jobs.write_all_jobs()
-                jobs_modification = False
-
-
+# Transform the multiuser status message in a more readable way
 def analise_multiuser_status( info, check_n, check_u):
     lines = info.split('\n')
     do_users = False
@@ -838,13 +680,11 @@ def analise_multiuser_status( info, check_n, check_u):
 # return string with information on required jobs, defined by pattern
 def check_jobs( jobs, pattern):
     asked_jobs = []
-    jobs.lock.acquire()
+    jobs.lock_all.acquire()
     for job in jobs.all:
         if (job.asked( pattern)):
             asked_jobs.append( job)
-    jobs.lock.release()
-
-    # TODO: sort - implement based on required info
+    jobs.lock_all.release()
 
     req_jobs = ''
     for job in asked_jobs:
@@ -854,31 +694,281 @@ def check_jobs( jobs, pattern):
     return req_jobs
 
 
-# Kill job
-def job_kill( job, sub_ctrl):
-    kill_command = 'source ~/.bash_profile; qpy --jobkill ' + str( job.ID)
-    kill_p = subprocess.Popen(["ssh", "-o", "StrictHostKeyChecking=no", job.node.node_id, kill_command],
-                              shell=False,
-                              stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE)
-    job.status = 3
-    job.node.n_jobs -= job.n_cores
-    if (verbose):
-        print "Killing job " + str( job.ID) + ' on node ' + job.node.node_id
-        print "job_kill stdout: ", kill_p.stdout.readlines()
-        print "job_kill stderr: ", kill_p.stderr.readlines()
 
-    if (multiuser):
-        multiuser_args = (user, job.ID, sub_ctrl.jobs.queue_size)
-        msg_back = send_multiuser_arguments( MULTIUSER_REMOVE_JOB, multiuser_args)
-        if (verbose):
-            if (msg_back == None):
-                print 'Multiuser seems not to be running.'
+
+#------------------------------------------------
+# Tasks threads
+
+#------------------------------------------------
+# Check connection with multiuser
+#
+class CHECK_MULTIUSER( threading.Thread):
+    def __init__( self, jobs, multiuser_alive):
+        self.jobs = jobs
+        self.multiuser_alive = multiuser_alive
+
+        threading.Thread.__init__( self)
+        self.finish = threading.Event()
+
+    def run( self):
+
+        waiting_time = 0
+        while not self.finish.is_set():
+            if (waiting_time < 1):
+                msg_back = send_multiuser_arguments( MULTIUSER_USER, [user])
+                if (msg_back == None):
+                    self.multiuser_alive.clear()
+                else:
+                    self.multiuser_alive.set()
+                    if ( isinstance( msg_back[1], str) and msg_back[1] != 'User exists.'):
+                        multiuser_cur_jobs = []
+                        self.jobs.lock_running.acquire()
+                        for job in self.jobs.running:
+                            multiuser_cur_jobs.append( [job.ID, job.node.node_id, job.n_cores])
+                        self.jobs.lock_running.release()
+                        msg_back = send_multiuser_arguments( MULTIUSER_USER, (user, multiuser_cur_jobs))
+                if (verbose):
+                    print "Checking multiuser: ", msg_back
+                if (self.multiuser_alive.is_set()):
+                    waiting_time = conn_multiuser_at
+                else:
+                    waiting_time = conn_multiuser_at_not_working
+
             else:
-                print 'Multiuser message (killing a job): ', msg_back[1]
-        sub_ctrl.multiuser_cur_jobs.remove( [job.ID, job.node.node_id, job.n_cores])
+                waiting_time -= 1
 
-# Get job from client and send it for submission
+            sleep( 1)
+
+
+#------------------------------------------------
+# Check if the jobs are still running
+#
+class CHECK_RUN( threading.Thread):
+    def __init__( self, jobs, multiuser_alive):
+        self.jobs = jobs
+        self.multiuser_alive = multiuser_alive
+
+        threading.Thread.__init__( self)
+        self.finish = threading.Event()
+
+    def run( self):
+
+        while not self.finish.is_set():
+            i = 0
+            jobs_modification = False
+            self.jobs.lock_running.acquire()
+            self.jobs.lock_done.acquire()
+            while (i < len( self.jobs.running)):
+                job = self.jobs.running[i]
+                if (not job.is_running() and job.status == 1):
+                    job.status = 2
+                    jobs_modification = True
+                    self.jobs.running.remove( job)
+                    self.jobs.done.append( job)
+                    self.skip_job_sub = 0
+                    job.node.n_jobs -= job.n_cores
+                    if (multiuser and self.multiuser_alive.is_set()):
+                        multiuser_args = (user, job.ID, self.jobs.queue_size)
+                        msg_back = send_multiuser_arguments( MULTIUSER_REMOVE_JOB, multiuser_args)
+                        if (msg_back == None):
+                            self.multiuser_alive.clear()
+                        if (verbose):
+                            print 'Multiuser message (removing a job): ', msg_back
+                else:
+                    i += 1
+            self.jobs.lock_running.release()
+            self.jobs.lock_done.release()
+            sleep ( sleep_time_check_run)
+            if (jobs_modification):
+                self.jobs.write_all_jobs()
+                jobs_modification = False
+
+
+
+#------------------------------------------------
+# Kill jobs
+#
+class JOBS_KILLER( threading.Thread):
+    def __init__( self, jobs, multiuser_alive):
+        self.jobs = jobs
+        self.multiuser_alive = multiuser_alive
+
+        threading.Thread.__init__( self)
+        self.queue = Queue()
+
+    def run( self):
+
+        while True:
+            job = self.queue.get()
+
+            if ( isinstance( job, str)):
+                if ( job == 'kill'):
+                    break
+
+            if (verbose):
+                print 'Killing: ' + str( job.ID) + ' on node ' + job.node.node_id
+
+            kill_command = 'source ~/.bash_profile; qpy --jobkill ' + str( job.ID)
+            kill_p = subprocess.Popen(["ssh", "-o", "StrictHostKeyChecking=no",
+                                       job.node.node_id, kill_command],
+                                      shell=False,
+                                      stdout=subprocess.PIPE,
+                                      stderr=subprocess.PIPE)
+            std_outerr = kill_p.communicate()
+            job.process.communicate()
+            job.status = 3
+            job.node.n_jobs -= job.n_cores
+            self.jobs.lock_running.acquire()
+            self.jobs.lock_killed.acquire()
+            self.jobs.running.remove( job)
+            self.jobs.killed.append( job)
+            self.jobs.lock_running.release()
+            self.jobs.lock_killed.release()
+            self.jobs.write_all_jobs()
+
+                        
+            if (verbose):
+                print "Killing job " + str( job.ID) + ' on node ' + job.node.node_id
+                print "job_kill stdout: ", repr( std_outerr[0])
+                print "job_kill stderr: ", repr( std_outerr[1])
+
+
+            if (self.multiuser_alive.is_set()):
+                multiuser_args = (user, job.ID, self.jobs.queue_size)
+                msg_back = send_multiuser_arguments( MULTIUSER_REMOVE_JOB, multiuser_args)
+                if (msg_back == None):
+                    self.multiuser_alive.clear()
+            
+
+#------------------------------------------------
+# Control job subimission
+#
+class SUB_CTRL( threading.Thread):
+    def __init__( self, jobs, multiuser_alive):
+        self.jobs = jobs
+        self.multiuser_alive = multiuser_alive
+
+        threading.Thread.__init__( self)
+        self.finish = threading.Event()
+
+        self.node_list = []
+        self.max_nodes = max_nodes_default
+        if (multiuser):
+            self.max_jobs_default = -1
+        else:
+            self.max_jobs_default = 20
+        self.skip_job_sub = 0
+
+    def write_nodes( self):
+        with  open( cur_nodes_file, 'w') as f:
+            for node in self.node_list:
+                f.write( node.node_id + '\n')
+
+    def write_new_known_node( self, new_node):
+        with open( known_nodes_file, 'r') as f:
+            known_nodes = []
+            for node in f:
+                known_nodes.append( node.strip())
+
+        if (not( new_node in known_nodes)):
+            with open( known_nodes_file, 'a') as f:
+                f.write( new_node + '\n')
+            
+    def run( self):
+        if (not( multiuser)):
+            self.write_nodes()
+        n_time_multiuser = 0
+        self.jobs.initialize_old_jobs( self)
+        jobs_modification = False
+        while not self.finish.is_set():
+
+            # Dealloc the non-used node
+            if (dyn_nodes):
+                cur_time = time()
+                for node in self.node_list:
+                    if (not( node.n_jobs) and (cur_time - node.init_time) > min_working_time):
+                        node.queue.put( 'kill')
+                        self.node_list.remove( node)
+
+            # Send a job, if there is space
+            if (self.skip_job_sub <= 0):
+                self.jobs.lock_Q.acquire()
+                queue_has_jobs = len( self.jobs.Q) != 0
+                if (queue_has_jobs):
+                    next_jobID = self.jobs.Q[-1].ID
+                    next_Ncores = self.jobs.Q[-1].n_cores
+                    next_mem = self.jobs.Q[-1].mem
+                    best_node = None
+                    if (multiuser and self.multiuser_alive.is_set()):
+                        multiuser_args = (user, next_jobID, next_Ncores, next_mem, self.jobs.queue_size)
+                        msg_back = send_multiuser_arguments( MULTIUSER_REQ_CORE, multiuser_args)
+                        if (msg_back == None):
+                            self.multiuser_alive.clear()
+                            continue
+                        if (verbose):
+                            print 'Multiuser message (sending job): ', msg_back
+                        if (msg_back[0] == 0):
+                            node_found = False
+                            for node in self.node_list:
+                                if (msg_back[1] == node.node_id):
+                                    best_node = node
+                                    node_found = True
+                                    break
+                            if (not( node_found)):
+                                best_node = NODE( -1, msg_back[1])
+                                best_node.start()
+                                self.node_list.append( best_node)
+                        else:
+                            self.skip_job_sub = 300
+                    else:
+                        best_free = 0
+                        cur_time = time()
+                        for node in self.node_list:
+                            free = node.max_jobs - node.n_jobs
+                            if (free > best_free):
+                                if (not( dyn_nodes) or (cur_time - node.init_time) < max_working_time):
+                                    best_node = node
+                                    best_free = free
+                        if (best_node == None and len( self.node_list) < self.max_nodes):
+                            best_node = NODE( self.max_jobs_default)
+                            if (best_node.node_id):
+                                best_node.start()
+                                sub_ctrl.node_list.append( best_node)
+                            else:
+                                best_node.start()
+                                best_node.queue.put( 'kill')
+                                best_node = None
+                                self.skip_job_sub = 180
+                    if (best_node != None):
+                        if (verbose):
+                            print "submission_control: putting job"
+                        job = self.jobs.Q.pop()
+                        job.node = best_node
+                        best_node.queue.put( job)
+                        self.jobs.lock_running.acquire()
+                        self.jobs.lock_queue.acquire()
+                        self.jobs.queue.remove( job)
+                        self.jobs.queue_size -= 1
+                        self.jobs.running.append( job)
+                        self.jobs.lock_running.release()
+                        self.jobs.lock_queue.release()
+                        jobs_modification = True
+                self.jobs.lock_Q.release()
+
+            else:
+                self.skip_job_sub -= 1
+                if (verbose):
+                    print "Skipping job submission: " + str( self.skip_job_sub)
+
+            sleep( sleep_time_sub_ctrl)
+            if (jobs_modification):
+                self.jobs.write_all_jobs()
+                jobs_modification = False
+
+
+#------------------------------------------------
+# Handle the user messages sent from qpy
+#
 # message from client must be:
 #   (job_type, arguments)
 # where:
@@ -894,10 +984,20 @@ def job_kill( job, sub_ctrl):
 #
 #   the arguments are option dependent. See below
 #
-def handle_client( sub_ctrl, jobId):
-    if (verbose):
-        print "handle_client: ready"
-    server_master = Listener(( "localhost", port), authkey = 'qwerty')
+def handle_qpy( sub_ctrl, check_run, check_multiuser, jobs_killer, jobs, jobId):
+
+    while True:
+        random.seed()
+        port = random.randint( 10000, 20000 )
+        port=15555
+        try:
+            server_master = Listener(( "localhost", port), authkey = 'qwerty')
+            break
+        except:
+            pass
+    f = open( port_file, 'w', 0)
+    f.write( str( port))
+    f.close()
     while True:
         client_master = server_master.accept()
         (job_type, arguments) = client_master.recv()
@@ -910,14 +1010,16 @@ def handle_client( sub_ctrl, jobId):
             new_job = JOB( jobId, arguments)
             try:
                 new_job.parse_options()
-                sub_ctrl.jobs.lock.acquire()
-                sub_ctrl.jobs.all.append( new_job)
-                sub_ctrl.jobs.queue.append( new_job)
-                sub_ctrl.jobs.queue_size += 1
-                sub_ctrl.jobs.lock.release()
-                sub_ctrl.jobs.Q_lock.acquire()
-                sub_ctrl.jobs.Q.appendleft( new_job)
-                sub_ctrl.jobs.Q_lock.release()
+                jobs.lock_all.acquire()
+                jobs.lock_queue.acquire()
+                jobs.all.append( new_job)
+                jobs.queue.append( new_job)
+                jobs.queue_size += 1
+                jobs.lock_all.release()
+                jobs.lock_queue.release()
+                jobs.lock_Q.acquire()
+                jobs.Q.appendleft( new_job)
+                jobs.lock_Q.release()
                 client_master.send( 'Job ' + str(jobId) + ' received.\n')
                 jobId += 1
                 with open( jobID_file, 'w') as f:
@@ -932,7 +1034,7 @@ def handle_client( sub_ctrl, jobId):
         # Check jobs
         # arguments: a dictionary, indicating patterns (see JOB.asked)
         elif (job_type == JOBTYPE_CHECK):
-            client_master.send( check_jobs( sub_ctrl.jobs, arguments))
+            client_master.send( check_jobs( jobs, arguments))
 
         # Kill a job
         # arguments = a list of jobIDs and status (all, queue, running)
@@ -941,37 +1043,40 @@ def handle_client( sub_ctrl, jobId):
             kill_q = (( 'all' in arguments) or ('queue' in arguments))
             kill_r = (( 'all' in arguments) or ('running' in arguments))
 
-
             for st in ['all', 'queue', 'running']:
                 while (st in arguments):
                     arguments.remove( st)
 
-            sub_ctrl.jobs.lock_kill.acquire()
-            sub_ctrl.jobs.Q_lock.acquire()
+            jobs.lock_queue.acquire()
+            jobs.lock_undone.acquire()
+            jobs.lock_Q.acquire()
             n_kill_q = 0
             to_remove = []
-            for job in sub_ctrl.jobs.queue:
+            for job in jobs.queue:
                 if (job.ID in arguments or kill_q):
                     to_remove.append( job)
             for job in to_remove:
                 job.status = 4
-                sub_ctrl.jobs.queue.remove( job)
-                sub_ctrl.jobs.queue_size -= 1
-                sub_ctrl.jobs.undone.append( job)
-                sub_ctrl.jobs.Q.remove( job)
+                jobs.queue.remove( job)
+                jobs.queue_size -= 1
+                jobs.undone.append( job)
+                jobs.Q.remove( job)
                 n_kill_q += 1
-            sub_ctrl.jobs.Q_lock.release()
+            jobs.lock_queue.release()
+            jobs.lock_undone.release()
+            jobs.lock_Q.release()
+
             n_kill_r = 0
             to_remove = []
-            for job in sub_ctrl.jobs.running:
+            jobs.lock_running.acquire()
+            for job in jobs.running:
                 if (job.ID in arguments or kill_r):
                     to_remove.append( job)
+            jobs.lock_running.release()
+
             for job in to_remove:
-                job_kill( job, sub_ctrl)
-                sub_ctrl.jobs.running.remove( job)
-                sub_ctrl.jobs.killed.append( job)
+                jobs_killer.queue.put( job)
                 n_kill_r += 1
-            sub_ctrl.jobs.lock_kill.release()
 
             if (n_kill_q + n_kill_r):
                 sub_ctrl.skip_job_sub = 0
@@ -982,21 +1087,25 @@ def handle_client( sub_ctrl, jobId):
                 msg += plural[1] + ' ' + plural[0] + ' removed from the queue.\n'
             if (n_kill_r):
                 plural = get_plural( ('job', 'jobs'), n_kill_r)
-                msg += plural[1] + ' ' + plural[0] + ' killed.\n'
+                msg += plural[1] + ' ' + plural[0] + ' will be killed.\n'
 
             if (not( msg)):
                 msg = 'Nothing to do: required jobs not found.\n'
             else:
-                sub_ctrl.jobs.write_all_jobs()
+                jobs.write_all_jobs()
             client_master.send( msg)
 
         # Finish the master execution
         # argumets: no arguments
         if (job_type == JOBTYPE_FINISH):
+            client_master.send( 'Stopping qpy-master driver.\n')
             for node in sub_ctrl.node_list:
                 node.queue.put( 'kill')
-            client_master.send( 'Stopping qpy-master driver.\n')
-            sub_ctrl.live = False
+            sub_ctrl.finish.set()
+            check_run.finish.set()
+            jobs_killer.queue.put( 'kill')
+            if (multiuser):
+                check_multiuser.finish.set()
             break
 
         # Change maximum number of nodes or add/remove nodes
@@ -1209,24 +1318,36 @@ def handle_client( sub_ctrl, jobId):
             n_jobs = 0
             for i in arguments:
                 arg_is_id = isinstance( i, int)
-                sub_ctrl.jobs.lock.acquire()
+                jobs.lock_all.acquire()
+                jobs.lock_done.acquire()
+                jobs.lock_killed.acquire()
+                jobs.lock_undone.acquire()
                 ij = 0
-                while (ij < len( sub_ctrl.jobs.all)):
-                    job = sub_ctrl.jobs.all[ij]
+                while (ij < len( jobs.all)):
+                    job = jobs.all[ij]
                     remove = False
                     if (job.status > 1):
                         remove = arg_is_id and i == job.ID
                         remove = remove or not( arg_is_id) and i == 'all'
                         remove = remove or not( arg_is_id) and i == job_status[job.status]
                         if (remove):
-                            sub_ctrl.jobs.all.remove( job)
+                            if (job.status == 2):
+                                jobs.done.remove( job)
+                            elif (job.status == 3):
+                                jobs.killed.remove( job)
+                            elif (job.status == 4):
+                                jobs.undone.remove( job)
+                            jobs.all.remove( job)
                             n_jobs += 1
                     if (not( remove)):
                         ij += 1
-                sub_ctrl.jobs.lock.release()
+                jobs.lock_all.release()
+                jobs.lock_done.release()
+                jobs.lock_killed.release()
+                jobs.lock_undone.release()
 
             if (n_jobs):
-                sub_ctrl.jobs.write_all_jobs()
+                jobs.write_all_jobs()
                 plural = get_plural( ('job', 'jobs'), n_jobs)
                 msg = plural[1] + ' finished ' + plural[0] + ' removed.\n'
             else:
@@ -1237,18 +1358,39 @@ def handle_client( sub_ctrl, jobId):
         else:
             client_master.send( 'Unknown option: ' + str( job_type) + '\n')
 
+
+#------------------------------
 if (ini_job_ID == None):
     try:
         with open( jobID_file, 'r') as f:
             ini_job_ID = int( f.read())
     except:
-        sys.exit( 'Problem to get initial jobID. Please, report this bug.')
+        ini_job_ID = 1
 
-sub_ctrl = submission_control()
+jobs = job_collection()
+
+multiuser_alive = threading.Event()
+
+if (multiuser):
+    check_multiuser = CHECK_MULTIUSER( jobs, multiuser_alive)
+    check_multiuser.start()
+    multiuser_alive.set()
+else:
+    multiuser_alive.clear()
+    check_multiuser = None
+
+check_run = CHECK_RUN( jobs, multiuser_alive)
+check_run.start()
+
+jobs_killer = JOBS_KILLER( jobs, multiuser_alive)
+jobs_killer.start()
+
+sub_ctrl = SUB_CTRL( jobs, multiuser_alive)
 sub_ctrl.start()
 
-handle_client( sub_ctrl, ini_job_ID)
+handle_qpy( sub_ctrl, check_run, check_multiuser, jobs_killer, jobs, ini_job_ID)
+
 os.remove( port_file)
 
 if (verbose):
-    print "qpy-master: done!"
+    print "qpy-master main thread done!"

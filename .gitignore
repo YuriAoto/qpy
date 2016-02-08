@@ -1,11 +1,2 @@
 *pyc
 *~
-.port
-.current_nodes
-.known_nodes
-.next_jobID
-.all_jobs
-multiuser_allowed_users
-multiuser_distribution_rules
-multiuser_nodes
-running-qpy-multiuser

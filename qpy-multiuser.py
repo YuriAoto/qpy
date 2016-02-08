@@ -553,7 +553,7 @@ class check_outsiders( threading.Thread):
                     n_jobs = 0
                     for line in ssh_stdout:
                         line_spl = line.split()
-                        if float(line_spl[8]) > 50:
+                        if float(line_spl[8].replace(',','.')) > 50:
                             n_jobs += 1
                         else:
                             break

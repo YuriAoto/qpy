@@ -21,6 +21,7 @@ tutorial_file = qpy_source_dir + '/tutorial'
 
 scr_dir = '/scratch/'+ user
 
+qpy_finish_command = ['qpy', 'finish', '>', '/dev/null', '2>', '/dev/null']
 qpy_master_command = ['python', qpy_source_dir+'qpy-master.py', '-c', 'linux4', '-m', '>', '/dev/null', '2>', '/dev/null']
 
 # Return a list with all children and grand-children from pid
@@ -123,7 +124,7 @@ keywords={'sub':     (JOBTYPE_SUB     , 'Submit a job. Arguments: the job comman
           'clean':   (JOBTYPE_CLEAN   , 'Remove finished jobs from the list. Arguments: the jobs id'),
           'tutorial':(JOBTYPE_TUTORIAL, 'Run the qpy tutorial. Arguments: optional: a qpy option'),
           'status':  (JOBTYPE_STATUS  , 'Show current status. No arguments'),
-          'start':   (JOBTYPE_START   , 'Start qpy-master. No arguments')
+          'restart': (JOBTYPE_RESTART , 'Restart qpy-master. No arguments')
           }
 
 
@@ -141,6 +142,9 @@ except:
         usage_msg += '\n  ' + format_spc.format( opt+':') + ' ' + keywords[opt][1]
     sys.exit( usage_msg)
 
+start_qpy_master = option == JOBTYPE_RESTART
+if (start_qpy_master):
+    option = JOBTYPE_FINISH
 
 # Get arguments, according to the option
 arguments = ()
@@ -233,17 +237,23 @@ elif (option == JOBTYPE_TUTORIAL):
     exit()
 
 
-# Start qpy-master
-elif (option == JOBTYPE_START):
-    start = subprocess.Popen( qpy_master_command, shell = False)
+
+def start_master_driver():
+    sys.stdout.write( "Starting qpy-master driver.\n")
+    subprocess.Popen( qpy_master_command, shell = False)
     exit()
+
+
 
 try:
     f = open( port_file, 'r')
     port = int( f.read())
     f.close()
 except:
-    sys.exit( 'Problem to get the port number. Are you sure that qpy-master is running?')
+    if (start_qpy_master):
+        start_master_driver()
+    else:
+        sys.exit( 'Problem to get the port number. Are you sure that qpy-master is running?')
 
 address = 'localhost'
 key = 'qwerty'
@@ -251,26 +261,35 @@ key = 'qwerty'
 class try_connection( threading.Thread):
     def __init__( self):
         threading.Thread.__init__( self)
-        self.master = None
+        self.conn = None
+        self.done = threading.Event()
+
     def run( self):
-        self.master = Client( (address, port), authkey=key)
-        
+        try:
+            self.conn = Client( (address, port), authkey=key)
+            self.done.set()
+        except:
+            self.done.clear()
+
+
 M = try_connection()
 M.daemon = True
 M.start()
-n=0
-waiting = 60
-while (M.is_alive()):
-    n += 1
-    if (n == waiting):
-        sys.exit( 'Time for connection exceeded. Are you sure that qpy-master is running?')
-    sleep( 0.05)
+M.done.wait( 3.0)
+if (not( M.done.is_set())):
+    if (start_qpy_master):
+        os.remove( port_file)
+        start_master_driver()
+    sys.exit( 'Time for connection exceeded. Are you sure that qpy-master is running?')
 
-master = M.master
-master.send( (option, arguments))
+conn = M.conn
+conn.send( (option, arguments))
 try:
-    sys.stdout.write( master.recv())
+    sys.stdout.write( conn.recv())
 except:
     sys.exit( 'Problem when getting message from qpy-master. Your qpy-master might be broken.\nTry to run again or contact the qpy-team.')
+conn.close()
 
-master.close()
+if (start_qpy_master):
+    sleep( 1)
+    start_master_driver()
