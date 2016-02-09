@@ -16,10 +16,14 @@ multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
 multiuser_port = 9999
 
+qpy_source_dir = os.path.dirname( os.path.abspath( __file__)) + '/'
+qpy_multiuser_command = ['python', qpy_source_dir+'qpy-multiuser.py', '>', '/dev/null', '2>', '/dev/null']
+
 keywords={'nodes':        (MULTIUSER_NODES,          'Reaload nodes file. No arguments'),
           'distribute':   (MULTIUSER_DISTRIBUTE,     'Distribute cores: No arguments'),
           'status' :      (MULTIUSER_STATUS,         'Show status. No arguments'),
           'variables' :   (MULTIUSER_SHOW_VARIABLES, 'Show variables. No arguments'),
+          'start':        (MULTIUSER_START,          'Start multiuser execution. No arguments'),
           'finish':       (MULTIUSER_FINISH,         'Finish the multiuser execution. No arguments'),
           '__user':       (MULTIUSER_USER,           'Add user. Arguments: user_name'),
           '__req_core':   (MULTIUSER_REQ_CORE,       'Require a core: Arguments: user_name, jobID, n_cores, mem, queue_size'),
@@ -48,6 +52,7 @@ except:
 # Get arguments, according to the option
 arguments = ()
 
+
 # Add user
 if (option == MULTIUSER_USER):
     try:
@@ -71,6 +76,13 @@ if (option == MULTIUSER_REMOVE_JOB):
     except:
         usage_msg = 'Usage: ' + sys.argv[0] +  ' __remove_job <user_name> <job_ID> <queue_size>.'
         sys.exit( usage_msg)
+
+
+# Add user
+if (option == MULTIUSER_START):
+    sys.stdout.write( "Starting qpy-multiuser driver.\n")
+    subprocess.Popen( qpy_multiuser_command, shell = False)
+    exit()
 
 
 # Try to connect in a thread, to test the connection
