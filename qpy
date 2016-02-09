@@ -237,9 +237,29 @@ elif (option == JOBTYPE_TUTORIAL):
     exit()
 
 
+def kill_master_instances():
+    pattern = ' '.join( qpy_master_command)
+    ps = subprocess.Popen(["ps", "-fu", user],
+                          shell=False,
+                          stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE)
+    std_outerr = ps.communicate()
+    ps_stdout = std_outerr[0].split( '\n')
+    for l in ps_stdout:
+        if (pattern in l):
+            pid = l.split()[1]
+            kill = subprocess.Popen(["kill", pid],
+                                    shell=False,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE)
+            sys.stdout.write( 'Killing older qpy-master instance: ' + pid + '\n')
+            std_outerr = kill.communicate()
+
 
 def start_master_driver():
     sys.stdout.write( "Starting qpy-master driver.\n")
+    sleep( 1)
+#    kill_master_instances()
     subprocess.Popen( qpy_master_command, shell = False)
     exit()
 
@@ -271,7 +291,6 @@ class try_connection( threading.Thread):
         except:
             self.done.clear()
 
-
 M = try_connection()
 M.daemon = True
 M.start()
@@ -291,5 +310,4 @@ except:
 conn.close()
 
 if (start_qpy_master):
-    sleep( 1)
     start_master_driver()
