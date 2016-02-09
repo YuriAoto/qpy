@@ -155,14 +155,20 @@ def send_multiuser_arguments( option, arguments):
     M.start()
     M.done.wait( 5.0)
     if (not( M.done.is_set())):
-        kill_conn = Listener(( multiuser_address, multiuser_port), authkey = multiuser_key)
-        client = kill_conn.accept()
-        kill_conn.close()
-        return None
+        try:
+            kill_conn = Listener(( multiuser_address, multiuser_port), authkey = multiuser_key)
+            client = kill_conn.accept()
+            kill_conn.close()
+            return None
+        except:
+            return None
     conn = M.conn
-    conn.send( (option, arguments))
-    msg_back = conn.recv()
-    conn.close()
+    try:
+        conn.send( (option, arguments))
+        msg_back = conn.recv()
+        conn.close()
+    except:
+        return None
     if (saveMessages):
         if (not(multiuser_messages) or ((option, arguments), msg_back) != multiuser_messages[-1][0]):
             multiuser_messages.append( [ ((option, arguments), msg_back), 1])

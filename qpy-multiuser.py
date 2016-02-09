@@ -345,8 +345,11 @@ def handle_client( ):
         print "handle_client: ready"
     conn = Listener(( multiuser_address, multiuser_port), authkey = multiuser_key)
     while True:
-        client = conn.accept()
-        (action_type, arguments) = client.recv()
+        try:
+            client = conn.accept()
+            (action_type, arguments) = client.recv()
+        except:
+            continue
         if (verbose):
             print "Received: " + str(action_type) + " -> " + str(arguments)
 
@@ -530,7 +533,10 @@ def handle_client( ):
 
 
         # Send message back
-        client.send( (status, msg))
+        try:
+            client.send( (status, msg))
+        except:
+            continue
 
 
 # Attempt to connect to qpy-multiuser
