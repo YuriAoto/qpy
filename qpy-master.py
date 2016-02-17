@@ -339,11 +339,15 @@ class JOB():
 
     def fmt( self):
         job_str = job_fmt_pattern
+        try:
+            str_node = str(self.node.node_id)
+        except:
+            str_node = 'None'
         for pattern, info in (('%j', str( self.ID)),
                               ('%s', job_status[self.status]),
                               ('%c', self.info[0]),
                               ('%d', self.info[1]),
-                              ('%n', str(self.node.node_id)),
+                              ('%n', str_node),
                               ('%N', str(self.n_cores))
                               ):
             job_str = job_str.replace( pattern, info)
