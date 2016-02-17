@@ -112,7 +112,7 @@ multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
 multiuser_port = 9999
 
-job_fmt_pattern_def = '%j (%s):%c (wd: %d)\n'
+job_fmt_pattern_def = '%j (%s):%c (on %n; wd: %d)\n'
 job_fmt_pattern = job_fmt_pattern_def
 
 
@@ -342,7 +342,9 @@ class JOB():
         for pattern, info in (('%j', str( self.ID)),
                               ('%s', job_status[self.status]),
                               ('%c', self.info[0]),
-                              ('%d', self.info[1])
+                              ('%d', self.info[1]),
+                              ('%n', str(self.node.node_id)),
+                              ('%N', str(self.n_cores))
                               ):
             job_str = job_str.replace( pattern, info)
         return job_str
