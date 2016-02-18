@@ -80,7 +80,7 @@ dyn_nodes = cluster == "hlrs"
 
 # Times, all in seconds
 sleep_time_sub_ctrl = 1
-sleep_time_check_run = 1
+sleep_time_check_run = 10
 
 # dynamical nodes allocation
 max_node_time = 1814400
