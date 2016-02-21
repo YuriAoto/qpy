@@ -769,14 +769,18 @@ class CHECK_RUN( threading.Thread):
             i = 0
             jobs_modification = False
             self.jobs.lock_running.acquire()
-            self.jobs.lock_done.acquire()
-            while (i < len( self.jobs.running)):
-                job = self.jobs.running[i]
+            jobs_to_check = list( self.jobs.running)
+            self.jobs.lock_running.release()
+            for job in jobs_to_check:
                 if (not job.is_running() and job.status == 1):
                     job.status = 2
                     jobs_modification = True
+                    self.jobs.lock_running.acquire()
+                    self.jobs.lock_done.acquire()
                     self.jobs.running.remove( job)
                     self.jobs.done.append( job)
+                    self.jobs.lock_running.release()
+                    self.jobs.lock_done.release()
                     self.skip_job_sub = 0
                     job.node.n_jobs -= job.n_cores
                     if (multiuser and self.multiuser_alive.is_set()):
@@ -788,8 +792,6 @@ class CHECK_RUN( threading.Thread):
                             print 'Multiuser message (removing a job): ', msg_back
                 else:
                     i += 1
-            self.jobs.lock_running.release()
-            self.jobs.lock_done.release()
             sleep ( sleep_time_check_run)
             if (jobs_modification):
                 self.jobs.write_all_jobs()
