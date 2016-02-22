@@ -23,13 +23,17 @@ Here are the different options that can be used while running qpy-master:
 
 -> Using qpy
 
-qpy is used to submit jobs from the main server (say 'linux4' and 'hlrs') and then the jobs are distributed to different nodes according the availability or the choices given by the user. It can handle jobs running in both single and multi processors. The distribution of jobs are different for 'linux4' and 'hlrs' cluter. For 'linux4', the submitted jobs are distributed to the defferent 'orpheus' nodes. The user, while using the 'single-user' environment , has to add the nodes and the number of cores he/she wants to use on that particular node before submitting the first job. The user, on the other hand, does not have to add any nodes or corersponding number of cores while using 'hlrs' cluster. qpy allot a node itself along with the avaliable cores in it whenever it needs to submit any new job. 
+qpy is used to submit jobs from the main server (say 'linux4' and 'hlrs') and then the jobs are distributed to different nodes according the availability or the choices given by the user. It can handle jobs running in both single and multi processors. The distribution of jobs are different for 'linux4' and 'hlrs' cluter. For 'linux4', the submitted jobs are distributed to the defferent 'orpheus' nodes. The user, while using the 'single-user' environment , has to add the nodes and the number of cores he/she wants to use on that particular node before submitting the first job. The user, on the other hand, does not have to add any nodes or corersponding number of cores while using either the 'multi-user' enviroment in 'linux4' or 'hlrs' cluster. qpy allots a node itself along with the avaliable cores in these cases whenever it needs to submit any new job. 
 
-The followings are the commands that are necessary to use qpy. While qoy-master is already running in the background, the user can user any of these commands as 'qpy [cmd]'
+The followings are the commands that are necessary to use qpy. While qpy-master is already running in the background, the user can user any of these commands as 'qpy [cmd]'
 
 # sub
 
-Submit any script after the command 'qpy sub'. The output and the error file of running that particular script will be written in the files 'job_[jodid].out' and 'job_[jodid].err' respectively.
+Submit any executable after the command 'qpy sub'. The output and the error file of running that particular script will be written in the files 'job_[jodid].out' and 'job_[jodid].err' respectively.
+
+Submitting a serial job is the default one for this command. To submit a job that uses multi-processor, please add the information of number of processors (N) needed either by putting '-n N' between 'qpy sub' and the executable, or by adding '#QPY n_cores=N' in the script running. For the first case, do not put the option after the executable as it would then be considered as an option corresponding to the executable. 
+
+qpy also check if enough memory is available in a node before starting a job there. The defualt memory it checks for availibility is 5 GB. If a job needs to use more memory (M) please add this information either by putting '-m M' between 'qpy sub' and the executable, or by adding '#QPY mem=M' in the script running.
 
 # check
 
@@ -43,9 +47,13 @@ Kill a particular jobs using the command 'qpy kill [jobid]'. One can also kill s
 
 If you feel like done using qpy or want to update the version and rerun it, please finish the existing qpy-master which is running in background using 'qpy finish'. If somehow the qpy-master crashe while using, please remove the '.port' file from the qpy directory before starting a new qpy session. 
 
+# status
+
+This command is mainly useful for the 'multi-user' environment. It writes elaborately the number of jobs running for each users and in each of the available nodes. 
+
 # nodes
 
-It gives the number of cores being used by the user for each of the nodes that the user has added to use. For linux4, while working as a 'single user', it also provide the way to add or remove node by simple adding the name of the node after 'qpy nodes add/remove'.
+While working as a single user, it gives the number of cores being used by the user for each of the nodes that the user has added to use. It also provides the way to add or remove node by simple adding the name of the node after 'qpy nodes add/remove'. While using the 'multi-user' environment, this command gives the information about number of jobs running by all the users and how these jobs are distributed in each of the nodes. 
 
 # maxJobs
 
@@ -53,7 +61,15 @@ This command set the maxJobs. The default of maxJobs is 20 for both linux4 (for 
 
 # config
 
-This command gives informations about some of the variables in qpy. Feel free to check. It is quite self explanatory.
+This command gives informations about some of the variables in qpy. Feel free to check. It is quite self explanatory.One of the advanced feature of this command is to configure the format that 'qpy check' would follow. The default format that 'qpy check' uses to write all the jobs is '%j (%s):%c (on %n; wd: %d)\n'. It might seem little complicated, but it follows mainly these rules:
+%j  -> job ID
+%s -> job status
+%c -> command you used to submit the job
+%d -> working directory of your job
+%n -> node allocated for your job
+%N -> number of cores for your job.
+
+The user can also change this format to a minimalistic one, by 'qpy config checkFMT %j:%s' or anything using the notations defined above. To check the current format, use the command 'qpy config checkFMT' and to change it to the default one, use 'qpy config checkFMT default'.
 
 # clean
 
