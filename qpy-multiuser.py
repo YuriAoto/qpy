@@ -309,14 +309,16 @@ def distribute_cores( ):
         print 'users_min:   ', users_min
         print 'users_extra: ', users_extra
     # Finally put into the users variable
-    global N_min_cores
+    global N_min_cores, N_used_min_cores
     N_min_cores = 0
+    N_used_min_cores = 0
     for user in users:
         try:
             users[user].min_cores = users_min[user]
         except:
             users[user].min_cores = 0
         N_min_cores += users[user].min_cores
+        N_used_min_cores += min( users[user].min_cores, users[user].n_used_cores)
         try:
             users[user].extra_cores = users_extra[user]
         except:
