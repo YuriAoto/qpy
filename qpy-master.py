@@ -80,7 +80,7 @@ dyn_nodes = cluster == "hlrs"
 
 # Times, all in seconds
 sleep_time_sub_ctrl = 1
-sleep_time_check_run = 1
+sleep_time_check_run = 10
 
 # dynamical nodes allocation
 max_node_time = 1814400
@@ -112,7 +112,7 @@ multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
 multiuser_port = 9999
 
-job_fmt_pattern_def = '%j (%s):%c (wd: %d)\n'
+job_fmt_pattern_def = '%j (%s):%c (on %n; wd: %d)\n'
 job_fmt_pattern = job_fmt_pattern_def
 
 
@@ -155,14 +155,20 @@ def send_multiuser_arguments( option, arguments):
     M.start()
     M.done.wait( 5.0)
     if (not( M.done.is_set())):
-        kill_conn = Listener(( multiuser_address, multiuser_port), authkey = multiuser_key)
-        client = kill_conn.accept()
-        kill_conn.close()
-        return None
+        try:
+            kill_conn = Listener(( multiuser_address, multiuser_port), authkey = multiuser_key)
+            client = kill_conn.accept()
+            kill_conn.close()
+            return None
+        except:
+            return None
     conn = M.conn
-    conn.send( (option, arguments))
-    msg_back = conn.recv()
-    conn.close()
+    try:
+        conn.send( (option, arguments))
+        msg_back = conn.recv()
+        conn.close()
+    except:
+        return None
     if (saveMessages):
         if (not(multiuser_messages) or ((option, arguments), msg_back) != multiuser_messages[-1][0]):
             multiuser_messages.append( [ ((option, arguments), msg_back), 1])
@@ -333,10 +339,16 @@ class JOB():
 
     def fmt( self):
         job_str = job_fmt_pattern
+        try:
+            str_node = str(self.node.node_id)
+        except:
+            str_node = 'None'
         for pattern, info in (('%j', str( self.ID)),
                               ('%s', job_status[self.status]),
                               ('%c', self.info[0]),
-                              ('%d', self.info[1])
+                              ('%d', self.info[1]),
+                              ('%n', str_node),
+                              ('%N', str(self.n_cores))
                               ):
             job_str = job_str.replace( pattern, info)
         return job_str
@@ -757,14 +769,18 @@ class CHECK_RUN( threading.Thread):
             i = 0
             jobs_modification = False
             self.jobs.lock_running.acquire()
-            self.jobs.lock_done.acquire()
-            while (i < len( self.jobs.running)):
-                job = self.jobs.running[i]
+            jobs_to_check = list( self.jobs.running)
+            self.jobs.lock_running.release()
+            for job in jobs_to_check:
                 if (not job.is_running() and job.status == 1):
                     job.status = 2
                     jobs_modification = True
+                    self.jobs.lock_running.acquire()
+                    self.jobs.lock_done.acquire()
                     self.jobs.running.remove( job)
                     self.jobs.done.append( job)
+                    self.jobs.lock_running.release()
+                    self.jobs.lock_done.release()
                     self.skip_job_sub = 0
                     job.node.n_jobs -= job.n_cores
                     if (multiuser and self.multiuser_alive.is_set()):
@@ -776,8 +792,6 @@ class CHECK_RUN( threading.Thread):
                             print 'Multiuser message (removing a job): ', msg_back
                 else:
                     i += 1
-            self.jobs.lock_running.release()
-            self.jobs.lock_done.release()
             sleep ( sleep_time_check_run)
             if (jobs_modification):
                 self.jobs.write_all_jobs()

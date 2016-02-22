@@ -45,7 +45,7 @@ parser.add_option("-v", "--verbose",
 (options, args) = parser.parse_args()
 verbose = options.verbose
 
-check_outsiders_time = 120
+check_outsiders_time = 60
 
 # Node informations
 class NODE():
@@ -63,8 +63,8 @@ class NODE():
                                        shell=False,
                                        stdout=subprocess.PIPE,
                                        stderr=subprocess.PIPE)
-        mem_stderr = mem_details.stderr.readlines()
-        mem_stdout = mem_details.stdout.readlines()
+        std_outerr = mem_details.communicate()
+        mem_stdout = std_outerr[0].split( '\n')
         self.free_mem = float(mem_stdout[2].split()[3])
         return self.free_mem
 
@@ -309,14 +309,16 @@ def distribute_cores( ):
         print 'users_min:   ', users_min
         print 'users_extra: ', users_extra
     # Finally put into the users variable
-    global N_min_cores
+    global N_min_cores, N_used_min_cores
     N_min_cores = 0
+    N_used_min_cores = 0
     for user in users:
         try:
             users[user].min_cores = users_min[user]
         except:
             users[user].min_cores = 0
         N_min_cores += users[user].min_cores
+        N_used_min_cores += min( users[user].min_cores, users[user].n_used_cores)
         try:
             users[user].extra_cores = users_extra[user]
         except:
@@ -345,8 +347,12 @@ def handle_client( ):
         print "handle_client: ready"
     conn = Listener(( multiuser_address, multiuser_port), authkey = multiuser_key)
     while True:
-        client = conn.accept()
-        (action_type, arguments) = client.recv()
+        try:
+            client = conn.accept()
+            (action_type, arguments) = client.recv()
+        except:
+            # TODO: print exception in a log file
+            continue
         if (verbose):
             print "Received: " + str(action_type) + " -> " + str(arguments)
 
@@ -390,7 +396,28 @@ def handle_client( ):
             msg += 'N_min_cores      = ' + str( N_min_cores)      + '\n'
             msg += 'N_used_cores     = ' + str( N_used_cores)     + '\n'
             msg += 'N_used_min_cores = ' + str( N_used_min_cores) + '\n'
-
+            outsiders_lock.acquire()
+            msg += 'N_outsiders      = ' + str( N_outsiders)      + '\n'
+            outsiders_lock.release()
+            msg += 'users:\n'
+            for user, info in users.iteritems():
+                msg += user + ':\n'
+                msg += '  min_cores    = ' + str( info.min_cores)    + '\n'
+                msg += '  extra_cores  = ' + str( info.extra_cores)  + '\n'
+                msg += '  max_cores    = ' + str( info.max_cores)    + '\n'
+                msg += '  n_used_cores = ' + str( info.n_used_cores) + '\n'
+                msg += '  n_queue      = ' + str( info.n_queue)      + '\n'
+                msg += '  cur_jobs     :' + '\n'
+                for cj in info.cur_jobs:
+                    msg += '          ' + repr( cj) + '\n'
+            msg += 'nodes:\n'
+            for node, info in nodes.iteritems():
+                msg += node + ':\n'
+                msg += '  max_cores       = ' + str( info.max_cores)       + '\n'
+                msg += '  n_used_cores    = ' + str( info.n_used_cores)    + '\n'
+                msg += '  n_outsiders     = ' + str( info.n_outsiders)     + '\n'
+                msg += '  free_mem        = ' + str( info.free_mem)        + '\n'
+                msg += '  pref_multicores = ' + str( info.pref_multicores) + '\n'
 
         # Show status
         # arguments = () or (user_name)
@@ -530,26 +557,31 @@ def handle_client( ):
 
 
         # Send message back
-        client.send( (status, msg))
+        try:
+            client.send( (status, msg))
+        except:
+            # TODO: print exception in a log file
+            continue
 
 
 # Attempt to connect to qpy-multiuser
 class check_outsiders( threading.Thread):
     def __init__( self):
         threading.Thread.__init__( self)
+        self.command = "top -b -n1 | sed -n '8,50p'"
 
     def run( self):
-        command = "top -b -n1 | sed -n '8,50p'"
         global N_outsiders
         while outsiders_alive:
             for node in nodes:
                 try:
-                    ssh = subprocess.Popen(["ssh", node, command],
+                    ssh = subprocess.Popen(["ssh", node, self.command],
                                            shell=False,
                                            stdout=subprocess.PIPE,
                                            stderr=subprocess.PIPE)
-                    ssh_stderr = ssh.stderr.readlines()
-                    ssh_stdout = ssh.stdout.readlines()
+
+                    std_outerr = ssh.communicate()
+                    ssh_stdout = std_outerr[0].split( '\n')
                     n_jobs = 0
                     for line in ssh_stdout:
                         line_spl = line.split()
@@ -557,13 +589,14 @@ class check_outsiders( threading.Thread):
                             n_jobs += 1
                         else:
                             break
-                
+
                     outsiders_lock.acquire()
                     N_outsiders -= nodes[node].n_outsiders
                     nodes[node].n_outsiders = max(n_jobs - nodes[node].n_used_cores, 0)
                     N_outsiders += nodes[node].n_outsiders
                     outsiders_lock.release()
                 except:
+                    # TODO: print exception in a log file
                     pass
 
             sleep( check_outsiders_time)
