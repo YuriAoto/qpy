@@ -400,6 +400,10 @@ def handle_client( ):
         # Show status
         # arguments = () or (user_name)
         elif (action_type == MULTIUSER_STATUS):
+            nodes_ordered = []
+            for node in nodes:
+                nodes_ordered.append( node)
+            nodes_ordered.sort()
             status = 0
             Umsg = ''
             for user, info in users.iteritems():
@@ -410,8 +414,8 @@ def handle_client( ):
                 Umsg = 'No users.\n'
             Nmsg = ''
             outsiders_lock.acquire()
-            for node, info in nodes.iteritems():
-                Nmsg += '  ' + node + ': ' + str( info.n_used_cores) + '/' + str( info.max_cores) + '-' + str(info.n_outsiders) + '\n'
+            for node in nodes_ordered:
+                Nmsg += '  ' + node + ': ' + str( nodes[node].n_used_cores) + '/' + str( nodes[node].max_cores) + '-' + str( nodes[node].n_outsiders) + '\n'
             outsiders_lock.release()
             if (Nmsg):
                 Nmsg = 'Nodes:\n' + Nmsg
