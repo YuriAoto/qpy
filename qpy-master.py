@@ -13,6 +13,8 @@ import sys
 import os
 import random
 import glob
+import datetime
+
 from optparse import OptionParser,OptionError
 
 from qpy_general_variables import *
@@ -324,15 +326,42 @@ class JOB():
         self.status = 0
         self.re_run = False
         self.set_parser()
-
+        self.queue_time = datetime.datetime.today()
+        self.start_time = None
+        self.end_time = None
+        self.run_duration = None
         self.process = None
+
+    def set_get_run_duration( self):
+        if (self.status == 0):
+            try:
+                return datetime.datetime.today() - self.queue_time
+            except:
+                return None
+
+        if (self.status == 1):
+            try:
+                return datetime.datetime.today() - self.start_time
+            except:
+                return  None
+
+        if (self.run_duration != None):
+            return self.run_duration
+
+        try:
+            self.run_duration = self.end_time - self.start_time
+        except:
+            self.run_duration = None
+
+        return self.run_duration
 
     def fmt_for_log( self):
         job_str = str( self.ID) + ' ' + str( self.status) + ' ' + str( self.n_cores) + ' ' + str( self.mem) + '\n'
         if (self.node == None):
-            job_str += 'None\n'
+            job_str += 'None'
         else:
-            job_str += self.node.node_id + '\n'
+            job_str += self.node.node_id
+        job_str += '---' + str( self.queue_time) + '---' + str( self.start_time) + '---' + str( self.end_time) + '\n'
         job_str += self.info[0] + '\n'
         job_str += self.info[1] + '\n'
         return job_str
@@ -343,11 +372,16 @@ class JOB():
             str_node = str(self.node.node_id)
         except:
             str_node = 'None'
+
         for pattern, info in (('%j', str( self.ID)),
                               ('%s', job_status[self.status]),
                               ('%c', self.info[0]),
                               ('%d', self.info[1]),
                               ('%n', str_node),
+                              ('%Q', str(self.queue_time)),
+                              ('%S', str(self.start_time)),
+                              ('%E', str(self.end_time)),
+                              ('%R', str(self.set_get_run_duration())),
                               ('%N', str(self.n_cores))
                               ):
             job_str = job_str.replace( pattern, info)
@@ -377,6 +411,7 @@ class JOB():
         command += ' > ' + out_or_err_name( self, '.out') + ' 2> ' + out_or_err_name( self, '.err')
         self.process = subprocess.Popen(["ssh", self.node.node_id, command],
                                         shell = False)
+        self.start_time = datetime.datetime.today()
         self.status = 1
 
     def is_running( self):
@@ -532,7 +567,12 @@ class job_collection():
                     if (i%4 == 1):
                         (new_id, new_status, new_n_cores, new_mem) = line.split()
                     elif (i%4 == 2):
-                        new_node = line.strip()
+                        new_node_and_times = line.strip().split('---')
+                        new_node = new_node_and_times[0]
+                        if (len( new_node_and_times) == 1):
+                            new_times = ['None','None','None']
+                        else:
+                            new_times = new_node_and_times[1:]
                     elif (i%4 == 3):
                         new_command = line.strip()
                     else:
@@ -540,6 +580,19 @@ class job_collection():
                         new_job = JOB( int( new_id), [new_command, new_wd])
                         new_job.n_cores = int( new_n_cores)
                         new_job.mem = float( new_mem)
+                        if (new_times[0] == 'None'):
+                            new_job.queue_time = None
+                        else:
+                            new_job.queue_time = datetime.datetime.strptime(new_times[0], "%Y-%m-%d %H:%M:%S.%f")
+                        if (new_times[1] == 'None'):
+                            new_job.start_time = None
+                        else:
+                            new_job.start_time = datetime.datetime.strptime(new_times[1], "%Y-%m-%d %H:%M:%S.%f")
+                        if (new_times[2] == 'None'):
+                            new_job.end_time = None
+                        else:
+                            new_job.end_time = datetime.datetime.strptime(new_times[2], "%Y-%m-%d %H:%M:%S.%f")
+                            new_job.set_get_run_duration()
                         if (new_node == 'None'):
                             new_job.node = None
                         else:
@@ -774,6 +827,8 @@ class CHECK_RUN( threading.Thread):
             for job in jobs_to_check:
                 if (not job.is_running() and job.status == 1):
                     job.status = 2
+                    job.end_time = datetime.datetime.today()
+                    job.set_get_run_duration()
                     jobs_modification = True
                     self.jobs.lock_running.acquire()
                     self.jobs.lock_done.acquire()
@@ -832,6 +887,8 @@ class JOBS_KILLER( threading.Thread):
             if (job.process != None):
                 job.process.communicate()
             job.status = 3
+            job.end_time = datetime.datetime.today()
+            job.set_get_run_duration()
             job.node.n_jobs -= job.n_cores
             self.jobs.lock_running.acquire()
             self.jobs.lock_killed.acquire()
