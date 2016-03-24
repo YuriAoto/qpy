@@ -321,7 +321,7 @@ class JOB():
         self.ID = jobID
         self.info = job_info
         self.n_cores = 1
-        self.mem = 5.0
+        self.mem = 4.0
         self.node = None
         self.status = 0
         self.re_run = False
