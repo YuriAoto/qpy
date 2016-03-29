@@ -65,7 +65,10 @@ class NODE():
                                        stderr=subprocess.PIPE)
         std_outerr = mem_details.communicate()
         mem_stdout = std_outerr[0].split( '\n')
-        self.free_mem = float(mem_stdout[2].split()[3])
+        if (len(mem_stdout) == 5):
+            self.free_mem = float(mem_stdout[2].split()[3])
+        else:
+            self.free_mem = float(mem_stdout[1].split()[6])
         return self.free_mem
 
 # User informations
