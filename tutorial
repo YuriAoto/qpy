@@ -27,6 +27,10 @@ qpy is used to submit jobs from the main server (say 'linux4' and 'hlrs') and th
 
 The followings are the commands that are necessary to use qpy. While qpy-master is already running in the background, the user can user any of these commands as 'qpy [cmd]'
 
+# restart
+
+This command only works for linux4. The user can start qpy with this command.  This command also works as an easy way to finish current session of qpy and start a new, which is most useful when the user wants to update the qpy to its latest version.
+
 # sub
 
 Submit any executable after the command 'qpy sub'. The output and the error file of running that particular script will be written in the files 'job_[jodid].out' and 'job_[jodid].err' respectively.
@@ -70,6 +74,12 @@ This command gives informations about some of the variables in qpy. Feel free to
 %N -> number of cores for your job.
 
 The user can also change this format to a minimalistic one, by 'qpy config checkFMT %j:%s' or anything using the notations defined above. To check the current format, use the command 'qpy config checkFMT' and to change it to the default one, use 'qpy config checkFMT default'.
+
+There are some new options available to format 'qpy check' and have some information about the timing of the jobs. These are:
+%R  -> running time of the job. (time in queue if the job is in queue)
+%Q  -> actual time when the job is submitted
+%S  -> actual time when the job has started
+%E  -> actual time when the job has finished
 
 # clean
 
