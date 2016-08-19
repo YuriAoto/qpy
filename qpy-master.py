@@ -437,7 +437,10 @@ class JOB():
                 re_res = regexp.search(line )
                 if ( re_res is not None ):
                     try:
-                        self.__setattr__(attr, int(re_res.group(1)) )
+                        if (attr == 'n_cores'):
+                            self.n_cores = int(re_res.group(1))
+                        if (attr == 'mem'):
+                            self.mem = float(re_res.group(1))
                         option_found=True
                     except ValueError:
                         raise ParseError("Invalid Value for {atr} found.".format(atr=attr))
