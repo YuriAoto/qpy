@@ -79,7 +79,7 @@ if (len( sys.argv) > 1):
         pid_kill = get_all_children( grand_PID, parents)
         pid_kill.reverse()
         for i in pid_kill:
-            kill_job = subprocess.call(['kill', i])
+            kill_job = subprocess.call(['kill', '-9', i])
             print 'Killing PID ' + i
 
         exit()

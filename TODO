@@ -12,3 +12,13 @@ running time for a running job and total time for a finished job need to be show
 
 
 ***** sort the jobs in check as required by the user
+
+
+***** check this error:
+
+⎭<~> Traceback (most recent call last):
+                                         File "/users/fs/koehn_git/CommonTools/qpy-bin/qpy-multiuser.py", line 616, in <module>
+                                                                                                                                   handle_client()
+                                                                                                                                                    File "/users/fs/koehn_git/CommonTools/qpy-bin/qpy-multiuser.py", line 503, in handle_client
+                                                                  nodes[job[1]].n_used_cores += job[2]
+                                                                                                      KeyError: 'orpheus31'
