@@ -633,6 +633,76 @@ class job_collection():
         self.lock_undone.release()
         self.lock_Q.release()
 
+    # Puts the jobs in job_list to be submited just before pos
+    # pos = 0: put in the beginning of queue
+    # pos = -1: put in the end of queue
+    def jump_Q( self, job_list, pos):
+        if (pos in job_list):
+            return 'Position is part of list: queue not reordered.\n'
+        self.lock_Q.acquire()
+        found_pos = False
+        if(pos > 0):
+            for j in self.Q:
+                if (j.ID == pos):
+                    found_pos = True
+                    break
+            if (not( found_pos)):
+                self.lock_Q.release()
+                return 'Position not found: queue not reordered.\n'
+        jobs_to_jump = []
+        for j in self.Q:
+            if(j.ID in job_list):
+                jobs_to_jump.append( j)
+        for j in jobs_to_jump:
+            self.Q.remove( j)
+        if (not( jobs_to_jump)):
+            self.lock_Q.release()
+            return 'List does not have jobs in queue: queue not reordered.\n'
+        jobs_in_front = []
+        lenQ = len( self.Q)
+        for i in range(0, lenQ):
+            if (self.Q[0].ID == pos):
+                break
+            jobs_in_front.append( self.Q.popleft())
+        first_remain_Q = self.Q[0] if len( self.Q) > 0 else None
+        last_remain_Q = self.Q[-1] if len( self.Q) > 0 else None
+        first_in_front = jobs_in_front[0] if len( jobs_in_front) > 0 else None
+        last_in_front = jobs_in_front[-1] if len( jobs_in_front) > 0 else None
+        if (pos == -1):
+            for j in jobs_in_front[::-1]:
+                self.Q.appendleft( j)
+        for j in jobs_to_jump[::-1]:
+            self.Q.appendleft( j)
+        if (pos != -1):
+            for j in jobs_in_front[::-1]:
+                self.Q.appendleft( j)
+        # reorder self.queue and self.all if needed
+        if (last_in_front == None and first_remain_Q == None):
+            self.lock_Q.release()
+            return 'Queue is completely contained in list: queue not reordered.\n'
+        if (last_in_front != None or first_remain_Q != None):
+            self.lock_all.acquire()
+            self.lock_queue.acquire()
+            for j in jobs_to_jump:
+                self.all.remove( j)
+                self.queue.remove( j)
+            if (pos == 0):
+                iq = 0
+                ia = self.all.index( last_in_front)
+            elif (pos == -1):
+                iq = self.queue_size
+                ia = self.all.index( first_in_front)+1
+            else:
+                iq = self.queue.index( first_remain_Q)+1
+                ia = self.all.index( first_remain_Q)+1
+            self.queue[iq:iq] = jobs_to_jump[::-1]
+            self.all[ia:ia] = jobs_to_jump[::-1]
+            self.lock_all.release()
+            self.lock_queue.release()
+        self.lock_Q.release()
+        return 'Queue reordered.\n'
+
+
 
 # A node.
 #
@@ -933,6 +1003,8 @@ class SUB_CTRL( threading.Thread):
         else:
             self.max_jobs_default = 20
         self.skip_job_sub = 0
+        self.submit_jobs = True
+        self.sub_paused = False
 
     def write_nodes( self):
         with  open( cur_nodes_file, 'w') as f:
@@ -966,7 +1038,7 @@ class SUB_CTRL( threading.Thread):
                         self.node_list.remove( node)
 
             # Send a job, if there is space
-            if (self.skip_job_sub <= 0):
+            if (self.submit_jobs):
                 self.jobs.lock_Q.acquire()
                 queue_has_jobs = len( self.jobs.Q) != 0
                 if (queue_has_jobs):
@@ -1017,11 +1089,11 @@ class SUB_CTRL( threading.Thread):
                     if (best_node != None):
                         if (verbose):
                             print "submission_control: putting job"
+                        self.jobs.lock_running.acquire()
+                        self.jobs.lock_queue.acquire()
                         job = self.jobs.Q.pop()
                         job.node = best_node
                         best_node.queue.put( job)
-                        self.jobs.lock_running.acquire()
-                        self.jobs.lock_queue.acquire()
                         self.jobs.queue.remove( job)
                         self.jobs.queue_size -= 1
                         self.jobs.running.append( job)
@@ -1031,7 +1103,11 @@ class SUB_CTRL( threading.Thread):
                 self.jobs.lock_Q.release()
 
             else:
-                self.skip_job_sub -= 1
+                if (self.skip_job_sub > 0):
+                    self.skip_job_sub -= 1
+                    if (self.skip_job_sub == 0):
+                        self.submit_jobs = True
+
                 if (verbose):
                     print "Skipping job submission: " + str( self.skip_job_sub)
 
@@ -1086,13 +1162,13 @@ def handle_qpy( sub_ctrl, check_run, check_multiuser, jobs_killer, jobs, jobId):
                 new_job.parse_options()
                 jobs.lock_all.acquire()
                 jobs.lock_queue.acquire()
+                jobs.lock_Q.acquire()
                 jobs.all.append( new_job)
                 jobs.queue.append( new_job)
                 jobs.queue_size += 1
+                jobs.Q.appendleft( new_job)
                 jobs.lock_all.release()
                 jobs.lock_queue.release()
-                jobs.lock_Q.acquire()
-                jobs.Q.appendleft( new_job)
                 jobs.lock_Q.release()
                 client_master.send( 'Job ' + str(jobId) + ' received.\n')
                 jobId += 1
@@ -1108,7 +1184,12 @@ def handle_qpy( sub_ctrl, check_run, check_multiuser, jobs_killer, jobs, jobId):
         # Check jobs
         # arguments: a dictionary, indicating patterns (see JOB.asked)
         elif (job_type == JOBTYPE_CHECK):
-            client_master.send( check_jobs( jobs, arguments))
+            if (sub_ctrl.sub_paused):
+                msg_pause = 'Job submission is paused.\n'
+            else:
+                msg_pause = ''
+
+            client_master.send( check_jobs( jobs, arguments) + msg_pause)
 
         # Kill a job
         # arguments = a list of jobIDs and status (all, queue, running)
@@ -1348,6 +1429,30 @@ def handle_qpy( sub_ctrl, check_run, check_multiuser, jobs_killer, jobs, jobId):
 
             client_master.send( msg)
 
+        # Control queue
+        # arguments: a list: [<type>, <arguments>].
+        elif (job_type == JOBTYPE_CTRLQUEUE):
+            ctrl_type = arguments[0]
+            if (ctrl_type == 'pause'):
+                sub_ctrl.submit_jobs = False
+                sub_ctrl.sub_paused = True
+                msg = 'Job submission paused.\n'
+
+            elif (ctrl_type == 'continue'):
+                sub_ctrl.submit_jobs = True
+                sub_ctrl.sub_paused = False
+                msg = 'Job submission continued.\n'
+
+            elif (ctrl_type == 'jump'):
+                if (not(sub_ctrl.sub_paused)):
+                    msg = 'Pause the queue before trying to control it.\n'
+                else:
+                    msg = jobs.jump_Q( arguments[1], arguments[2])
+            else:
+                msg = 'Unknown ctrlQueue type: ' + ctrl_type + '.\n'
+
+            client_master.send( msg)
+
         # Show current configuration
         # arguments: optionally, a pair to change the configuration: (<key>, <value>)
         elif (job_type == JOBTYPE_CONFIG):
@@ -1366,6 +1471,9 @@ def handle_qpy( sub_ctrl, check_run, check_multiuser, jobs_killer, jobs, jobId):
                     msg = 'Unkown key: ' + k + '\n'
             else:
                 msg = 'Check pattern: ' + repr( job_fmt_pattern) + '\n'
+                if (sub_ctrl.sub_paused):
+                    msg += 'Job submission is paused\n'
+                msg += ''
                 if (not( multiuser)):
                     msg += 'max_jobs         = ' + str( sub_ctrl.max_jobs_default) + '\n'
                 if (dyn_nodes):

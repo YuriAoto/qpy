@@ -8,7 +8,7 @@ _qpy()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    opts="sub check kill restart finish nodes status maxJobs config clean tutorial"
+    opts="sub check ctrlQueue kill restart finish nodes status maxJobs config clean tutorial"
 
     opts_nodes="add remove forceRemove"
 
@@ -25,6 +25,7 @@ _qpy()
     keys_config="checkFMT"
     keys_unfinished="queue running"
     keys_finished="done killed undone"
+    keys_ctrlQueue="pause continue jump"
 
     qpy_dir=$( dirname "${BASH_SOURCE[0]}" )
 
@@ -72,6 +73,10 @@ _qpy()
  		sub)
 		    echo "Submit a job."
 		    ;;
+                # ==========
+                ctrlQueue)
+                    echo "Fine control over the queue."
+                    ;;
                 # ==========
  		clean)
 		    echo "Remove finished jobs jobs from the list."
@@ -179,6 +184,26 @@ _qpy()
 
 	    compopt +o nospace
             return 0;;
+
+
+	# ==========
+	ctrlQueue)
+
+	    COMPREPLY=( $(compgen -W "${keys_ctrlQueue}"  ${cur}) )
+
+	    action="${COMP_WORDS[2]}"
+
+	    if [[ ${action} == 'jump' ]] ; then
+		if [[ "x${cur}" == 'x' ]] ; then
+		    COMPREPLY=( $(compgen -W ": ${jobID}"))
+		fi
+	    elif [[ ${action} == 'pause' || ${action} == 'continue' ]] ; then
+		COMPREPLY=( $(compgen -W ": ${noArg}") )
+	    fi
+
+	    compopt +o nospace
+	    return 0;;
+
 
 	# ==========
 	nodes)
