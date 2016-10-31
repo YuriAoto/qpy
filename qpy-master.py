@@ -1089,11 +1089,11 @@ class SUB_CTRL( threading.Thread):
                     if (best_node != None):
                         if (verbose):
                             print "submission_control: putting job"
-                        self.jobs.lock_running.acquire()
-                        self.jobs.lock_queue.acquire()
                         job = self.jobs.Q.pop()
                         job.node = best_node
                         best_node.queue.put( job)
+                        self.jobs.lock_running.acquire()
+                        self.jobs.lock_queue.acquire()
                         self.jobs.queue.remove( job)
                         self.jobs.queue_size -= 1
                         self.jobs.running.append( job)
@@ -1162,13 +1162,13 @@ def handle_qpy( sub_ctrl, check_run, check_multiuser, jobs_killer, jobs, jobId):
                 new_job.parse_options()
                 jobs.lock_all.acquire()
                 jobs.lock_queue.acquire()
-                jobs.lock_Q.acquire()
                 jobs.all.append( new_job)
                 jobs.queue.append( new_job)
                 jobs.queue_size += 1
-                jobs.Q.appendleft( new_job)
                 jobs.lock_all.release()
                 jobs.lock_queue.release()
+                jobs.lock_Q.acquire()
+                jobs.Q.appendleft( new_job)
                 jobs.lock_Q.release()
                 client_master.send( 'Job ' + str(jobId) + ' received.\n')
                 jobId += 1
