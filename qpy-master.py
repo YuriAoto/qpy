@@ -109,6 +109,7 @@ cur_nodes_file = qpy_dir + '/current_nodes'
 known_nodes_file = qpy_dir + '/known_nodes'
 jobID_file = qpy_dir + '/next_jobID'
 all_jobs_file = qpy_dir + '/all_jobs'
+config_file = qpy_dir + '/config'
 
 multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
@@ -150,6 +151,40 @@ class try_multiuser_connection( threading.Thread):
             self.done.set()
         except:
             self.done.clear()
+
+# write configurations on file
+def write_conf_on_file( sub_ctrl):
+
+    f = open( config_file, 'w')
+    f.write( 'paused_jobs ' + str( sub_ctrl.sub_paused) + '\n')
+    f.write( 'checkFMT ' + job_fmt_pattern + '\n')
+    f.close()
+
+# read configurations from file
+def get_conf_from_file( sub_ctrl):
+
+    global job_fmt_pattern
+    if (os.path.isfile( config_file)):
+        f = open( config_file, 'r')
+        for l in f:
+            l_spl = l.split()
+            if (not (l_spl)):
+                continue
+            if (l_spl[0] == 'paused_jobs'):
+                try:
+                    sub_ctrl.sub_paused = True if (l_spl[1] == 'True') else False
+                    sub_ctrl.submit_jobs = not( sub_ctrl.sub_paused)
+                except:
+                    print "Config file seems to be corrupted for paused_jobs. Skipping..."
+            elif (l_spl[0] == 'checkFMT'):
+                try:
+                    job_fmt_pattern = l[9:]
+                except:
+                    print "Config file seems to be corrupted for checkFMT. Skipping..."
+        f.close()
+    else:
+        print "Initialising config file."
+        write_conf_on_file( sub_ctrl)
 
 # Send arguments to qpy-multiuser
 def send_multiuser_arguments( option, arguments):
@@ -1174,6 +1209,7 @@ def handle_qpy( sub_ctrl, check_run, check_multiuser, jobs_killer, jobs, jobId):
                 jobId += 1
                 with open( jobID_file, 'w') as f:
                     f.write( str( jobId))
+                jobs.write_all_jobs()
             except HelpException,ex :
                 client_master.send( ex.message)
             except ParseError, ex:
@@ -1433,15 +1469,15 @@ def handle_qpy( sub_ctrl, check_run, check_multiuser, jobs_killer, jobs, jobId):
         # arguments: a list: [<type>, <arguments>].
         elif (job_type == JOBTYPE_CTRLQUEUE):
             ctrl_type = arguments[0]
-            if (ctrl_type == 'pause'):
-                sub_ctrl.submit_jobs = False
-                sub_ctrl.sub_paused = True
-                msg = 'Job submission paused.\n'
-
-            elif (ctrl_type == 'continue'):
-                sub_ctrl.submit_jobs = True
-                sub_ctrl.sub_paused = False
-                msg = 'Job submission continued.\n'
+            if (ctrl_type == 'pause' or ctrl_type == 'continue'):
+                if (ctrl_type == 'pause'):
+                    sub_ctrl.sub_paused = True
+                    msg = 'Job submission paused.\n'
+                else:
+                    sub_ctrl.sub_paused = False
+                    msg = 'Job submission continued.\n'
+                write_conf_on_file( sub_ctrl)
+                sub_ctrl.submit_jobs = not( sub_ctrl.sub_paused)
 
             elif (ctrl_type == 'jump'):
                 if (not(sub_ctrl.sub_paused)):
@@ -1467,6 +1503,7 @@ def handle_qpy( sub_ctrl, check_run, check_multiuser, jobs_killer, jobs, jobId):
                     else:
                         job_fmt_pattern = v.decode('string_escape')
                         msg = 'Check pattern modified to ' + repr( job_fmt_pattern) + '.\n'
+                    write_conf_on_file( sub_ctrl)
                 else:
                     msg = 'Unkown key: ' + k + '\n'
             else:
@@ -1569,6 +1606,8 @@ jobs_killer.start()
 
 sub_ctrl = SUB_CTRL( jobs, multiuser_alive)
 sub_ctrl.start()
+
+get_conf_from_file( sub_ctrl)
 
 handle_qpy( sub_ctrl, check_run, check_multiuser, jobs_killer, jobs, ini_job_ID)
 
