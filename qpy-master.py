@@ -127,6 +127,7 @@ if (saveMessages):
 
 if (not( os.path.isdir( qpy_dir))):
     os.makedirs( qpy_dir)
+os.chmod( qpy_dir, 0700)
 
 if (not( os.path.isdir( scripts_dir))):
     os.makedirs( scripts_dir)
