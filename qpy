@@ -17,6 +17,7 @@ user = os.environ['USER']
 qpy_dir = os.path.expanduser( '~/.qpy/')
 qpy_source_dir = os.path.dirname( os.path.abspath( __file__)) + '/'
 port_file = qpy_dir + '/port'
+key_file = qpy_dir + '/conn_key'
 tutorial_file = qpy_source_dir + '/tutorial'
 
 scr_dir = '/scratch/'+ user
@@ -298,14 +299,16 @@ try:
     f = open( port_file, 'r')
     port = int( f.read())
     f.close()
+    f = open( key_file, 'r')
+    conn_key = f.read()
+    f.close()
 except:
     if (start_qpy_master):
         start_master_driver()
     else:
-        sys.exit( 'Problem to get the port number. Are you sure that qpy-master is running?')
+        sys.exit( 'Problem to get the connection information. Are you sure that qpy-master is running?')
 
 address = 'localhost'
-key = 'qwerty'
 
 class try_connection( threading.Thread):
     def __init__( self):
@@ -315,7 +318,7 @@ class try_connection( threading.Thread):
 
     def run( self):
         try:
-            self.conn = Client( (address, port), authkey=key)
+            self.conn = Client( (address, port), authkey=conn_key)
             self.done.set()
         except:
             self.done.clear()

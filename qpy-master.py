@@ -106,6 +106,7 @@ user = os.environ['USER']
 qpy_dir = os.path.expanduser( '~/.qpy/')
 source_these_files = ['~/.bash_profile']
 port_file = qpy_dir + '/port'
+key_file = qpy_dir + '/conn_key'
 cur_nodes_file = qpy_dir + '/current_nodes'
 known_nodes_file = qpy_dir + '/known_nodes'
 jobID_file = qpy_dir + '/next_jobID'
@@ -143,6 +144,9 @@ if (not( os.path.isfile( jobID_file))):
 
 if (os.path.isfile( port_file)):
     sys.exit( 'A port file was found. Is there a qpy-master instance running?')
+
+if (os.path.isfile( key_file)):
+    sys.exit( 'A conn_key file was found. Is there a qpy-master instance running?')
 
 
 # Attempt to connect to qpy-multiuser
@@ -1204,6 +1208,26 @@ class SUB_CTRL( threading.Thread):
                 jobs_modification = False
 
 
+# Set port, key and open connection
+def establish_connection():
+    random.seed()
+    conn_key = os.urandom( 30)
+    while True:
+        port = random.randint( 10000, 20000 )
+        try:
+            server_master = Listener(( "localhost", port), authkey = conn_key)
+            break
+        except:
+            pass
+    f = open( port_file, 'w', 0)
+    f.write( str( port))
+    f.close()
+    f = open( key_file, 'w', 0)
+    f.write( conn_key)
+    f.close()
+    return server_master
+
+
 #------------------------------------------------
 # Handle the user messages sent from qpy
 #
@@ -1224,17 +1248,8 @@ class SUB_CTRL( threading.Thread):
 #
 def handle_qpy( sub_ctrl, check_run, check_multiuser, jobs_killer, jobs, jobId):
 
-    while True:
-        random.seed()
-        port = random.randint( 10000, 20000 )
-        try:
-            server_master = Listener(( "localhost", port), authkey = 'qwerty')
-            break
-        except:
-            pass
-    f = open( port_file, 'w', 0)
-    f.write( str( port))
-    f.close()
+    server_master = establish_connection()
+
     while True:
         client_master = server_master.accept()
         (job_type, arguments) = client_master.recv()
@@ -1675,6 +1690,7 @@ get_conf_from_file( sub_ctrl)
 handle_qpy( sub_ctrl, check_run, check_multiuser, jobs_killer, jobs, ini_job_ID)
 
 os.remove( port_file)
+os.remove( key_file)
 
 if (verbose):
     print "qpy-master main thread done!"
