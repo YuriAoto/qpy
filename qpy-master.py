@@ -14,6 +14,7 @@ import os
 import random
 import glob
 import datetime
+from shutil import copyfile
 
 from optparse import OptionParser,OptionError
 
@@ -110,6 +111,7 @@ known_nodes_file = qpy_dir + '/known_nodes'
 jobID_file = qpy_dir + '/next_jobID'
 all_jobs_file = qpy_dir + '/all_jobs'
 config_file = qpy_dir + '/config'
+scripts_dir = qpy_dir + '/scripts/'
 
 multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
@@ -118,12 +120,16 @@ multiuser_port = 9999
 job_fmt_pattern_def = '%j (%s):%c (on %n; wd: %d)\n'
 job_fmt_pattern = job_fmt_pattern_def
 
+use_script_copy = False
 
 if (saveMessages):
     multiuser_messages = deque( maxlen=25)
 
 if (not( os.path.isdir( qpy_dir))):
     os.makedirs( qpy_dir)
+
+if (not( os.path.isdir( scripts_dir))):
+    os.makedirs( scripts_dir)
 
 if (not( os.path.isfile( known_nodes_file))):
     f = open( known_nodes_file, 'w')
@@ -157,13 +163,16 @@ def write_conf_on_file( sub_ctrl):
 
     f = open( config_file, 'w')
     f.write( 'paused_jobs ' + str( sub_ctrl.sub_paused) + '\n')
-    f.write( 'checkFMT ' + job_fmt_pattern + '\n')
+    f.write( 'job_fmt_pattern ' + repr(job_fmt_pattern) + '\n')
+    f.write( 'use_script_copy ' + str( use_script_copy) + '\n')
     f.close()
 
 # read configurations from file
 def get_conf_from_file( sub_ctrl):
 
     global job_fmt_pattern
+    global use_script_copy
+
     if (os.path.isfile( config_file)):
         f = open( config_file, 'r')
         for l in f:
@@ -172,15 +181,20 @@ def get_conf_from_file( sub_ctrl):
                 continue
             if (l_spl[0] == 'paused_jobs'):
                 try:
-                    sub_ctrl.sub_paused = True if (l_spl[1] == 'True') else False
+                    sub_ctrl.sub_paused = True if (l_spl[1] == 'true') else False
                     sub_ctrl.submit_jobs = not( sub_ctrl.sub_paused)
                 except:
                     print "Config file seems to be corrupted for paused_jobs. Skipping..."
-            elif (l_spl[0] == 'checkFMT'):
+            elif (l_spl[0] == 'job_fmt_pattern'):
                 try:
-                    job_fmt_pattern = l[9:]
+                    job_fmt_pattern = l[17:-2].decode('string_escape')
                 except:
                     print "Config file seems to be corrupted for checkFMT. Skipping..."
+            elif (l_spl[0] == 'use_script_copy'):
+                try:
+                    use_script_copy = True if (l_spl[1] == 'true') else False
+                except:
+                    print "Config file seems to be corrupted for use_script_copy. Skipping..."
         f.close()
     else:
         print "Initialising config file."
@@ -359,6 +373,8 @@ class JOB():
         self.mem = 5.0
         self.node = None
         self.status = 0
+        self.use_script_copy = use_script_copy
+        self.cp_script_to_replace = None
         self.re_run = False
         self.set_parser()
         self.queue_time = datetime.datetime.today()
@@ -391,7 +407,10 @@ class JOB():
         return self.run_duration
 
     def fmt_for_log( self):
-        job_str = str( self.ID) + ' ' + str( self.status) + ' ' + str( self.n_cores) + ' ' + str( self.mem) + '\n'
+        job_str = str( self.ID) + ' ' + str( self.status) + ' ' + str( self.n_cores) + ' ' + str( self.mem) + ' ' + str( self.use_script_copy) + ' '
+        if (self.cp_script_to_replace != None):
+            job_str += self.cp_script_to_replace[0] + ' ' + self.cp_script_to_replace[1]
+        job_str += '\n'
         if (self.node == None):
             job_str += 'None'
         else:
@@ -428,9 +447,10 @@ class JOB():
         parser=JobParser()
         parser.add_option("-n","--cores", dest="cores", help="set the number of cores", default="1")
         parser.add_option("-m","--mem","--memory",dest="memory",help="set the memory in GB", default="5")
+        parser.add_option("-c","--copyScript",dest="cpScript",help="script should be copied",action='store_false')
+        parser.add_option("-o","--originalScript",dest="orScript",help="use original script",action='store_false')
         parser.disable_interspersed_args()
         self.parser=parser
-
 
     def run( self):
         def out_or_err_name( job, postfix):
@@ -442,7 +462,10 @@ class JOB():
         for sf in source_these_files:
            command += 'source ' + sf + '; '
         command += 'cd ' + self.info[1] + '; ' 
-        command += self.info[0]
+        try:
+            command += self.info[0].replace( self.cp_script_to_replace[0], 'sh ' + self.cp_script_to_replace[1], 1)
+        except:
+            command += self.info[0]
         command += ' > ' + out_or_err_name( self, '.out') + ' 2> ' + out_or_err_name( self, '.err')
         self.process = subprocess.Popen(["ssh", self.node.node_id, command],
                                         shell = False)
@@ -476,6 +499,8 @@ class JOB():
                             self.n_cores = int(re_res.group(1))
                         if (attr == 'mem'):
                             self.mem = float(re_res.group(1))
+                        if (attr == 'cpScript'):
+                            self.use_script_copy = True if (re_res.group(1) == 'true') else False
                         option_found=True
                     except ValueError:
                         raise ParseError("Invalid Value for {atr} found.".format(atr=attr))
@@ -489,9 +514,10 @@ class JOB():
         
         @param file_name
         """
-        option_list=[("n_cores", re.compile('n_cores[= ]?(\d*)') ),
-                     ("mem"   , re.compile('mem[= ]?(\d*)'    ) )
-                 ]
+        option_list=[("n_cores"  , re.compile('n_cores[= ]?(\d*)' ) ),
+                     ("mem"      , re.compile('mem[= ]?(\d*)'     ) ),
+                     ("cpScript" , re.compile('cpScript[= ]?(\w*)') )
+                     ]
         try:
             with open( file_name, 'r') as f:
                 for line in f:
@@ -504,10 +530,19 @@ class JOB():
             options,command = self.parser.parse_args( command.split())
             self.n_cores = int(options.cores)
             self.mem = int(options.memory)
+            if (options.cpScript == None and options.orScript == None):
+                self.use_script_copy = use_script_copy
+            elif (options.cpScript != None and options.orScript != None):
+                raise ParseError("Please, do not supply both cpScript or orScript")
+            elif (options.cpScript != None):
+                self.use_script_copy = True
+            else:
+                self.use_script_copy = False
+
         except (AttributeError, TypeError), ex:
             raise ParseError("Something went wrong. please contact the qpy-team\n"+ex.message)
         except ValueError:
-            raise ParseError("Please supply only full numbers for memory or number of cores")
+            raise ParseError("Please supply only full numbers for memory or number of cores, true or false for cpScript")
         return ' '.join(command)
 
     
@@ -603,7 +638,20 @@ class job_collection():
                 for line in f:
                     i += 1
                     if (i%4 == 1):
-                        (new_id, new_status, new_n_cores, new_mem) = line.split()
+                        line_spl = line.split()
+                        new_id = line_spl[0]
+                        new_status = line_spl[1]
+                        new_n_cores = line_spl[2]
+                        new_mem = line_spl[3]
+                        if (len( line_spl) == 4): # old way. Remove as soon as everybody has new version working
+                            new_use_script_copy = False
+                            new_cp_script_to_replace = None
+                        else:
+                            new_use_script_copy = True if ( line_spl[4] == 'true') else False
+                            if (len( line_spl) == 5):
+                                new_cp_script_to_replace = None
+                            else:
+                                new_cp_script_to_replace = (line_spl[5], line_spl[6])
                     elif (i%4 == 2):
                         new_node_and_times = line.strip().split('---')
                         new_node = new_node_and_times[0]
@@ -945,6 +993,9 @@ class CHECK_RUN( threading.Thread):
                     self.jobs.lock_running.release()
                     self.jobs.lock_done.release()
                     self.skip_job_sub = 0
+                    if (job.cp_script_to_replace != None):
+                        if (os.path.isfile( job.cp_script_to_replace[1])):
+                            os.remove( job.cp_script_to_replace[1])
                     job.node.n_jobs -= job.n_cores
                     if (multiuser and self.multiuser_alive.is_set()):
                         multiuser_args = (user, job.ID, self.jobs.queue_size)
@@ -1205,6 +1256,13 @@ def handle_qpy( sub_ctrl, check_run, check_multiuser, jobs_killer, jobs, jobId):
                 jobs.lock_Q.acquire()
                 jobs.Q.appendleft( new_job)
                 jobs.lock_Q.release()
+                if (new_job.use_script_copy):
+                    first_arg = new_job.info[0].split()[0]
+                    script_name = new_job._expand_script_name(first_arg)
+                    if (script_name != None):
+                        copied_script_name = scripts_dir + 'job_script.' + str( new_job.ID)
+                        copyfile( script_name, copied_script_name)
+                        new_job.cp_script_to_replace = ( first_arg, copied_script_name)
                 client_master.send( 'Job ' + str(jobId) + ' received.\n')
                 jobId += 1
                 with open( jobID_file, 'w') as f:
@@ -1493,6 +1551,7 @@ def handle_qpy( sub_ctrl, check_run, check_multiuser, jobs_killer, jobs, jobId):
         # arguments: optionally, a pair to change the configuration: (<key>, <value>)
         elif (job_type == JOBTYPE_CONFIG):
             global job_fmt_pattern
+            global use_script_copy
             if (arguments):
                 k = arguments[0]
                 v = arguments[1]
@@ -1503,14 +1562,17 @@ def handle_qpy( sub_ctrl, check_run, check_multiuser, jobs_killer, jobs, jobId):
                     else:
                         job_fmt_pattern = v.decode('string_escape')
                         msg = 'Check pattern modified to ' + repr( job_fmt_pattern) + '.\n'
-                    write_conf_on_file( sub_ctrl)
+                if (k == 'copyScripts'):
+                    use_script_copy = True if (v == 'true') else False
+                    msg = 'Using a copied version of run script set to ' + str( use_script_copy) + '.\n'
                 else:
                     msg = 'Unkown key: ' + k + '\n'
+                write_conf_on_file( sub_ctrl)
             else:
                 msg = 'Check pattern: ' + repr( job_fmt_pattern) + '\n'
+                msg += 'Using a copied version of run script: ' + str( use_script_copy) + '\n'
                 if (sub_ctrl.sub_paused):
                     msg += 'Job submission is paused\n'
-                msg += ''
                 if (not( multiuser)):
                     msg += 'max_jobs         = ' + str( sub_ctrl.max_jobs_default) + '\n'
                 if (dyn_nodes):

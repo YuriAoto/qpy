@@ -22,10 +22,11 @@ _qpy()
     keys_all="all"
     keys_maxJob_default="maxJob_default"
     keys_status="queue running done killed undone"
-    keys_config="checkFMT"
+    keys_config="checkFMT copyScripts"
     keys_unfinished="queue running"
     keys_finished="done killed undone"
     keys_ctrlQueue="pause continue jump"
+    keys_TorF="true false"
 
     qpy_dir=$( dirname "${BASH_SOURCE[0]}" )
 
@@ -87,7 +88,7 @@ _qpy()
 		    ;;
                 # ==========
  		config)
-		    echo "Show current configuration for qpy."
+		    echo "Show or change current configuration for qpy."
 		    ;;
                 # ==========
  		check)
@@ -194,8 +195,10 @@ _qpy()
 	    action="${COMP_WORDS[2]}"
 
 	    if [[ ${action} == 'jump' ]] ; then
-		if [[ "x${cur}" == 'x' ]] ; then
+		if [[ "x${cur}" == 'x' && "${prev}" == 'jump' ]] ; then
 		    COMPREPLY=( $(compgen -W ": ${jobID}"))
+		else
+		    COMPREPLY=( $(compgen -W ": ${jobID} begin end" $cur))
 		fi
 	    elif [[ ${action} == 'pause' || ${action} == 'continue' ]] ; then
 		COMPREPLY=( $(compgen -W ": ${noArg}") )
@@ -265,7 +268,7 @@ _qpy()
 	# ==========
 	config)
 
-	    COMPREPLY=( $(compgen -W "${keys_config}") )
+	    COMPREPLY=( $(compgen -W "${keys_config}"  ${cur}) )
 
 	    action="${COMP_WORDS[2]}"
 
@@ -275,6 +278,13 @@ _qpy()
 		    COMPREPLY=( $(compgen -W ": ${check_fmt}") )
 		fi
 	    fi  
+
+	    if [[ ${action} == 'copyScripts' ]] ; then
+		COMPREPLY=( $(compgen -W "${keys_TorF}" ${cur}) )
+		if [[ -z "${COMPREPLY}" ]] ; then
+		    COMPREPLY=( $(compgen -W ": ${check_fmt}") )
+		fi
+	    fi
 
 	    compopt +o nospace
 	    return 0;;
