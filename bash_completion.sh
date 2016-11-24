@@ -22,7 +22,7 @@ _qpy()
     keys_all="all"
     keys_maxJob_default="maxJob_default"
     keys_status="queue running done killed undone"
-    keys_config="checkFMT copyScripts"
+    keys_config="checkFMT copyScripts colour"
     keys_unfinished="queue running"
     keys_finished="done killed undone"
     keys_ctrlQueue="pause continue jump"
@@ -280,6 +280,13 @@ _qpy()
 	    fi  
 
 	    if [[ ${action} == 'copyScripts' ]] ; then
+		COMPREPLY=( $(compgen -W "${keys_TorF}" ${cur}) )
+		if [[ -z "${COMPREPLY}" ]] ; then
+		    COMPREPLY=( $(compgen -W ": ${check_fmt}") )
+		fi
+	    fi
+
+	    if [[ ${action} == 'colours' ]] ; then
 		COMPREPLY=( $(compgen -W "${keys_TorF}" ${cur}) )
 		if [[ -z "${COMPREPLY}" ]] ; then
 		    COMPREPLY=( $(compgen -W ": ${check_fmt}") )

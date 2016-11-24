@@ -1,7 +1,3 @@
-*****  qpy jump
-
-qpy jump 25-30,34 20 {Jobs 25,26,27,28,29,30 and 34 would jump the que to go before 20}
-
 ***** adding time 
 
 JOB.
@@ -22,3 +18,7 @@ running time for a running job and total time for a finished job need to be show
                                                                                                                                                     File "/users/fs/koehn_git/CommonTools/qpy-bin/qpy-multiuser.py", line 503, in handle_client
                                                                   nodes[job[1]].n_used_cores += job[2]
                                                                                                       KeyError: 'orpheus31'
+
+
+******* make more flexible colours
+The user can choose the colour scheme
