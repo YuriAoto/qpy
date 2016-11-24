@@ -286,7 +286,7 @@ _qpy()
 		fi
 	    fi
 
-	    if [[ ${action} == 'colours' ]] ; then
+	    if [[ ${action} == 'colour' ]] ; then
 		COMPREPLY=( $(compgen -W "${keys_TorF}" ${cur}) )
 		if [[ -z "${COMPREPLY}" ]] ; then
 		    COMPREPLY=( $(compgen -W ": ${check_fmt}") )
