@@ -600,10 +600,13 @@ class JOB():
     # return a boolean, indicating whether this job obbeys the dictionary pattern or not
     # empty pattern means that everthing is required
     def asked( self, pattern):
-        req = True
+        req = not ( "status" in pattern
+                    or "job_id" in pattern)
         for k in pattern:
             if (k == 'status'):
-                req = job_status[self.status] in pattern[k]
+                req = req or job_status[self.status] in pattern[k]
+            elif ( k == "job_id"):
+                req = req or self.ID in pattern[k]
         return req
 
 

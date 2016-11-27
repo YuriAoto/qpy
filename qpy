@@ -93,25 +93,15 @@ if (len( sys.argv) > 1):
 # '1-3'      -> [1,2,3]
 # '1-3,6-10' -> [1,2,3,6,7,8,9,10]
 #
-def string_to_int_list( X):
+def string_to_int_list( string):
     res = []
-    X_by_comma = X.split(',')
-    for i in X_by_comma:
-        i_by_hifen = i.split('-')
-        if (len( i_by_hifen) == 1):
-            try:
-                res.append( int(i_by_hifen[0]))
-            except:
-                return None
-        elif (len( i_by_hifen) == 2):
-            try:
-                res.extend( range( int(i_by_hifen[0]), int(i_by_hifen[1])+1))
-            except:
-                return None
-        else:
-            return None
-
+    for entry in string.split(',') :
+        range_ = [ int(num) for num in entry.split('-')] # raises ValueError on 3-
+        if (len(range_) not in [1,2] ):
+            raise IndexError("No multivalue ranges")
+        res.extend( range( range_[0], range_[-1]+1)) #works correctly for len(range_ ) == 1
     return res
+
 
 job_status = ['queue', 'running', 'done', 'killed', 'undone']
 
@@ -167,6 +157,11 @@ if (option == JOBTYPE_CHECK):
                 arguments['status'].append( x)
             else:
                 arguments['status'] = [x]
+        elif (len(sys.argv)==3):
+            try:
+                arguments['job_id'] = string_to_int_list( x)
+            except TypeError:
+                sys.exit( 'Unknown pattern for checking jobs: ' + x)
         else:
             sys.exit( 'Unknown pattern for checking jobs: ' + x)
 
