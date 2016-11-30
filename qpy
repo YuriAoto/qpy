@@ -157,13 +157,15 @@ if (option == JOBTYPE_CHECK):
                 arguments['status'].append( x)
             else:
                 arguments['status'] = [x]
-        elif (len(sys.argv)==3):
-            try:
-                arguments['job_id'] = string_to_int_list( x)
-            except TypeError:
-                sys.exit( 'Unknown pattern for checking jobs: ' + x)
         else:
-            sys.exit( 'Unknown pattern for checking jobs: ' + x)
+            try:
+                new_jobids = string_to_int_list( x)
+            except:
+                sys.exit( 'Unknown pattern for checking jobs: ' + x)
+            if ('job_id' in arguments):
+                arguments['job_id'].extend( new_jobids)
+            else:
+                arguments['job_id'] = new_jobids
 
 # Change max_nodes, add/remove nodes
 elif (option == JOBTYPE_NODES):
