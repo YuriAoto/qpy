@@ -192,6 +192,11 @@ elif (option == JOBTYPE_MAXJOBS):
 elif (option == JOBTYPE_CONFIG):
     if (len( sys.argv) == 4):
         arguments = ( sys.argv[2], sys.argv[3])
+    elif (len( sys.argv) > 2 and sys.argv[2] == 'coloursScheme'):
+        if( len( sys.argv) == 8):
+            arguments = ( sys.argv[2], sys.argv[3:])
+        else:
+            sys.exit( 'Give five colours for coloursScheme')
     elif (len( sys.argv) != 2):
         sys.exit( 'Give, optionally, a pair <key> <value> for the config option')
 

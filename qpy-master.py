@@ -125,6 +125,24 @@ job_fmt_pattern = job_fmt_pattern_def
 use_colour = True
 use_script_copy = False
 
+job_status = ['queue',   # 0
+              'running', # 1
+              'done',    # 2
+              'killed',  # 3
+              'undone']  # 4
+
+possible_colours = ['yellow',
+                    'blue',
+                    'green',
+                    'red',
+                    'grey',
+                    'magenta',
+                    'cyan',
+                    'white']
+
+colour_scheme = possible_colours[:5]
+
+
 if (saveMessages):
     multiuser_messages = deque( maxlen=25)
 
@@ -173,6 +191,12 @@ def write_conf_on_file( sub_ctrl):
     f.write( 'job_fmt_pattern ' + repr(job_fmt_pattern) + '\n')
     f.write( 'use_script_copy ' + str( use_script_copy) + '\n')
     f.write( 'use_colour ' + str( use_colour) + '\n')
+    f.write( 'coloursScheme '
+             + str( colour_scheme[0]) + ' '
+             + str( colour_scheme[1]) + ' '
+             + str( colour_scheme[2]) + ' '
+             + str( colour_scheme[3]) + ' '
+             + str( colour_scheme[4]) + '\n')
     f.close()
 
 # read configurations from file
@@ -181,6 +205,7 @@ def get_conf_from_file( sub_ctrl):
     global job_fmt_pattern
     global use_script_copy
     global use_colour
+    global colour_scheme
 
     if (os.path.isfile( config_file)):
         f = open( config_file, 'r')
@@ -209,6 +234,13 @@ def get_conf_from_file( sub_ctrl):
                     use_colour = True if (l_spl[1] == 'True') else False
                 except:
                     print "Config file seems to be corrupted for use_colour. Skipping..."
+            elif (l_spl[0] == 'coloursScheme'):
+                try:
+                    for i in range( 5):
+                        colour_scheme[i] = l_spl[i+1] if (l_spl[i+1] in possible_colours) else possible_colours[i]
+                except:
+                    colour_scheme = possible_colours[:5]
+                    print "Config file seems to be corrupted for coloursScheme. Skipping..."
         f.close()
     else:
         print "Initialising config file."
@@ -352,18 +384,6 @@ def node_dealloc( node_id, alloc_id):
     if (verbose):
         print 'Node ' + node_id + ' deallocated.'
 
-
-job_status = ['queue',   # 0
-              'running', # 1
-              'done',    # 2
-              'killed',  # 3
-              'undone']  # 4
-
-colour_scheme = ['yellow',
-                 'blue',
-                 'green',
-                 'red',
-                 'grey']
 
 class JobParser(OptionParser):
     """An Option Parser that does not exit the program but just raises a ParseError
@@ -1589,6 +1609,7 @@ def handle_qpy( sub_ctrl, check_run, check_multiuser, jobs_killer, jobs, jobId):
             global job_fmt_pattern
             global use_script_copy
             global use_colour
+            global colour_scheme
             if (arguments):
                 k = arguments[0]
                 v = arguments[1]
@@ -1605,13 +1626,31 @@ def handle_qpy( sub_ctrl, check_run, check_multiuser, jobs_killer, jobs, jobId):
                 elif (k == 'colour'):
                     use_colour = True if (v == 'true') else False
                     msg = 'Using coloured check set to ' + str( use_colour) + '.\n'
+                elif (k == 'coloursScheme'):
+                    colours_ok = True
+                    for i in v:
+                        if (not (i in possible_colours)):
+                            msg = 'Unknown colour: ' + i + '.\n'
+                            colours_ok = False
+                            break
+                    if (len( v) != 5):
+                        msg = 'Give five colours for coloursScheme.\n'
+                        colours_ok = False
+                    if (colours_ok):
+                        colour_scheme = list( v)
+                        msg = 'Colours scheme changed.\n'
                 else:
-                    msg = 'Unkown key: ' + k + '\n'
+                    msg = 'Unknown key: ' + k + '\n'
                 write_conf_on_file( sub_ctrl)
             else:
                 msg = 'Check pattern: ' + repr( job_fmt_pattern) + '\n'
                 msg += 'Using a copied version of run script: ' + str( use_script_copy) + '\n'
                 msg += 'Using coloured check: ' + str( use_colour) + '\n'
+                if (use_colour):
+                    msg += 'Colours:\n'
+                    for i in range( len( job_status)):
+                        msg += '  - ' + termcolour.colored( job_status[i], colour_scheme[i])
+                        msg += ' (' + colour_scheme[i] + ')\n'
                 if (sub_ctrl.sub_paused):
                     msg += 'Job submission is paused\n'
                 if (not( multiuser)):

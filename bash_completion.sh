@@ -22,11 +22,12 @@ _qpy()
     keys_all="all"
     keys_maxJob_default="maxJob_default"
     keys_status="queue running done killed undone"
-    keys_config="checkFMT copyScripts colour"
+    keys_config="checkFMT copyScripts colour coloursScheme"
     keys_unfinished="queue running"
     keys_finished="done killed undone"
     keys_ctrlQueue="pause continue jump"
     keys_TorF="true false"
+    keys_colours="yellow blue green red grey magenta cyan white"
 
     qpy_dir=$( dirname "${BASH_SOURCE[0]}" )
 
@@ -290,6 +291,14 @@ _qpy()
 		COMPREPLY=( $(compgen -W "${keys_TorF}" ${cur}) )
 		if [[ -z "${COMPREPLY}" ]] ; then
 		    COMPREPLY=( $(compgen -W ": ${check_fmt}") )
+		fi
+	    fi
+
+	    if [[ ${action} == 'coloursScheme' ]] ; then
+		if [ ${#COMP_WORDS[@]} -lt 9 ]; then
+		    COMPREPLY=( $(compgen -W "${keys_colours}" ${cur}) )
+		else
+		    COMPREPLY=( $(compgen -W ": ${noArg}") )
 		fi
 	    fi
 
