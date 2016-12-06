@@ -473,7 +473,7 @@ def handle_client( ):
             outsiders_lock.release()
             if (msgN):
                 msgN = '-'*50 + '\n' + msgN + '='*50 + '\n'
-                msgN = ' '*18 + 'cores' + ' '*12 + 'memory\n' + 'node' + ' '*11 + 'used  total' + ' '*7 + 'used  total' + '\n' + msgN
+                msgN = ' '*18 + 'cores' + ' '*10 + 'memory (GB)\n' + 'node' + ' '*11 + 'used  total' + ' '*7 + 'used  total' + '\n' + msgN
             else:
                 msgN = 'No nodes.\n'
 
