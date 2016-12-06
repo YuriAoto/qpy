@@ -8,16 +8,19 @@ import sys
 import subprocess
 import re
 import threading
-
 from qpy_general_variables import *
 
 # Important variables
+qpy_source_dir = os.path.dirname( os.path.abspath( __file__)) + '/'
+test_run = os.path.isfile( qpy_source_dir + 'test_dir')
 multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
-multiuser_port = 9999
+if (test_run):
+    multiuser_port = 9998
+else:
+    multiuser_port = 9999
 
-qpy_source_dir = os.path.dirname( os.path.abspath( __file__)) + '/'
-qpy_multiuser_command = ['python', qpy_source_dir+'qpy-multiuser.py', '>', '/dev/null', '2>', '/dev/null']
+qpy_multiuser_command = [ 'python', qpy_source_dir + 'qpy-multiuser.py', '>', '/dev/null', '2>', '/dev/null']
 
 keywords={'nodes':        (MULTIUSER_NODES,          'Reaload nodes file. No arguments'),
           'distribute':   (MULTIUSER_DISTRIBUTE,     'Distribute cores: No arguments'),
@@ -101,7 +104,7 @@ waiting = 60
 while (M.is_alive()):
     n += 1
     if (n == waiting):
-        sys.exit( 'Time for connection exceeded. Are you sure that qpy-master is running?')
+        sys.exit( 'Time for connection exceeded. Are you sure that qpy-multiuser is running?')
     sleep( 0.05)
 conn = M.conn
 conn.send( (option, arguments))

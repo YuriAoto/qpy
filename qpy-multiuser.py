@@ -11,10 +11,15 @@ import re
 import math
 from optparse import OptionParser
 import threading
-
 from qpy_general_variables import *
 
-qpy_multiuser_dir = os.path.expanduser( '~/.qpy-multiuser/')
+qpy_source_dir = os.path.dirname( os.path.abspath( __file__)) + '/'
+test_run = os.path.isfile( qpy_source_dir + 'test_dir')
+
+if (test_run):
+    qpy_multiuser_dir = os.path.expanduser( '~/.qpy-multiuser-test/')
+else:
+    qpy_multiuser_dir = os.path.expanduser( '~/.qpy-multiuser/')
 
 if (not( os.path.isdir( qpy_multiuser_dir))):
     os.makedirs( qpy_multiuser_dir)
@@ -36,7 +41,10 @@ outsiders_alive = True
 
 multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
-multiuser_port = 9999
+if (test_run):
+    multiuser_port = 9998
+else:
+    multiuser_port = 9999
 
 parser = OptionParser()
 parser.add_option("-v", "--verbose",
@@ -55,7 +63,18 @@ class NODE():
         self.n_used_cores = 0
         self.n_outsiders = 0
         self.free_mem = 0
+        self.total_mem = 0
         self.pref_multicores = False
+
+        command="free -g"
+        mem_details = subprocess.Popen(["ssh", self.name , command],
+                                       shell=False,
+                                       stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE)
+        std_outerr = mem_details.communicate()
+        mem_stdout = std_outerr[0].split( '\n')
+        self.total_mem = float(mem_stdout[1].split()[1])
+        self.memory()
 
     def memory( self):
         command="free -g"
@@ -430,24 +449,36 @@ def handle_client( ):
                 nodes_ordered.append( node)
             nodes_ordered.sort()
             status = 0
-            Umsg = ''
+
+            msgU = ''
+            format_spec = '{0:17s} {1:<5d}' + ' '*8 + '{2:<5d}\n'
             for user, info in users.iteritems():
-                Umsg += '  ' + user + ': ' + str( info.n_used_cores) + '+' + str( info.n_queue) + '/' + str( info.min_cores) + '+' + str( info.extra_cores) + '\n'
-            if (Umsg):
-                Umsg = 'Users:\n' + Umsg
+                msgU += format_spec.format( user,
+                                            info.n_used_cores,
+                                            info.n_queue)
+            if (msgU):
+                msgU = 'user' + ' '*10 + 'using cores' + ' '*3 + 'queue size\n' + '-'*50 + '\n' + msgU + '='*50 + '\n'
             else:
-                Umsg = 'No users.\n'
-            Nmsg = ''
+                msgU = 'No users.\n'
+
+            msgN = ''
+            format_spec = '{0:15s} {1:<5d} {2:<5d}' + ' '*2 + '{3:>7.1f} {4:>7.1f}\n'
             outsiders_lock.acquire()
             for node in nodes_ordered:
-                Nmsg += '  ' + node + ': ' + str( nodes[node].n_used_cores) + '/' + str( nodes[node].max_cores) + '-' + str( nodes[node].n_outsiders) + '\n'
+                msgN += format_spec.format( node,
+                                            nodes[node].n_used_cores + nodes[node].n_outsiders,
+                                            nodes[node].max_cores,
+                                            nodes[node].total_mem - nodes[node].free_mem,
+                                            nodes[node].total_mem)
             outsiders_lock.release()
-            if (Nmsg):
-                Nmsg = 'Nodes:\n' + Nmsg
+            if (msgN):
+                msgN = '-'*50 + '\n' + msgN + '='*50 + '\n'
+                msgN = ' '*18 + 'cores' + ' '*12 + 'memory\n' + 'node' + ' '*11 + 'used  total' + ' '*7 + 'used  total' + '\n' + msgN
             else:
-                Nmsg = 'No nodes.\n'
-            msg = Umsg + Nmsg
-            msg = msg + 'Cores: ' + str( N_used_cores) + '+' + str( N_outsiders) + '/' + str( N_cores)
+                msgN = 'No nodes.\n'
+
+            msg = msgU + msgN
+            msg += 'There are ' + str( N_used_cores + N_outsiders) + ' out of a total of ' + str( N_cores) + ' cores being used.\n'
 
 
         # Finish qpy-multiuser

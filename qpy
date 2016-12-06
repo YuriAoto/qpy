@@ -9,21 +9,24 @@ import sys
 import subprocess
 import re
 import threading
-
 from qpy_general_variables import *
 
+qpy_source_dir = os.path.dirname( os.path.abspath( __file__)) + '/'
+test_run = os.path.isfile( qpy_source_dir + 'test_dir')
 home_dir = os.environ['HOME']
 user = os.environ['USER']
-qpy_dir = os.path.expanduser( '~/.qpy/')
-qpy_source_dir = os.path.dirname( os.path.abspath( __file__)) + '/'
+if (test_run):
+    qpy_dir = os.path.expanduser( '~/.qpy-test/')
+else:
+    qpy_dir = os.path.expanduser( '~/.qpy/')
 port_file = qpy_dir + '/port'
 key_file = qpy_dir + '/conn_key'
 tutorial_file = qpy_source_dir + '/tutorial'
 
 scr_dir = '/scratch/'+ user
 
-qpy_finish_command = ['qpy', 'finish', '>', '/dev/null', '2>', '/dev/null']
-qpy_master_command = ['python', qpy_source_dir+'qpy-master.py', '-c', 'linux4', '-m', '>', '/dev/null', '2>', '/dev/null']
+qpy_finish_command = [qpy_source_dir + 'qpy', 'finish', '>', '/dev/null', '2>', '/dev/null']
+qpy_master_command = ['python', qpy_source_dir + 'qpy-master.py', '-c', 'linux4', '-m', '>', '/dev/null', '2>', '/dev/null']
 
 # Return a list with all children and grand-children from pid
 # The dict parent_of shows the parents of all processes

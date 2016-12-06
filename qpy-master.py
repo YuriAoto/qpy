@@ -16,12 +16,10 @@ import glob
 import datetime
 from shutil import copyfile
 import termcolor.termcolor as termcolour
-
 from optparse import OptionParser,OptionError
-
 from qpy_general_variables import *
 
-DEVNULL = open(os.devnull, "w")
+DEVNULL = open( os.devnull, "w")
 
 class MyError(Exception):
     def __init__(self,msg):
@@ -102,9 +100,14 @@ if (dyn_nodes):
     max_nodes_default = 3
 
 # Some global variables
+qpy_source_dir = os.path.dirname( os.path.abspath( __file__)) + '/'
+test_run = os.path.isfile( qpy_source_dir + 'test_dir')
 home_dir = os.environ['HOME']
 user = os.environ['USER']
-qpy_dir = os.path.expanduser( '~/.qpy/')
+if (test_run):
+    qpy_dir = os.path.expanduser( '~/.qpy-test/')
+else:
+    qpy_dir = os.path.expanduser( '~/.qpy/')
 source_these_files = ['~/.bash_profile']
 port_file = qpy_dir + '/port'
 key_file = qpy_dir + '/conn_key'
@@ -117,7 +120,10 @@ scripts_dir = qpy_dir + '/scripts/'
 
 multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
-multiuser_port = 9999
+if (test_run):
+    multiuser_port = 9998
+else:
+    multiuser_port = 9999
 
 job_fmt_pattern_def = '%j (%s):%c (on %n; wd: %d)\n'
 job_fmt_pattern = job_fmt_pattern_def
@@ -1528,7 +1534,7 @@ def handle_qpy( sub_ctrl, check_run, check_multiuser, jobs_killer, jobs, jobId):
                 if (msg_back == None):
                     msg = 'qpy-multiuser seems not to be running. Contact the qpy-team.\n'
                 else:
-                    msg = analise_multiuser_status( msg_back[1], True, True)
+                    msg = msg_back[1]
             else:
                 msg = 'qpy is not under multiuser contrl.\n'
 
