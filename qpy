@@ -341,7 +341,11 @@ if (not( M.done.is_set())):
 conn = M.conn
 conn.send( (option, arguments))
 try:
-    sys.stdout.write( conn.recv())
+    ansi_escape = re.compile(r'\x1b[^m]*m')
+    master_msg = conn.recv()
+    if (not( sys.stdout.isatty())):
+        master_msg = ansi_escape.sub('', master_msg)
+    sys.stdout.write( master_msg)
 except:
     sys.exit( 'Problem when getting message from qpy-master. Your qpy-master might be broken.\nTry to run again or contact the qpy-team.')
 conn.close()
