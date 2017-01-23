@@ -117,6 +117,7 @@ jobID_file = qpy_dir + '/next_jobID'
 all_jobs_file = qpy_dir + '/all_jobs'
 config_file = qpy_dir + '/config'
 scripts_dir = qpy_dir + '/scripts/'
+notes_dir = qpy_dir + '/notes/'
 
 multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
@@ -158,6 +159,9 @@ os.chmod( qpy_dir, 0700)
 
 if (not( os.path.isdir( scripts_dir))):
     os.makedirs( scripts_dir)
+
+if (not( os.path.isdir( notes_dir))):
+    os.makedirs( notes_dir)
 
 if (not( os.path.isfile( known_nodes_file))):
     f = open( known_nodes_file, 'w')
@@ -472,6 +476,15 @@ class JOB():
             str_node = str(self.node.node_id)
         except:
             str_node = 'None'
+
+        if ('%K' in job_str):
+            if (os.path.isfile( notes_dir + 'notes.' + str(self.ID))):
+                f = open(       notes_dir + 'notes.' + str(self.ID), 'r')
+                notes = f.read()
+                f.close()
+                job_str = job_str.replace( '%K', notes )
+            else:
+                job_str = job_str.replace( '%K', '' )
 
         for pattern, info in (('%j', str( self.ID)),
                               ('%s', job_status[self.status]),
@@ -1706,6 +1719,8 @@ def handle_qpy( sub_ctrl, check_run, check_multiuser, jobs_killer, jobs, jobId):
                                 jobs.undone.remove( job)
                             jobs.all.remove( job)
                             n_jobs += 1
+                            if (os.path.isfile( notes_dir + 'notes.' + str(job.ID))):
+                                os.remove(      notes_dir + 'notes.' + str(job.ID))
                     if (not( remove)):
                         ij += 1
                 jobs.lock_all.release()
@@ -1719,6 +1734,41 @@ def handle_qpy( sub_ctrl, check_run, check_multiuser, jobs_killer, jobs, jobId):
                 msg = plural[1] + ' finished ' + plural[0] + ' removed.\n'
             else:
                 msg = 'Nothing to do: required jobs not found.\n'
+
+            client_master.send( msg)
+
+        # Add and read notes
+        # arguments = (jobID[, note])
+        elif (job_type == JOBTYPE_NOTE):
+            if (len( arguments) == 0):
+                all_notes = os.listdir( notes_dir)
+                msg = ''
+                for n in all_notes:
+                    if (n[0:6] == 'notes.'):
+                        msg += n[6:] + ' '
+                if (msg):
+                    msg = 'You have notes for the following jobs:\n' + msg + '\n'
+                else:
+                    msg = 'You have no notes.\n'
+            else:
+                notes_file = notes_dir + 'notes.' + str(arguments[0])
+                if (os.path.isfile( notes_file)):
+                    f = open( notes_file, 'r')
+                    notes = f.read()
+                    f.close()
+                else:
+                    notes = ''
+                if (len( arguments) == 1):
+                    if (not( notes)):
+                        msg = 'No notes for ' + arguments[0] + '\n'
+                    else:
+                        msg = notes + '\n'
+                else:
+                    notes += '----- Note added at ' + str(datetime.datetime.today()) + ':\n' + arguments[1] + '\n\n'
+                    f = open( notes_file, 'w')
+                    f.write( notes)
+                    f.close()
+                    msg = 'Note stored.\n'
 
             client_master.send( msg)
 

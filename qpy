@@ -119,7 +119,8 @@ keywords={'sub':       (JOBTYPE_SUB       , 'Submit a job. Arguments: the job co
           'tutorial':  (JOBTYPE_TUTORIAL  , 'Run the qpy tutorial. Arguments: optional: a qpy option'),
           'status':    (JOBTYPE_STATUS    , 'Show current status. No arguments'),
           'restart':   (JOBTYPE_RESTART   , 'Restart qpy-master. No arguments'),
-          'ctrlQueue': (JOBTYPE_CTRLQUEUE , 'Fine control over the queue. Arguments: see tutorial')
+          'ctrlQueue': (JOBTYPE_CTRLQUEUE , 'Fine control over the queue. Arguments: see tutorial'),
+          'note':      (JOBTYPE_NOTE      , 'Add and read notes. Arguments: note ID and the note')
           }
 
 
@@ -249,6 +250,15 @@ elif (option == JOBTYPE_CTRLQUEUE):
 
         else:
             arguments = sys.argv[2:]
+
+# Control queue
+elif (option == JOBTYPE_NOTE):
+    if (len( sys.argv) < 3):
+        arguments = ()
+    elif (len( sys.argv) == 3):
+        arguments = [ sys.argv[2]]
+    else:
+        arguments = [ sys.argv[2], ' '.join( sys.argv[3:])]
 
 # The qpy tutorial
 elif (option == JOBTYPE_TUTORIAL):
