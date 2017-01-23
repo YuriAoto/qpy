@@ -8,7 +8,7 @@ _qpy()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    opts="sub check ctrlQueue kill restart finish nodes status maxJobs config clean tutorial"
+    opts="sub check ctrlQueue kill restart finish nodes note status maxJobs config clean tutorial"
 
     opts_nodes="add remove forceRemove"
 
@@ -85,7 +85,11 @@ _qpy()
 		    ;;
                 # ==========
  		nodes)
-		    echo "Show information about, add or remove nodes. "
+		    echo "Show information about, add or remove nodes."
+		    ;;
+                # ==========
+ 		note)
+		    echo "Add or show note to job."
 		    ;;
                 # ==========
  		config)
@@ -309,6 +313,15 @@ _qpy()
 	check)
 
             COMPREPLY=( $(compgen -W "${keys_status}" ${cur}) )
+
+	    compopt +o nospace
+            return 0;;
+
+
+	# ==========
+	note)
+
+            COMPREPLY=( $(compgen -W "${jobID}" ${cur}) )
 
 	    compopt +o nospace
             return 0;;

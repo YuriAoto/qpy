@@ -482,9 +482,9 @@ class JOB():
                 f = open(       notes_dir + 'notes.' + str(self.ID), 'r')
                 notes = f.read()
                 f.close()
-                job_str = job_str.replace( '%K', notes )
+                job_str = job_str.replace( '%K', '\n' + notes)
             else:
-                job_str = job_str.replace( '%K', '' )
+                job_str = job_str.replace( '%K', '')
 
         for pattern, info in (('%j', str( self.ID)),
                               ('%s', job_status[self.status]),
