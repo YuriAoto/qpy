@@ -120,7 +120,7 @@ keywords={'sub':       (JOBTYPE_SUB       , 'Submit a job. Arguments: the job co
           'status':    (JOBTYPE_STATUS    , 'Show current status. No arguments'),
           'restart':   (JOBTYPE_RESTART   , 'Restart qpy-master. No arguments'),
           'ctrlQueue': (JOBTYPE_CTRLQUEUE , 'Fine control over the queue. Arguments: see tutorial'),
-          'note':      (JOBTYPE_NOTE      , 'Add and read notes. Arguments: note ID and the note')
+          'notes':     (JOBTYPE_NOTE      , 'Add and read notes. Arguments: ID and the note')
           }
 
 

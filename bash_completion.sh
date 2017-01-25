@@ -8,7 +8,7 @@ _qpy()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    opts="sub check ctrlQueue kill restart finish nodes note status maxJobs config clean tutorial"
+    opts="sub check ctrlQueue kill restart finish nodes notes status maxJobs config clean tutorial"
 
     opts_nodes="add remove forceRemove"
 
@@ -18,6 +18,7 @@ _qpy()
     pattern="__pattern__"
     check_fmt="__quoted_fmt__"
     noArg="__no_arguments__"
+    note="__note__"
 
     keys_all="all"
     keys_maxJob_default="maxJob_default"
@@ -88,8 +89,9 @@ _qpy()
 		    echo "Show information about, add or remove nodes."
 		    ;;
                 # ==========
- 		note)
-		    echo "Add or show note to job."
+ 		notes)
+		    echo "Add or show notes to job."
+		    echo "You can add a note with several lines using quotes"
 		    ;;
                 # ==========
  		config)
@@ -319,9 +321,13 @@ _qpy()
 
 
 	# ==========
-	note)
+	notes)
 
-            COMPREPLY=( $(compgen -W "${jobID}" ${cur}) )
+	    if [ ${#COMP_WORDS[@]} -eq 3 ]; then
+		COMPREPLY=( $(compgen -W ": ${jobID}") )
+	    else
+		COMPREPLY=( $(compgen -W ": ${note}") )
+	    fi
 
 	    compopt +o nospace
             return 0;;
