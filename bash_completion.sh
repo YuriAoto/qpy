@@ -8,20 +8,15 @@ _qpy()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    opts="sub check ctrlQueue kill restart finish nodes notes status maxJobs config clean tutorial"
-
-    opts_nodes="add remove forceRemove"
+    opts="sub check ctrlQueue kill restart finish notes status config clean tutorial"
 
     jobID="__job_ID__"
-    newnode="__new_node__"
-    maxJ="__max_jobs__"
     pattern="__pattern__"
     check_fmt="__quoted_fmt__"
     noArg="__no_arguments__"
     note="__note__"
 
     keys_all="all"
-    keys_maxJob_default="maxJob_default"
     keys_status="queue running done killed undone"
     keys_config="checkFMT copyScripts colour coloursScheme"
     keys_unfinished="queue running"
@@ -32,8 +27,6 @@ _qpy()
 
     qpy_dir=$( dirname "${BASH_SOURCE[0]}" )
 
-    file_curnodes="${qpy_dir}/.current_nodes"
-    file_knownnodes="${qpy_dir}/.known_nodes"
 
 # Interactive documentation 
     question_ASCII=$(printf "%d" "'?")
@@ -85,10 +78,6 @@ _qpy()
 		    echo "Remove finished jobs jobs from the list."
 		    ;;
                 # ==========
- 		nodes)
-		    echo "Show information about, add or remove nodes."
-		    ;;
-                # ==========
  		notes)
 		    echo "Add or show notes to job."
 		    echo "You can add a note with several lines using quotes"
@@ -100,10 +89,6 @@ _qpy()
                 # ==========
  		check)
 		    echo "Give a list of (required) jobs."
-		    ;;
-                # ==========
- 		maxJobs)
-		    echo "Show/change maximum jobs per node."
 		    ;;
                 # ==========
  		tutorial)
@@ -216,63 +201,6 @@ _qpy()
 
 
 	# ==========
-	nodes)
-
-	    if [[ ${prev} == 'nodes' ]] ; then
-		COMPREPLY=( $(compgen -W "${opts_nodes}" ${cur}) )
-		compopt +o nospace
-		return 0
-	    fi
-
-	    action="${COMP_WORDS[2]}"
-
-	    if [[ ${action} == 'add' ]] ; then
-
-		cur_nodes='::'
-		for n in `cat $file_curnodes`
-		do
-		    cur_nodes="$cur_nodes::$n::"
-		done
-
-		nodes=''
-		for n in `cat $file_knownnodes`
-		do
-		    if [[ ! ( ${cur_nodes} =~ "::$n::") ]] ; then
-			nodes="$nodes $n"
-		    fi
-		done
-
-		if [[ -z "${nodes}" ]] ; then
-		    COMPREPLY=( $(compgen -W ": ${newnode}" ${cur}) )
-		else
-
-		    if [[ "x${cur}" == 'x' ]] ; then
-			COMPREPLY=( $(compgen -W "${nodes} ${newnode}" ${cur}) )
-		    else
-			COMPREPLY=( $(compgen -W "${nodes}" ${cur}) )
-		    fi
-		fi
-
-	    fi
-
-	    if [[ ${action} == 'remove' || ${action} == 'forceRemove' ]] ; then
-
-		nodes=''
-		for n in `cat $file_curnodes`
-		do
-		    nodes="$nodes $n"
-		done
-
-		if [[ -n "${nodes}" ]] ; then
-		    COMPREPLY=( $(compgen -W "${nodes} ${keys_all}" ${cur}) )
-		fi
-
-	    fi
-
-	    compopt +o nospace
-	    return 0;;
-
-	# ==========
 	config)
 
 	    COMPREPLY=( $(compgen -W "${keys_config}"  ${cur}) )
@@ -331,29 +259,6 @@ _qpy()
 
 	    compopt +o nospace
             return 0;;
-
-	# ==========
-	maxJobs)
-	    if [[ ${prev} == 'maxJobs' ]] ; then
-
-		COMPREPLY=( $(compgen -W ": 0 1 2 3 ${maxJ}") )
-
-	    else
-
-		nodes=''
-		for n in `cat $file_curnodes`
-		do
-		    nodes="$nodes $n"
-		done
-
-		if [[ -n "${nodes}" ]] ; then
-		    COMPREPLY=( $(compgen -W "${nodes} ${keys_maxJob_default}" ${cur}) )
-		fi
-
-	    fi
-
-	    compopt +o nospace
-	    return 0;;
 
 	# ==========
 	tutorial)

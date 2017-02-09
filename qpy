@@ -23,10 +23,10 @@ port_file = qpy_dir + '/port'
 key_file = qpy_dir + '/conn_key'
 tutorial_file = qpy_source_dir + '/tutorial'
 
-scr_dir = '/scratch/'+ user
+scr_dir = '/scratch/' + user
 
 qpy_finish_command = [qpy_source_dir + 'qpy', 'finish', '>', '/dev/null', '2>', '/dev/null']
-qpy_master_command = ['python', qpy_source_dir + 'qpy-master.py', '-c', 'linux4', '-m', '>', '/dev/null', '2>', '/dev/null']
+qpy_master_command = ['python', qpy_source_dir + 'qpy-master.py', '>', '/dev/null', '2>', '/dev/null']
 
 # Return a list with all children and grand-children from pid
 # The dict parent_of shows the parents of all processes
@@ -43,24 +43,6 @@ def get_all_children( pid, parent_of):
 
 # '--options' are to be called only by qpy-master, not by the users
 if (len( sys.argv) > 1):
-    if (sys.argv[1] == '--alloc'):
-        sleep( float( sys.argv[2]))
-        exit()
-
-    if (sys.argv[1] == '--init'):
-        if (os.path.isdir( scr_dir)):
-            command = 'rm -rf ' + scr_dir + '/*'
-        else:
-            command = 'mkdir ' + scr_dir
-        subprocess.call( command, shell = True)
-        print "Success on qpy init!"
-        exit()
-
-    if (sys.argv[1] == '--term'):
-        command = 'rm -rf ' + scr_dir
-        subprocess.call( command, shell = True)
-        exit()
-
     if (sys.argv[1] == '--jobkill'):
         job_id = sys.argv[2]
         command = 'ps -fu ' + user
@@ -112,8 +94,6 @@ keywords={'sub':       (JOBTYPE_SUB       , 'Submit a job. Arguments: the job co
           'check':     (JOBTYPE_CHECK     , 'Check the jobs. Arguments: the desired job status'),
           'kill':      (JOBTYPE_KILL      , 'Kill jobs. Argument: the jobs id'),
           'finish':    (JOBTYPE_FINISH    , 'Finish the master execution. No arguments'),
-          'nodes':     (JOBTYPE_NODES     , 'Change the maximum number of nodes. Argument: the desired value'),
-          'maxJobs':   (JOBTYPE_MAXJOBS   , 'Change the maximum number of jobs per node. Argument: the desired value'),
           'config':    (JOBTYPE_CONFIG    , 'Show the current configuration. No arguments'),
           'clean':     (JOBTYPE_CLEAN     , 'Remove finished jobs from the list. Arguments: the jobs id'),
           'tutorial':  (JOBTYPE_TUTORIAL  , 'Run the qpy tutorial. Arguments: optional: a qpy option'),
@@ -170,27 +150,6 @@ if (option == JOBTYPE_CHECK):
                 arguments['job_id'].extend( new_jobids)
             else:
                 arguments['job_id'] = new_jobids
-
-# Change max_nodes, add/remove nodes
-elif (option == JOBTYPE_NODES):
-    try:
-        arguments = int( sys.argv[2])
-    except:
-        try:
-            arguments = sys.argv[2:]
-        except:
-            arguments = ()
-
-# Change max_jobs
-elif (option == JOBTYPE_MAXJOBS):
-    try:
-        arguments = [int( sys.argv[2])]
-    except:
-        try:
-            sys.exit( 'First argument for maxJobs must be an integer: ' + sys.argv[2])
-        except:
-            sys.exit( 'maxJobs require an integer as argument.')
-    arguments.extend( sys.argv[3:])
 
 # Config
 elif (option == JOBTYPE_CONFIG):
