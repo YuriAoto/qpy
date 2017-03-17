@@ -11,6 +11,9 @@ import re
 import threading
 from qpy_general_variables import *
 
+import unittest as ut
+
+
 qpy_source_dir = os.path.dirname( os.path.abspath( __file__)) + '/'
 test_run = os.path.isfile( qpy_source_dir + 'test_dir')
 home_dir = os.environ['HOME']
@@ -28,6 +31,49 @@ scr_dir = '/scratch/' + user
 qpy_finish_command = [qpy_source_dir + 'qpy', 'finish', '>', '/dev/null', '2>', '/dev/null']
 qpy_master_command = ['python', qpy_source_dir + 'qpy-master.py', '>', '/dev/null', '2>', '/dev/null']
 
+class ProcessHandle(object):
+    def __init__(self, pid, cmd, parent_pid):
+        self._pid = pid
+        self.command = cmd
+        self._parent_pid = parent_pid
+
+    def is_parent(self, other):
+        return self._pid == other._parent_pid
+
+class BashAdapter(object):
+
+
+    #---------------------------------------------------------
+    ## Retrieves all active processes 
+    ##
+    ## @param user[in] name of the user for which  processes are retrieved
+    ## @return a list of ProcessHandles 
+    ## @raises a subprocess.CalledProcessError if the retirval fails
+    def get_active_processes(self, user):
+        job_ps = subprocess.Popen(["ps", "-fu", str(user)],
+                                  shell = False,
+                                  stdout = subprocess.PIPE,
+                                  stderr = subprocess.PIPE)
+        line_tuples = [proc.split(None,7)  for proc in job_ps.stdout.readlines()]
+        return [ ProcessHandle(proc_tuple[1],proc_tuple[-1],proc_tuple[2]) for proc_tuple in  line_tuples]
+
+
+    def kill_process(self, proc):
+        """ ends a process
+        @param proc a ProcessHandle
+        """
+        
+        pid = proc._pid
+        try:
+            subprocess.check_call(['kill', str(pid)])
+        except subprocess.CalledProcessError as ex:
+            pass
+        sleep(1)
+        try:
+            subprocess.check_output(['kill','-9', str(pid)])
+        except subprocess.CalledProcessError as ex:
+            pass
+
 # Return a list with all children and grand-children from pid
 # The dict parent_of shows the parents of all processes
 def get_all_children( pid, parent_of):
@@ -41,33 +87,32 @@ def get_all_children( pid, parent_of):
     all_children.extend( cur_child)
     return all_children
 
+def jobkill(jobid):
+    def find_job( jobid, proc_list):
+        for process in proc_list:
+            if re.search('export QPY_JOB_ID={job_id};'.format(job_id=str(jobid)),
+                         process.command)is not None:
+                return process
+        raise Exception("Job {job_id} NotFound".format(job_id=str(jobid) ))
+
+    shell = BashAdapter()
+    process_list = shell.get_active_processes(user=user)
+
+    child_list = [ find_job(jobid, process_list)] #initialize the child list with origin process
+    kill_list = []
+    while child_list != []:
+        current = child_list.pop()
+        child_list.extend([ job for job in process_list if current.is_parent(job)])
+        kill_list.append(current)
+    for job in reversed(kill_list):
+        shell.kill_process(job)
+        print 'Killing PID ' + job._pid
+
 # '--options' are to be called only by qpy-master, not by the users
 if (len( sys.argv) > 1):
     if (sys.argv[1] == '--jobkill'):
         job_id = sys.argv[2]
-        command = 'ps -fu ' + user
-        kill_job_ps = subprocess.Popen(command,
-                                       shell = True,
-                                       stdout = subprocess.PIPE,
-                                       stderr = subprocess.PIPE)
-        ps_out = kill_job_ps.stdout.readlines()
-
-        # Get calling PID and parents associations:
-        grand_PID = ''
-        parents = {}
-        for l in ps_out:
-            new_pid = l.split()
-            parents[new_pid[1]] = new_pid[2]
-            re_res = re.search('export QPY_JOB_ID=' + job_id + ';', l)
-            if (re_res):
-                grand_PID = new_pid[1]
-
-        pid_kill = get_all_children( grand_PID, parents)
-        pid_kill.reverse()
-        for i in pid_kill:
-            kill_job = subprocess.call(['kill', '-9', i])
-            print 'Killing PID ' + i
-
+        jobkill(job_id)
         exit()
 # end of '--options'
 
