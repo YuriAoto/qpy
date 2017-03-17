@@ -148,20 +148,29 @@ keywords={'sub':       (JOBTYPE_SUB       , 'Submit a job. Arguments: the job co
           'notes':     (JOBTYPE_NOTE      , 'Add and read notes. Arguments: ID and the note')
           }
 
+def usage_message(keywords):
+    def get_max_wordlength(words):
+        length = 0
+        for word in words:
+            length = max(length, len(word))
+        return length
+    
+    length = get_max_wordlength(keywords)+1
+    format_spc = '{0:' + str( length) + 's}'
+    usage_msg =  'Usage: {prog} <option> [<arguments>].\n'.format(prog=sys.argv[0])
+    usage_msg += 'Options:'
+    for opt in keywords:
+        usage_msg += '\n {option} {usage}'.format(option=format_spc.format( opt+':'),
+                                                  usage= keywords[opt][1] )
+    return usage_msg
+
+
+
 
 try:
     option = keywords[sys.argv[1]][0]
 except:
-    str_len = 0
-    for opt in keywords:
-        if (str_len < len( opt)):
-            str_len = len( opt)
-    format_spc = '{0:' + str( str_len+1) + 's}'
-    usage_msg =  'Usage: ' + sys.argv[0] +  ' <option> [<arguments>].\n'
-    usage_msg += 'Options:'
-    for opt in keywords:
-        usage_msg += '\n  ' + format_spc.format( opt+':') + ' ' + keywords[opt][1]
-    sys.exit( usage_msg)
+    sys.exit( usage_message(keywords))
 
 start_qpy_master = option == JOBTYPE_RESTART
 if (start_qpy_master):
