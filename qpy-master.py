@@ -437,7 +437,9 @@ class JOB():
             command += self.info[0]
         command += ' > ' + out_or_err_name( self, '.out') + ' 2> ' + out_or_err_name( self, '.err')
         self.process = subprocess.Popen(["ssh", self.node, command],
-                                        shell = False)
+                                        shell = False,
+                                        stdout=subprocess.PIPE,
+                                        stderr=subprocess.PIPE)
         self.start_time = datetime.datetime.today()
         self.status = 1
 
