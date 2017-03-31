@@ -37,7 +37,7 @@ class ProcessHandle(object):
         self.command = cmd
         self._parent_pid = parent_pid
 
-    def is_parent(self, other):
+    def is_parent_of(self, other):
         return self._pid == other._parent_pid
 
 class BashAdapter(object):
@@ -102,7 +102,7 @@ def jobkill(jobid):
     kill_list = []
     while child_list != []:
         current = child_list.pop()
-        child_list.extend([ job for job in process_list if current.is_parent(job)])
+        child_list.extend([ job for job in process_list if current.is_parent_of(job)])
         kill_list.append(current)
     for job in reversed(kill_list):
         shell.kill_process(job)
@@ -165,6 +165,18 @@ def usage_message(keywords):
     return usage_msg
 
 
+def jobpattern_to_list(arguments,allowed_statuses):
+    ret = []
+    for argument in arguments:
+        try:
+            ret.extend(string_to_int_list(argument))
+        except:
+            if (argument == 'all'
+                    or argument in allowed_statuses):
+               ret.append(argument)
+            else:
+                sys.exit('Range with wrong format or invalid status: ' + argument)
+    return list(set(ret))
 
 
 try:
@@ -216,18 +228,7 @@ elif (option == JOBTYPE_KILL or option == JOBTYPE_CLEAN):
         status_bound = (0,2)
     else:
         status_bound = (2,5)
-    arguments = []
-    for x in sys.argv[2:]:
-        try:
-            new_range = string_to_int_list( x)
-            arguments.extend( new_range)
-        except:
-            if (x == 'all' or x in job_status[status_bound[0]:status_bound[1]]):
-                arguments.append( x)
-            else:
-                sys.exit( 'Range with wrong format or invalid status: ' + x)
-
-    arguments = list( set( arguments))
+    arguments = jobpattern_to_list(sys.argv[2:],job_status[status_bound[0]:status_bound[1]])
 
 # Control queue
 elif (option == JOBTYPE_CTRLQUEUE):
