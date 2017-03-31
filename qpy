@@ -181,9 +181,7 @@ arguments = ()
 
 # Submit a job
 if (option == JOBTYPE_SUB):
-    job = ''
-    for i in sys.argv[2:]:
-        job += ' ' + i
+    job = " ".join(sys.argv[2:])
     arguments = [job, os.getcwd()]
 
 # Check jobs
@@ -191,19 +189,14 @@ if (option == JOBTYPE_CHECK):
     arguments = {}
     for x in sys.argv[2:]:
         if x in job_status:
-            if ('status' in arguments):
-                arguments['status'].append( x)
-            else:
-                arguments['status'] = [x]
+            arguments.setdefault("status",[]).append(x)
         else:
             try:
                 new_jobids = string_to_int_list( x)
             except:
                 sys.exit( 'Unknown pattern for checking jobs: ' + x)
-            if ('job_id' in arguments):
-                arguments['job_id'].extend( new_jobids)
             else:
-                arguments['job_id'] = new_jobids
+                arguments.setdefault("job_id",[]).extend(new_jobids)
 
 # Config
 elif (option == JOBTYPE_CONFIG):
@@ -321,15 +314,16 @@ def start_master_driver():
     subprocess.Popen( qpy_master_command, shell = False)
     exit()
 
+def retrieve_port(port_file=port_file):
+    with open(port_file,'r') as f:
+        return int( f.read())
 
-
+def retrieve_conn_key(key_file=key_file):
+    with open( key_file, 'r') as f:
+        return  f.read()
 try:
-    f = open( port_file, 'r')
-    port = int( f.read())
-    f.close()
-    f = open( key_file, 'r')
-    conn_key = f.read()
-    f.close()
+    port = retrieve_port()
+    conn_key = retrieve_conn_key()
 except:
     if (start_qpy_master):
         start_master_driver()
