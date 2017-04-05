@@ -63,6 +63,7 @@ class NODE():
         self.n_used_cores = 0
         self.n_outsiders = 0
         self.free_mem = 0
+        self.free_mem_real = 0
         self.total_mem = 0
         self.pref_multicores = False
 
@@ -75,7 +76,9 @@ class NODE():
         mem_stdout = std_outerr[0].split( '\n')
         self.total_mem = float(mem_stdout[1].split()[1])
         self.memory()
+        self.free_mem = self.total_mem - 5.0
 
+    # Get the really used memory
     def memory( self):
         command="free -g"
         mem_details = subprocess.Popen(["ssh", self.name , command],
@@ -85,10 +88,10 @@ class NODE():
         std_outerr = mem_details.communicate()
         mem_stdout = std_outerr[0].split( '\n')
         if (len(mem_stdout) == 5):
-            self.free_mem = float(mem_stdout[2].split()[3])
+            self.free_mem_real = float(mem_stdout[2].split()[3])
         else:
-            self.free_mem = float(mem_stdout[1].split()[6])
-        return self.free_mem
+            self.free_mem_real = float(mem_stdout[1].split()[6])
+        return self.free_mem_real
 
 # User informations
 # self.min_cores    -> only for the user
@@ -104,7 +107,7 @@ class USER():
         self.max_cores = 0
         self.n_used_cores = 0
         self.n_queue = 0
-        self.cur_jobs = [] # each job = (jobID, node, num_cores)
+        self.cur_jobs = [] # each job = (jobID, node, num_cores, mem)
 
     # Add a job, if possible
     def add_job( self, jobID, num_cores, mem):
@@ -148,12 +151,12 @@ class USER():
             if (num_cores == 1):
                 for node, info in nodes.iteritems():
                     free = info.max_cores - info.n_outsiders - info.n_used_cores
-                    if (not(info.pref_multicores) and free > best_free and info.memory() > mem):
+                    if (not(info.pref_multicores) and free > best_free and info.free_mem > mem):
                         best_node = node
                         best_free = free
             if (best_node == None):
                 for node in nodes_list:
-                    if (nodes[node].max_cores  - nodes[node].n_outsiders - nodes[node].n_used_cores >= num_cores and nodes[node].memory() > mem):
+                    if (nodes[node].max_cores  - nodes[node].n_outsiders - nodes[node].n_used_cores >= num_cores and nodes[node].free_mem > mem):
                         best_node = node
                         break
             outsiders_lock.release()
@@ -161,9 +164,10 @@ class USER():
             if (best_node == None):
                 return 1
 
-            self.cur_jobs.append( (jobID, best_node, num_cores))
+            self.cur_jobs.append( (jobID, best_node, num_cores, mem))
             self.n_used_cores += num_cores
             nodes[best_node].n_used_cores += num_cores
+            nodes[best_node].free_mem -= mem
             N_used_cores += num_cores
 
             if (self.n_used_cores < self.min_cores):
@@ -182,6 +186,7 @@ class USER():
             if (job[0] == jobID):
                 self.n_used_cores -= job[2]
                 nodes[job[1]].n_used_cores -= job[2]
+                nodes[job[1]].free_mem += job[3]
                 N_used_cores -= job[2]
                 if (self.n_used_cores < self.min_cores):
                     N_used_min_cores -= min( job[2], self.min_cores - self.n_used_cores)
@@ -439,6 +444,7 @@ def handle_client( ):
                 msg += '  n_used_cores    = ' + str( info.n_used_cores)    + '\n'
                 msg += '  n_outsiders     = ' + str( info.n_outsiders)     + '\n'
                 msg += '  free_mem        = ' + str( info.free_mem)        + '\n'
+                msg += '  free_mem_real   = ' + str( info.free_mem_real)   + '\n'
                 msg += '  pref_multicores = ' + str( info.pref_multicores) + '\n'
 
         # Show status
@@ -528,10 +534,15 @@ def handle_client( ):
                 N_used_min_cores -= min( users[user].min_cores, users[user].n_used_cores)
                 for job in users[user].cur_jobs:
                     nodes[job[1]].n_used_cores -= job[2]
+                    nodes[job[1]].free_mem += job[3]
                 users[user].cur_jobs = new_cur_jobs
                 users[user].n_used_cores = 0
                 for job in users[user].cur_jobs:
                     nodes[job[1]].n_used_cores += job[2]
+                    if (len(job) > 3):
+                        nodes[job[1]].free_mem += job[3]
+                    else: # for old version of qpy-mster
+                        nodes[job[1]].free_mem = 5.0
                     users[user].n_used_cores += job[2]
                 N_used_cores += users[user].n_used_cores
                 N_used_min_cores += min( users[user].min_cores, users[user].n_used_cores)

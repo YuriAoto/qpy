@@ -428,6 +428,8 @@ class JOB():
         command =  'export QPY_JOB_ID=' + str( self.ID) + '; '
         command += 'export QPY_NODE=' + str( self.node) + '; '
         command += 'export QPY_N_CORES=' + str( self.n_cores) + '; '
+        command += 'export QPY_MEM=' + str( self.mem) + '; '
+        command += 'ulimit -Sv ' + str( self.mem*1048576) + '; '
         for sf in source_these_files:
            command += 'source ' + sf + '; '
         command += 'cd ' + self.info[1] + '; ' 
@@ -865,7 +867,7 @@ class CHECK_MULTIUSER( threading.Thread):
                         multiuser_cur_jobs = []
                         self.jobs.lock_running.acquire()
                         for job in self.jobs.running:
-                            multiuser_cur_jobs.append( [job.ID, job.node, job.n_cores])
+                            multiuser_cur_jobs.append( (job.ID, job.node, job.n_cores, job.mem))
                         self.jobs.lock_running.release()
                         msg_back = send_multiuser_arguments( MULTIUSER_USER, (user, multiuser_cur_jobs))
                 if (verbose):
