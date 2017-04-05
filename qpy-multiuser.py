@@ -36,8 +36,10 @@ N_min_cores = 0
 N_used_cores  = 0
 N_used_min_cores = 0
 N_outsiders = 0
-outsiders_lock = threading.RLock()
-outsiders_alive = True
+
+nodes_check_lock = threading.RLock()
+nodes_check_alive = True
+nodes_check_time = 60
 
 multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
@@ -53,7 +55,6 @@ parser.add_option("-v", "--verbose",
 (options, args) = parser.parse_args()
 verbose = options.verbose
 
-check_outsiders_time = 60
 
 # Node informations
 class NODE():
@@ -62,12 +63,16 @@ class NODE():
         self.max_cores = max_cores
         self.n_used_cores = 0
         self.n_outsiders = 0
+        self.pref_multicores = False
+        self.total_mem = 0
         self.free_mem = 0
         self.free_mem_real = 0
-        self.total_mem = 0
-        self.pref_multicores = False
+        self.memory()
+        self.free_mem = self.total_mem - 5.0
 
-        command="free -g"
+    # Get the really used memory
+    def memory( self):
+        command = "free -g"
         mem_details = subprocess.Popen(["ssh", self.name , command],
                                        shell=False,
                                        stdout=subprocess.PIPE,
@@ -75,23 +80,38 @@ class NODE():
         std_outerr = mem_details.communicate()
         mem_stdout = std_outerr[0].split( '\n')
         self.total_mem = float(mem_stdout[1].split()[1])
-        self.memory()
-        self.free_mem = self.total_mem - 5.0
-
-    # Get the really used memory
-    def memory( self):
-        command="free -g"
-        mem_details = subprocess.Popen(["ssh", self.name , command],
-                                       shell=False,
-                                       stdout=subprocess.PIPE,
-                                       stderr=subprocess.PIPE)
-        std_outerr = mem_details.communicate()
-        mem_stdout = std_outerr[0].split( '\n')
         if (len(mem_stdout) == 5):
             self.free_mem_real = float(mem_stdout[2].split()[3])
         else:
             self.free_mem_real = float(mem_stdout[1].split()[6])
         return self.free_mem_real
+
+    # Get the number of cores used by outsiders
+    def outsiders( self):
+
+        try:
+            command = "top -b -n1 | sed -n '8,50p'"
+            free_details = subprocess.Popen(["ssh", self.name , command],
+                                            shell=False,
+                                            stdout=subprocess.PIPE,
+                                            stderr=subprocess.PIPE)
+            std_outerr = free_details.communicate()
+            ssh_stdout = std_outerr[0].split( '\n')
+            n_jobs = 0
+            for line in ssh_stdout:
+                line_spl = line.split()
+                if float(line_spl[8].replace(',','.')) > 50:
+                    n_jobs += 1
+                else:
+                    break
+
+            self.n_outsiders = max(n_jobs - self.n_used_cores, 0)
+
+        except:
+            self.n_outsiders = 0
+
+        return self.n_outsiders
+
 
 # User informations
 # self.min_cores    -> only for the user
@@ -147,7 +167,7 @@ class USER():
         if (space_available):
             best_node = None
             best_free = 0
-            outsiders_lock.acquire()
+            nodes_check_lock.acquire()
             if (num_cores == 1):
                 for node, info in nodes.iteritems():
                     free = info.max_cores - info.n_outsiders - info.n_used_cores
@@ -159,7 +179,7 @@ class USER():
                     if (nodes[node].max_cores  - nodes[node].n_outsiders - nodes[node].n_used_cores >= num_cores and nodes[node].free_mem > mem):
                         best_node = node
                         break
-            outsiders_lock.release()
+            nodes_check_lock.release()
 
             if (best_node == None):
                 return 1
@@ -367,7 +387,7 @@ def distribute_cores( ):
 #    int     str
 #   (status, msg)
 #
-def handle_client( ):
+def handle_client( check_nodes):
     global N_cores, N_used_cores
     global N_min_cores, N_used_min_cores
     if (verbose):
@@ -418,14 +438,13 @@ def handle_client( ):
         # arguments = ()
         elif (action_type == MULTIUSER_SHOW_VARIABLES):
             status = 0
+            nodes_check_lock.acquire()
             msg = ''
-            msg += 'N_cores          = ' + str( N_cores)          + '\n'
-            msg += 'N_min_cores      = ' + str( N_min_cores)      + '\n'
-            msg += 'N_used_cores     = ' + str( N_used_cores)     + '\n'
-            msg += 'N_used_min_cores = ' + str( N_used_min_cores) + '\n'
-            outsiders_lock.acquire()
-            msg += 'N_outsiders      = ' + str( N_outsiders)      + '\n'
-            outsiders_lock.release()
+            msg += 'N_cores          = ' + str( N_cores)           + '\n'
+            msg += 'N_min_cores      = ' + str( N_min_cores)       + '\n'
+            msg += 'N_used_cores     = ' + str( N_used_cores)      + '\n'
+            msg += 'N_used_min_cores = ' + str( N_used_min_cores)  + '\n'
+            msg += 'N_outsiders      = ' + str( N_outsiders)       + '\n'
             msg += 'users:\n'
             for user, info in users.iteritems():
                 msg += user + ':\n'
@@ -443,9 +462,11 @@ def handle_client( ):
                 msg += '  max_cores       = ' + str( info.max_cores)       + '\n'
                 msg += '  n_used_cores    = ' + str( info.n_used_cores)    + '\n'
                 msg += '  n_outsiders     = ' + str( info.n_outsiders)     + '\n'
+                msg += '  total_mem       = ' + str( info.total_mem)       + '\n'
                 msg += '  free_mem        = ' + str( info.free_mem)        + '\n'
                 msg += '  free_mem_real   = ' + str( info.free_mem_real)   + '\n'
                 msg += '  pref_multicores = ' + str( info.pref_multicores) + '\n'
+            nodes_check_lock.release()
 
         # Show status
         # arguments = () or (user_name)
@@ -469,14 +490,14 @@ def handle_client( ):
 
             msgN = ''
             format_spec = '{0:15s} {1:<5d} {2:<5d}' + ' '*2 + '{3:>7.1f} {4:>7.1f}\n'
-            outsiders_lock.acquire()
+            nodes_check_lock.acquire()
             for node in nodes_ordered:
                 msgN += format_spec.format( node,
                                             nodes[node].n_used_cores + nodes[node].n_outsiders,
                                             nodes[node].max_cores,
                                             nodes[node].total_mem - nodes[node].free_mem,
                                             nodes[node].total_mem)
-            outsiders_lock.release()
+            nodes_check_lock.release()
             if (msgN):
                 msgN = '-'*50 + '\n' + msgN + '='*50 + '\n'
                 msgN = ' '*18 + 'cores' + ' '*10 + 'memory (GB)\n' + 'node' + ' '*11 + 'used  total' + ' '*7 + 'used  total' + '\n' + msgN
@@ -490,7 +511,7 @@ def handle_client( ):
         # Finish qpy-multiuser
         # arguments = ()
         elif (action_type == MULTIUSER_FINISH):
-            outsiders_alive = False
+            check_nodes.finish.set()
             client.send( (0, 'Finishing qpy-multiuser.'))
             client.close()
             break
@@ -613,46 +634,31 @@ def handle_client( ):
             continue
 
 
-# Attempt to connect to qpy-multiuser
-class check_outsiders( threading.Thread):
+# Check nodes temporarily
+class CHECK_NODES( threading.Thread):
     def __init__( self):
         threading.Thread.__init__( self)
-        self.command = "top -b -n1 | sed -n '8,50p'"
+        self.finish = threading.Event()
 
     def run( self):
         global N_outsiders
-        while outsiders_alive:
+
+        while not self.finish.is_set():
             for node in nodes:
-                try:
-                    ssh = subprocess.Popen(["ssh", node, self.command],
-                                           shell=False,
-                                           stdout=subprocess.PIPE,
-                                           stderr=subprocess.PIPE)
+                nodes_check_lock.acquire()
+                N_outsiders -= nodes[node].n_outsiders
+                nodes[node].outsiders()
+                N_outsiders += nodes[node].n_outsiders
+                nodes[node].memory()
+                nodes_check_lock.release()
 
-                    std_outerr = ssh.communicate()
-                    ssh_stdout = std_outerr[0].split( '\n')
-                    n_jobs = 0
-                    for line in ssh_stdout:
-                        line_spl = line.split()
-                        if float(line_spl[8].replace(',','.')) > 50:
-                            n_jobs += 1
-                        else:
-                            break
+            sleep( nodes_check_time)
 
-                    outsiders_lock.acquire()
-                    N_outsiders -= nodes[node].n_outsiders
-                    nodes[node].n_outsiders = max(n_jobs - nodes[node].n_used_cores, 0)
-                    N_outsiders += nodes[node].n_outsiders
-                    outsiders_lock.release()
-                except:
-                    # TODO: print exception in a log file
-                    pass
-
-            sleep( check_outsiders_time)
 
 load_nodes()
-c = check_outsiders()
-c.daemon = True
-c.start()
 
-handle_client()
+check_nodes = CHECK_NODES()
+check_nodes.daemon = True
+check_nodes.start()
+
+handle_client( check_nodes)
