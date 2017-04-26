@@ -30,7 +30,7 @@ tutorial_file = qpy_source_dir + '/tutorial'
 scr_dir = '/scratch/' + user
 
 qpy_finish_command = [qpy_source_dir + 'qpy', 'finish', '>', '/dev/null', '2>', '/dev/null']
-qpy_master_command = ['python', qpy_source_dir + 'qpy_master.py', '>', '/dev/null', '2>', '/dev/null']
+qpy_master_command = ['python', qpy_source_dir + 'qpy-master.py', '>', '/dev/null', '2>', '/dev/null']
 
 
             
@@ -397,26 +397,21 @@ class UserAction(object):
 
 @parser.register_user_action("tutorial")
 class Tutorial(UserAction):
-    option = JOBTYPE_TUTORIAL
     @property
     def arguments(self):
         return None
     def execute(self):
-        pattern = " ".join(self.args).replace('"','') #basic injection hindrance
-        formatstr = "less "
-        if len(self.args)>0:
-            formatstr += '--pattern "# {pattern}" ' if pattern in keywords else ' --pattern"{pattern}" '
-        formatstr += tutorial_file
-        print formatstr
+        command = ["less"]
+        if len(self.args)==1:
+           pattern = self.args[0]
+           command += ['--pattern',"# {pattern}".format(pattern=pattern)] if pattern in keywords else ['--pattern','{pattern} '.format(pattern=pattern)]
+        command += [tutorial_file]
         try:
-            # I tried everything to make this working with shell = False: no success
-            subprocess.call(formatstr.format(pattern=pattern) ,
-                                shell = True)
+            subprocess.call(command ,
+                                shell = False)
         except:
             sys.exit( 'Error when loading the tutorial.')
         exit()
-
-
 #############
 class SendingAction(UserAction):
     """ Base class for all actions that send something to the server
@@ -627,7 +622,7 @@ class TestPrinter(ut.TestCase):
         """ on tty output the colour are retained"""
         out = self.MockOutStream(True)
         Printer(out).print_('\033[1mdfa\033[0m')
-        self.assertEqual(out.msg , "\033[0mdfa")
+        self.assertEqual(out.msg , "\033[1mdfa\033[0m")
 
     def test_nottty(self):
         """for non tty output the colour escape sequences are removed"""
@@ -696,8 +691,7 @@ class TestSender(ut.TestCase):
 
 
 if __name__ == "__main__":
-    test = False
-    if not test: 
+# to test, uncomment the following two line
+#       collector.run()
+#       sys.exit()
         parser.parse(sys.argv)
-    else:
-        collector.run()
