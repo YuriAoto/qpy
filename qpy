@@ -114,7 +114,6 @@ def jobkill(jobid):
 
     shell = BashAdapter()
     process_list = shell.get_active_processes(user=user)
-    print [process.command for process in process_list] 
     child_list = [ find_job(jobid, process_list)] #initialize the child list with origin process
     kill_list = []
     while child_list != []:
@@ -263,7 +262,6 @@ class Parser(object):
     
     def parse(self, args=sys.argv):
         """ parses some arguments and creates and executes the assigned command"""
-        print "got: ",sys.argv
         try:
             actioncls=self._get_action( args[1:])
         except (IndexError, KeyError) :
@@ -273,10 +271,7 @@ class Parser(object):
             sys.exit(action.execute())
     
     def _get_action(self, args):
-        print "args",args
         if args[0][0:2] == "--":
-            print args[0][2:]
-            print self.server_actions
             return self.server_actions[args[0][2:]]
         else:
             return self.user_actions[args[0]]
@@ -316,7 +311,6 @@ class Jobkill(ServerAction):
     """
     documentation=ActionDocumentation(arguments=['<JOBID> a qpy-jobid'],description="someone forgot to add a description")
     def execute(self):
-        print self.args
         job_id = int(self.args[0])
         jobkill(job_id)
         return 0
@@ -362,9 +356,13 @@ class SendingAction(UserAction):
             self.printer.print_(master_message)
         return 0
                 
-        
-        
+           
+         
 
+@parser.register_user_action("status")
+class Status(SendingAction):
+    option = JOBTYPE_STATUS
+    arguments = ()
 @parser.register_user_action("sub")        
 class Submit(SendingAction):
     documentation = ActionDocumentation(arguments= "<cmd1> <cmd2> ... ; the parts of a commando to be submitted",
