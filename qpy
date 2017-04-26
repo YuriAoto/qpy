@@ -2,15 +2,13 @@
 # qpy - queueing manager for qpy
 #
 # 29 May 2015 - Pradipta and Yuri
-from multiprocessing.connection import Client
 from time import sleep
 import os
 import sys
 import subprocess
 import re
-import threading
 from qpy_general_variables import *
-
+from qpy_connection import ConnectionConfig,FileAccessor,Sender
 import unittest as ut
 import test_util
 
@@ -24,7 +22,6 @@ if (test_run):
 else:
     qpy_dir = os.path.expanduser( '~/.qpy/')
 port_file = qpy_dir + '/port'
-key_file = qpy_dir + '/conn_key'
 tutorial_file = qpy_source_dir + '/tutorial'
 
 scr_dir = '/scratch/' + user
@@ -89,7 +86,7 @@ class BashAdapter(object):
             pass
         sleep(1)
         try:
-            subprocess.check_output(['kill','-9', str(pid)])
+            subprocess.check_call(['kill','-9', str(pid)])
         except subprocess.CalledProcessError as ex:
             pass
 
@@ -110,14 +107,14 @@ def jobkill(jobid):
     """ kills a job with a given Jobid"""
     def find_job( jobid, proc_list):
         for process in proc_list:
-            if re.search('export QPY_JOB_ID={job_id};'.format(job_id=str(jobid)),
+            if re.search('export QPY_JOB_ID={job_id}'.format(job_id=str(jobid)),
                          process.command)is not None:
                 return process
         raise Exception("Job {job_id} NotFound".format(job_id=str(jobid) ))
 
     shell = BashAdapter()
     process_list = shell.get_active_processes(user=user)
-
+    print [process.command for process in process_list] 
     child_list = [ find_job(jobid, process_list)] #initialize the child list with origin process
     kill_list = []
     while child_list != []:
@@ -257,15 +254,16 @@ class Parser(object):
         """
         def register_core(cls):
             if isinstance(options, str):
-                self.server_actions[str] = cls
+                self.server_actions[options] = cls
             else:
                 for option in options:
-                    self.server_action[str]=cls
+                    self.server_action[option]=cls
             return cls
         return register_core
     
     def parse(self, args=sys.argv):
         """ parses some arguments and creates and executes the assigned command"""
+        print "got: ",sys.argv
         try:
             actioncls=self._get_action( args[1:])
         except (IndexError, KeyError) :
@@ -275,79 +273,20 @@ class Parser(object):
             sys.exit(action.execute())
     
     def _get_action(self, args):
-        if args[0] == "--option":
-            return self.server_actions[args[1]]
+        print "args",args
+        if args[0][0:2] == "--":
+            print args[0][2:]
+            print self.server_actions
+            return self.server_actions[args[0][2:]]
         else:
             return self.user_actions[args[0]]
-
-def retrieve_port(port_file=port_file):
-    with open(port_file,'r') as f:
-        return int( f.read())
-
-def retrieve_conn_key(key_file=key_file):
-    with open( key_file, 'r') as f:
-        return  f.read()
-
-class ConnectionThread(threading.Thread):
-    """ Threaded connector to the server"""
-    def __init__(self, clientfactory):
-        """ Takes a clientfactory, which will be called without arguments to create a client"""
-        threading.Thread.__init__(self)
-        self.conn = None
-        self.done = threading.Event()
-        self.clientfactory =clientfactory
-
-    def run(self):
-        """ call start if you want to run it."""
-        try:
-            self.conn = self.clientfactory()
-            self.done.set()
-        except:
-            self.done.clear()
-
-class Sender(object):
-    """ encapsulates the commutincation protokoll to the server.
-
-    usage:
-    >> with Sender(...) as sender:
-    >>      ret_msg = sender.send(msg)
-    """
-    def __init__( self, address, port, conn_key, connectionthread_factory= ConnectionThread, client_factory=Client):
-        self._thread = connectionthread_factory(lambda:client_factory( ( address, port), authkey = conn_key))
-        self._thread.daemon = True
-
-    def __enter__(self):
-            self._thread.start()
-            self._thread.done.wait(3.0)
-            if ( not (self._thread.done.is_set())):
-                    raise SendingError("Connection timed out. Are you sure that qpy-master is running?")
-            return self
-            
-    def send (self , msg):
-        self._thread.conn.send(msg)
-        return self._thread.conn.recv()
-
-    def __exit__(self, *args):
-        self._thread.conn.close()
-
-
-port = None
-conn_key = None
-try:
-    port = retrieve_port()
-    conn_key = retrieve_conn_key()
-except:
-    pass
-
-address = 'localhost'
-
 
 
 
 #########################################################################################################################################################################
 #                              actual actions
 
-parser = Parser(Sender( address,port,conn_key),
+parser = Parser(Sender.from_config( ConnectionConfig(),FileAccessor( ConnectionConfig()) ),
                     Printer(sys.stdout),
                     BashAdapter())
 
@@ -358,10 +297,12 @@ class ActionDocumentation(object):
         
 class Action(object):
     """ Base class for any public action"""
-    def __init__(self, sender, printer, shell, arguments = sys.argv[2:]):
-        pass
+    def __init__(self, sender, printer, shell, arguments=sys.argv[2:] ):
+        self.sender = sender
+        self.printer = printer
+        self.shell = shell
+        self.args = arguments
 
-#####################################################
 class ServerAction(Action):
     """ base class for any action the qpy-master might trigger"""
     pass
@@ -375,18 +316,14 @@ class Jobkill(ServerAction):
     """
     documentation=ActionDocumentation(arguments=['<JOBID> a qpy-jobid'],description="someone forgot to add a description")
     def execute(self):
+        print self.args
         job_id = int(self.args[0])
         jobkill(job_id)
         return 0
 
 ######################################################
-class UserAction(object):
+class UserAction(Action):
     option = None
-    def __init__(self, sender, printer, shell, arguments=sys.argv[2:] ):
-        self.sender = sender
-        self.printer = printer
-        self.shell = shell
-        self.args = arguments
         
     
     def execute(self):
@@ -558,19 +495,6 @@ class Finish(SendingAction):
             
 
 
-def start_master_driver():
-    sys.stdout.write( "Starting qpy-master driver.\n")
-    sleep( 1)
-    subprocess.Popen( qpy_master_command, shell = False)
-    exit()
-
-def retrieve_port(port_file=port_file):
-    with open(port_file,'r') as f:
-        return int( f.read())
-
-def retrieve_conn_key(key_file=key_file):
-    with open( key_file, 'r') as f:
-        return  f.read()
 
 
     
@@ -635,60 +559,6 @@ class TestPrinter(ut.TestCase):
         out = self.MockOutStream(False)
         Printer(out).print_('\033[30mmfa\033[0m')
         self.assertEqual(out.msg , "mfa")
-
-@collector.collect
-class TestSender(ut.TestCase):
-    class MockConnectionThread(object):
-        class MockEvent(object):
-            def __init__(self):
-                self.fl = False
-                self._err = False
-
-            def wait(self, timeout):
-                self.fl = not self._err
-
-            def is_set(self):
-                return self.fl
-
-            def set(self):
-                self.fl=True
-
-            def clear(self):
-                self.fl =False
-                
-        def __init__(self,clientfactory):
-            self.conn = None
-            self.done = self.MockEvent()
-            self.factory = clientfactory
-            self.daemon = False
-            self._err = False
-            
-        def start(self):
-            self.conn = self.factory()
-            self.done._err = self._err
-
-    class MockClient(object):
-        master_msg = "This is your master"
-        def __init__(self, *args,**kwargs):
-            pass
-        
-        def send(self, msg):
-            self._msg = msg
-            
-        def recv(self):
-            return self.master_msg
-        def close(self):
-            self._is_closed = True
-        
-        
-        
-    def test_successfull(self):
-        with Sender("localhost", 1123, "asdf", self.MockConnectionThread, self.MockClient) as sender:
-            self.assertEqual(sender.send((2,"go there")), "This is your master")
-        self.assertTrue(sender._thread.daemon )
-        self.assertTrue(sender._thread.conn._is_closed)
-            
-
 
 if __name__ == "__main__":
 # to test, uncomment the following two line
