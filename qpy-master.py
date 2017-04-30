@@ -249,6 +249,27 @@ def send_multiuser_arguments( option, arguments):
     return msg_back
 
 
+# Check if the <command> sent by ssh to <address> return the <exp_out> message without errors
+def is_ssh_working( address, command, exp_out):
+    ssh = subprocess.Popen(["ssh", "-o", "StrictHostKeyChecking=no", address, command],
+                             shell=False,
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
+    std_outerr = ssh.communicate()
+    if (verbose):
+        print "is_ssh_working stdout:", repr(std_outerr[0])
+        print "is_ssh_working stderr:", repr( std_outerr[1])
+    error = False
+    for i in ssh_stderr:
+        if ('No route to host' in i or 'Connection refused' in i or 'Could not resolve hostname' in i):
+            error = True
+    success = False
+    for i in ssh_stdout:
+        if (exp_out in i):
+            success = True
+    return success and not( error)
+
+
 def get_plural( word_s, stuff):
     """ Cosmetic function: get the plural
 
