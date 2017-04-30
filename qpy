@@ -2,17 +2,15 @@
 # qpy - queueing manager for qpy
 #
 # 29 May 2015 - Pradipta and Yuri
+from multiprocessing.connection import Client
 from time import sleep
 import os
 import sys
 import subprocess
 import re
+import threading
 from qpy_general_variables import *
-from qpy_connection import ConnectionConfig,FileAccessor,Sender
-import unittest as ut
-import test_util
 
- 
 qpy_source_dir = os.path.dirname( os.path.abspath( __file__)) + '/'
 test_run = os.path.isfile( qpy_source_dir + 'test_dir')
 home_dir = os.environ['HOME']
@@ -22,73 +20,13 @@ if (test_run):
 else:
     qpy_dir = os.path.expanduser( '~/.qpy/')
 port_file = qpy_dir + '/port'
+key_file = qpy_dir + '/conn_key'
 tutorial_file = qpy_source_dir + '/tutorial'
 
 scr_dir = '/scratch/' + user
 
 qpy_finish_command = [qpy_source_dir + 'qpy', 'finish', '>', '/dev/null', '2>', '/dev/null']
 qpy_master_command = ['python', qpy_source_dir + 'qpy-master.py', '>', '/dev/null', '2>', '/dev/null']
-
-
-            
-            
-class SendingError(Exception):
-    pass
-
-
-
-
-class ProcessHandle(object):
-    """ internal representation of a process
-
-    If we kill a job, we also want to kill all children of this process
-    """
-    def __init__(self, pid, cmd, parent_pid):
-        self._pid = pid
-        self.command = cmd
-        self._parent_pid = parent_pid
-
-    def is_parent_of(self, other):
-        """ probes if self is the parent process of the other process"""
-        return self._pid == other._parent_pid
-
-
-    
-class BashAdapter(object):
-    """ contains all interactions with the shell 
-    """
-
-    def get_active_processes(self, user):
-        """ Retrieves all active processes for a  user
-        
-        @param user[in] name of the user for which  processes are retrieved
-        @return a list of ProcessHandles 
-        @raises a subprocess.CalledProcessError if the retival fails
-        """
-        job_ps = subprocess.Popen(["ps", "-fu", str(user)],
-                                  shell = False,
-                                  stdout = subprocess.PIPE,
-                                  stderr = subprocess.PIPE)
-        line_tuples = [proc.split(None,7)  for proc in job_ps.stdout.readlines()]
-        return [ ProcessHandle(proc_tuple[1],proc_tuple[-1],proc_tuple[2]) for proc_tuple in  line_tuples]
-
-
-    def kill_process(self, proc):
-        """ ends a process
-
-        @param proc a ProcessHandle
-        """
-        
-        pid = proc._pid
-        try:
-            subprocess.check_call(['kill', str(pid)])
-        except subprocess.CalledProcessError as ex:
-            pass
-        sleep(1)
-        try:
-            subprocess.check_call(['kill','-9', str(pid)])
-        except subprocess.CalledProcessError as ex:
-            pass
 
 # Return a list with all children and grand-children from pid
 # The dict parent_of shows the parents of all processes
@@ -103,28 +41,35 @@ def get_all_children( pid, parent_of):
     all_children.extend( cur_child)
     return all_children
 
-def jobkill(jobid):
-    """ kills a job with a given Jobid"""
-    def find_job( jobid, proc_list):
-        for process in proc_list:
-            if re.search('export QPY_JOB_ID={job_id}'.format(job_id=str(jobid)),
-                         process.command)is not None:
-                return process
-        raise Exception("Job {job_id} NotFound".format(job_id=str(jobid) ))
+# '--options' are to be called only by qpy-master, not by the users
+if (len( sys.argv) > 1):
+    if (sys.argv[1] == '--jobkill'):
+        job_id = sys.argv[2]
+        command = 'ps -fu ' + user
+        kill_job_ps = subprocess.Popen(command,
+                                       shell = True,
+                                       stdout = subprocess.PIPE,
+                                       stderr = subprocess.PIPE)
+        ps_out = kill_job_ps.stdout.readlines()
 
-    shell = BashAdapter()
-    process_list = shell.get_active_processes(user=user)
-    child_list = [ find_job(jobid, process_list)] #initialize the child list with origin process
-    kill_list = []
-    while child_list != []:
-        current = child_list.pop()
-        child_list.extend([ job for job in process_list if current.is_parent_of(job)])
-        kill_list.append(current)
-    for job in reversed(kill_list):
-        shell.kill_process(job)
-        print 'Killing PID ' + job._pid
+        # Get calling PID and parents associations:
+        grand_PID = ''
+        parents = {}
+        for l in ps_out:
+            new_pid = l.split()
+            parents[new_pid[1]] = new_pid[2]
+            re_res = re.search('export QPY_JOB_ID=' + job_id + ';', l)
+            if (re_res):
+                grand_PID = new_pid[1]
 
+        pid_kill = get_all_children( grand_PID, parents)
+        pid_kill.reverse()
+        for i in pid_kill:
+            kill_job = subprocess.call(['kill', '-9', i])
+            print 'Killing PID ' + i
 
+        exit()
+# end of '--options'
 
 
 # Return a list of integers, described by the string X, as following:
@@ -158,267 +103,93 @@ keywords={'sub':       (JOBTYPE_SUB       , 'Submit a job. Arguments: the job co
           'notes':     (JOBTYPE_NOTE      , 'Add and read notes. Arguments: ID and the note')
           }
 
-def usage_message(keywords):
-    def get_max_wordlength(words):
-        length = 0
-        for word in words:
-            length = max(length, len(word))
-        return length
-    
-    length = get_max_wordlength(keywords)+1
-    format_spc = '{0:' + str( length) + 's}'
-    usage_msg =  'Usage: {prog} <option> [<arguments>].\n'.format(prog=sys.argv[0])
+
+try:
+    option = keywords[sys.argv[1]][0]
+except:
+    str_len = 0
+    for opt in keywords:
+        if (str_len < len( opt)):
+            str_len = len( opt)
+    format_spc = '{0:' + str( str_len+1) + 's}'
+    usage_msg =  'Usage: ' + sys.argv[0] +  ' <option> [<arguments>].\n'
     usage_msg += 'Options:'
     for opt in keywords:
-        usage_msg += '\n {option} {usage}'.format(option=format_spc.format( opt+':'),
-                                                  usage= keywords[opt][1] )
-    return usage_msg +"\n"
+        usage_msg += '\n  ' + format_spc.format( opt+':') + ' ' + keywords[opt][1]
+    sys.exit( usage_msg)
 
+start_qpy_master = option == JOBTYPE_RESTART
+if (start_qpy_master):
+    option = JOBTYPE_FINISH
 
-def jobpattern_to_list(arguments,allowed_statuses):
-    ret = []
-    for argument in arguments:
-        try:
-            ret.extend(string_to_int_list(argument))
-        except:
-            if (argument == 'all'
-                    or argument in allowed_statuses):
-               ret.append(argument)
+# Get arguments, according to the option
+arguments = ()
+
+# Submit a job
+if (option == JOBTYPE_SUB):
+    job = ''
+    for i in sys.argv[2:]:
+        job += ' ' + i
+    arguments = [job, os.getcwd()]
+
+# Check jobs
+if (option == JOBTYPE_CHECK):
+    arguments = {}
+    for x in sys.argv[2:]:
+        if x in job_status:
+            if ('status' in arguments):
+                arguments['status'].append( x)
             else:
-                sys.exit('Range with wrong format or invalid status: ' + argument)
-    return list(set(ret))
-
-class Printer(object):
-    """ Prints to an output stream 
-
-    responsible for removing colouring if a master_string is printed to a file
-    """
-    def __init__(self, out):
-        """ 
-        
-        takes an output stream (with a write method and a isatty method)
-        """
-        self.out = out
-
-    def print_(self, msg):
-        """ prints to the output stream
-
-        """
-        if not self.out.isatty():
-            ansi_escape = re.compile(r'\x1b[^m]*m')
-            msg = ansi_escape.sub('', msg)
-        self.out.write(msg)
-
-
-class Parser(object):
-    """ Registers actions and invokes them based on the commandline option
-
-    """
-    def __init__(self, sender, printer, shell):
-        """ 
-        @param sender a connector to the server
-        @param printer prints to output
-        @param shell shell adapter
-        """
-        self.user_actions = {}
-        self.server_actions = {}
-        self.printer = printer
-        self._args = (sender,printer,shell)
-
-    def register_user_action(self, options):
-        """ decorator for actions that may be taken by the user.
-
-        usage:
-        >> @parser.register_user_action("kill")
-        >> class Kill...
-
-        >> @parser.register_user_action(["sub","submit"])
-        >> class Submit... 
-
-        """
-        def register_core(cls):
-            if isinstance(options, str):
-                self.user_actions[options] = cls
-            else:
-                for option in options:
-                    self.user_action[options]=cls
-            return cls
-        return register_core
-
-    def register_server_action(self, options):
-        """ Decorator for actions that may be taken by the server.
-
-        >> @parser.register_server_action("jobkill")
-        >> class Jobkill...
-        """
-        def register_core(cls):
-            if isinstance(options, str):
-                self.server_actions[options] = cls
-            else:
-                for option in options:
-                    self.server_action[option]=cls
-            return cls
-        return register_core
-    
-    def parse(self, args=sys.argv):
-        """ parses some arguments and creates and executes the assigned command"""
-        try:
-            actioncls=self._get_action( args[1:])
-        except (IndexError, KeyError) :
-            self.printer.print_(usage_message(keywords))
+                arguments['status'] = [x]
         else:
-            action= actioncls(*self._args, arguments=args[2:])
-            sys.exit(action.execute())
-    
-    def _get_action(self, args):
-        if args[0][0:2] == "--":
-            return self.server_actions[args[0][2:]]
-        else:
-            return self.user_actions[args[0]]
-
-
-
-#########################################################################################################################################################################
-#                              actual actions
-
-parser = Parser(Sender.from_config( ConnectionConfig(),FileAccessor( ConnectionConfig()) ),
-                    Printer(sys.stdout),
-                    BashAdapter())
-
-class ActionDocumentation(object):
-    def __init__(self ,  arguments=[""], description=""):
-        self.arguments = arguments
-        self.description = description
-        
-class Action(object):
-    """ Base class for any public action"""
-    def __init__(self, sender, printer, shell, arguments=sys.argv[2:] ):
-        self.sender = sender
-        self.printer = printer
-        self.shell = shell
-        self.args = arguments
-
-class ServerAction(Action):
-    """ base class for any action the qpy-master might trigger"""
-    pass
-
-
-@parser.register_server_action("jobkill")
-class Jobkill(ServerAction):
-    """ kills a job with a given jobid and all its child processes
-
-    note: jobid is an qpy-jobid not a process id
-    """
-    documentation=ActionDocumentation(arguments=['<JOBID> a qpy-jobid'],description="someone forgot to add a description")
-    def execute(self):
-        job_id = int(self.args[0])
-        jobkill(job_id)
-        return 0
-
-######################################################
-class UserAction(Action):
-    option = None
-        
-    
-    def execute(self):
-        NotImplemented
-
-
-
-
-@parser.register_user_action("tutorial")
-class Tutorial(UserAction):
-    @property
-    def arguments(self):
-        return None
-    def execute(self):
-        command = ["less"]
-        if len(self.args)==1:
-           pattern = self.args[0]
-           command += ['--pattern',"# {pattern}".format(pattern=pattern)] if pattern in keywords else ['--pattern','{pattern} '.format(pattern=pattern)]
-        command += [tutorial_file]
-        try:
-            subprocess.call(command ,
-                                shell = False)
-        except:
-            sys.exit( 'Error when loading the tutorial.')
-        exit()
-#############
-class SendingAction(UserAction):
-    """ Base class for all actions that send something to the server
-
-    child classes need to implement the arguments and option property
-    """
-    def execute(self):
-        arguments = self.arguments
-        with self.sender as sender:
-            master_message = sender.send( (self.option, arguments))
-            self.printer.print_(master_message)
-        return 0
-                
-           
-         
-
-@parser.register_user_action("status")
-class Status(SendingAction):
-    option = JOBTYPE_STATUS
-    arguments = ()
-@parser.register_user_action("sub")        
-class Submit(SendingAction):
-    documentation = ActionDocumentation(arguments= "<cmd1> <cmd2> ... ; the parts of a commando to be submitted",
-                                            description="Submits an commando for execution to qpy-master")
-    option = JOBTYPE_SUB
-    @property
-    def arguments(self):
-        job = " ".join(self.args)
-        return [job, os.getcwd()]
-
-
-@parser.register_user_action("check")
-class Check(SendingAction):
-    option = JOBTYPE_CHECK
-    @property
-    def arguments(self):
-        arguments = {}
-        for x in self.args :
-            if x in job_status:
-                arguments.setdefault("status",[]).append(x)
+            try:
+                new_jobids = string_to_int_list( x)
+            except:
+                sys.exit( 'Unknown pattern for checking jobs: ' + x)
+            if ('job_id' in arguments):
+                arguments['job_id'].extend( new_jobids)
             else:
-                try:
-                    new_jobids = string_to_int_list( x)
-                except:
-                    sys.exit( 'Unknown pattern for checking jobs: ' + x)
-                else:
-                    arguments.setdefault("job_id",[]).extend(new_jobids)
-        return arguments
-                    
+                arguments['job_id'] = new_jobids
 
-@parser.register_user_action("kill")
-class Kill(SendingAction):
-    option = JOBTYPE_KILL
-    killable_statuses = ('queue', 'running')
-    @property
-    def arguments(self):
-        return jobpattern_to_list(self.args, self.killable_statuses)
+# Config
+elif (option == JOBTYPE_CONFIG):
+    if (len( sys.argv) == 4):
+        arguments = ( sys.argv[2], sys.argv[3])
+    elif (len( sys.argv) > 2 and sys.argv[2] == 'coloursScheme'):
+        if( len( sys.argv) == 8):
+            arguments = ( sys.argv[2], sys.argv[3:])
+        else:
+            sys.exit( 'Give five colours for coloursScheme')
+    elif (len( sys.argv) != 2):
+        sys.exit( 'Give, optionally, a pair <key> <value> for the config option')
 
-@parser.register_user_action("clean")
-class Clean(SendingAction):
-    option = JOBTYPE_CLEAN
-    cleanable_statuses = ( 'done', 'killed', 'undone')
-    @property
-    def arguments(self):
-        return jobpattern_to_list(self.args, self.cleanable_statuses)
+# Kill jobs or clean list
+elif (option == JOBTYPE_KILL or option == JOBTYPE_CLEAN):
+    if option == JOBTYPE_KILL:
+        status_bound = (0,2)
+    else:
+        status_bound = (2,5)
+    arguments = []
+    for x in sys.argv[2:]:
+        try:
+            new_range = string_to_int_list( x)
+            arguments.extend( new_range)
+        except:
+            if (x == 'all' or x in job_status[status_bound[0]:status_bound[1]]):
+                arguments.append( x)
+            else:
+                sys.exit( 'Range with wrong format or invalid status: ' + x)
 
-@parser.register_user_action("ctrlQueue")
-class ControlQueue(SendingAction):
-    option = JOBTYPE_CTRLQUEUE
-    @property
-    def arguments(self):
-        if len(self.args)<1:
-            sys.exit('Give an action for the queue.')
-        elif (self.args[0] == 'jump'):
+    arguments = list( set( arguments))
+
+# Control queue
+elif (option == JOBTYPE_CTRLQUEUE):
+    if (len( sys.argv) < 3):
+        sys.exit( 'Give the queue control type.')
+    else:
+        if (sys.argv[2] == 'jump'):
             new_range = []
-            for x in self.args[1:-1]:
+            for x in sys.argv[3:-1]:
                 try:
                     new_range.extend( string_to_int_list( x))
                 except:
@@ -426,76 +197,48 @@ class ControlQueue(SendingAction):
             if (not( new_range)):
                     sys.exit( 'Give the jobs to change position.')
             try:
-                pos = int( self.args[-1])
+                pos = int( sys.argv[-1])
             except:
-                if (self.args[-1] == 'begin'):
+                if (sys.argv[-1] == 'begin'):
                     pos = 0
-                elif (self.args[-1] == 'end'):
+                elif (sys.argv[-1] == 'end'):
                     pos = -1
                 else:
-                    sys.exit( 'Invalid jump position: ' + self.args[-1])
-            return ('jump', new_range, pos)
+                    sys.exit( 'Invalid jump position: ' + sys.argv[-1])
+            arguments = ('jump', new_range, pos)
 
         else:
-            return self.args
-            
+            arguments = sys.argv[2:]
 
-@parser.register_user_action("notes")
-class Notes(SendingAction):
-    option = JOBTYPE_NOTE
-    @property
-    def arguments(self):
-        if len(self.args) <1:
-            return ()
-        elif(len( self.args) == 1):
-            return self.args
-        else:
-            return [self.args[0]," ".join(self.args[1:])]
+# Control queue
+elif (option == JOBTYPE_NOTE):
+    if (len( sys.argv) < 3):
+        arguments = ()
+    elif (len( sys.argv) == 3):
+        arguments = [ sys.argv[2]]
+    else:
+        arguments = [ sys.argv[2], ' '.join( sys.argv[3:])]
 
-@parser.register_user_action("config")
-class Config( SendingAction):
-    option = JOBTYPE_CONFIG
-    @property
-    def arguments(self):
-        if len(self.args) == 2:
-            return (self.args[0],self.args[1])
-        elif len(self.args)>0 and self.args[0] == 'coloursScheme':
-            if( len( self.args) == 6):
-                return ( self.args[0], self.args[1:])
-            else:
-                sys.exit( 'Give five colours for coloursScheme')
-        elif (len(self.args)) != 0:
-            sys.exit( 'Give, optionally, a pair <key> <value> for the config option')
-        else:
-            return ()
-        
-
-@parser.register_user_action("restart")
-class Restart(SendingAction):
-    option = JOBTYPE_FINISH
-    @property
-    def arguments(self):
-        return ()
-    def execute(self):
-        try:
-            SendingAction.execute(self)
-        except SendingError:    
-            os.remove( port_file)
-        finally:
-            start_master_driver()
-
-@parser.register_user_action("finish")
-class Finish(SendingAction):
-    option = JOBTYPE_FINISH
-    @property
-    def arguments(self):
-        return ()
-            
-
-
-
-
+# The qpy tutorial
+elif (option == JOBTYPE_TUTORIAL):
     
+    pattern = ''
+    for i in sys.argv[2:3]:
+        pattern += i
+    for i in sys.argv[3:]:
+        pattern += ' ' + i
+
+    if (pattern in keywords):
+        pattern = '--pattern "# ' + pattern + '"'
+    elif (pattern):
+        pattern = '--pattern "' + pattern + '"'
+
+    command = 'less '  + pattern + ' ' + tutorial_file
+    try:
+        subprocess.call( command, shell = True)
+    except:
+        sys.exit( 'Error when loading the tutorial.')
+    exit()
 
 
 def kill_master_instances():
@@ -520,46 +263,61 @@ def kill_master_instances():
 def start_master_driver():
     sys.stdout.write( "Starting qpy-master driver.\n")
     sleep( 1)
+#    kill_master_instances()
     subprocess.Popen( qpy_master_command, shell = False)
     exit()
 
 
 
-####################################################################################################
-#                   TestClasses
-collector = test_util.TestCollector()
+try:
+    f = open( port_file, 'r')
+    port = int( f.read())
+    f.close()
+    f = open( key_file, 'r')
+    conn_key = f.read()
+    f.close()
+except:
+    if (start_qpy_master):
+        start_master_driver()
+    else:
+        sys.exit( 'Problem to get the connection information. Are you sure that qpy-master is running?')
 
-@collector.collect
-class TestPrinter(ut.TestCase):
-    class MockOutStream(object):
-        def __init__(self, tty =True):
-            self.tty = tty
-        def write(self,message):
-            self.msg = message
+address = 'localhost'
 
-        def isatty(self):
-            return self.tty
+class try_connection( threading.Thread):
+    def __init__( self):
+        threading.Thread.__init__( self)
+        self.conn = None
+        self.done = threading.Event()
 
-    def test_tty(self):
-        """ on tty output the colour are retained"""
-        out = self.MockOutStream(True)
-        Printer(out).print_('\033[1mdfa\033[0m')
-        self.assertEqual(out.msg , "\033[1mdfa\033[0m")
+    def run( self):
+        try:
+            self.conn = Client( (address, port), authkey=conn_key)
+            self.done.set()
+        except:
+            self.done.clear()
 
-    def test_nottty(self):
-        """for non tty output the colour escape sequences are removed"""
-        out = self.MockOutStream(False)
-        Printer(out).print_('\033[40mdfa\033[0m')
-        self.assertEqual(out.msg , "dfa")
-        
-    def test_nottty_beginm(self):
-        """after an escape sequence the word may begin with a non removed m"""
-        out = self.MockOutStream(False)
-        Printer(out).print_('\033[30mmfa\033[0m')
-        self.assertEqual(out.msg , "mfa")
+M = try_connection()
+M.daemon = True
+M.start()
+M.done.wait( 3.0)
+if (not( M.done.is_set())):
+    if (start_qpy_master):
+        os.remove( port_file)
+        start_master_driver()
+    sys.exit( 'Time for connection exceeded. Are you sure that qpy-master is running?')
 
-if __name__ == "__main__":
-# to test, uncomment the following two line
-#       collector.run()
-#       sys.exit()
-        parser.parse(sys.argv)
+conn = M.conn
+conn.send( (option, arguments))
+try:
+    ansi_escape = re.compile(r'\x1b[^m]*m')
+    master_msg = conn.recv()
+    if (not( sys.stdout.isatty())):
+        master_msg = ansi_escape.sub('', master_msg)
+    sys.stdout.write( master_msg)
+except:
+    sys.exit( 'Problem when getting message from qpy-master. Your qpy-master might be broken.\nTry to run again or contact the qpy-team.')
+conn.close()
+
+if (start_qpy_master):
+    start_master_driver()
