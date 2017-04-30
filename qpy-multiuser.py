@@ -39,7 +39,7 @@ N_outsiders = 0
 
 nodes_check_lock = threading.RLock()
 nodes_check_alive = True
-nodes_check_time = 60
+nodes_check_time = 300
 
 multiuser_address = 'localhost'
 multiuser_key = 'zxcvb'
@@ -60,6 +60,7 @@ verbose = options.verbose
 class NODE():
     def __init__( self, name, max_cores):
         self.name = name
+        self.is_up = self.is_ssh_working()
         self.max_cores = max_cores
         self.n_used_cores = 0
         self.n_outsiders = 0
@@ -67,8 +68,22 @@ class NODE():
         self.total_mem = 0
         self.free_mem = 0
         self.free_mem_real = 0
-        self.memory()
-        self.free_mem = self.total_mem - 5.0
+
+        if (self.is_up):
+            self.memory()
+            self.free_mem = self.total_mem - 5.0
+
+    # Check if the <command> sent by ssh to <address> return the <exp_out> message without errors
+    def is_ssh_working( self):
+        ssh = subprocess.Popen(["ssh", "-o", "StrictHostKeyChecking=no", self.name, 'hostname'],
+                                 shell=False,
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE)
+        std_outerr = ssh.communicate()
+        out = std_outerr[0]
+        err = std_outerr[1]
+        return not ('No route to host' in err or 'Connection refused' in err or 'Could not resolve hostname' in err) and (self.name in out)
+
 
     # Get the really used memory
     def memory( self):
@@ -176,7 +191,9 @@ class USER():
                         best_free = free
             if (best_node == None):
                 for node in nodes_list:
-                    if (nodes[node].max_cores  - nodes[node].n_outsiders - nodes[node].n_used_cores >= num_cores and nodes[node].free_mem > mem):
+                    if (nodes[node].nodes[node] and
+                        nodes[node].max_cores  - nodes[node].n_outsiders - nodes[node].n_used_cores >= num_cores and
+                        nodes[node].free_mem > mem):
                         best_node = node
                         break
             nodes_check_lock.release()
@@ -466,41 +483,57 @@ def handle_client( check_nodes):
                 msg += '  free_mem        = ' + str( info.free_mem)        + '\n'
                 msg += '  free_mem_real   = ' + str( info.free_mem_real)   + '\n'
                 msg += '  pref_multicores = ' + str( info.pref_multicores) + '\n'
+                msg += '  is_up           = ' + str( info.is_up) + '\n'
             nodes_check_lock.release()
 
         # Show status
         # arguments = () or (user_name)
         elif (action_type == MULTIUSER_STATUS):
+
+            sep1 = '-'*60 + '\n'
+            sep2 = '='*60 + '\n'
+            headerN =  '                       cores              memory (GB)\n'
+            headerN += 'node                used  total      used     req   total\n'
+            headerU =  'user                using cores        queue size\n' + sep1
+
             nodes_ordered = []
             for node in nodes:
                 nodes_ordered.append( node)
             nodes_ordered.sort()
+
+            users_ordered = []
+            for user in users:
+                users_ordered.append( user)
+            users_ordered.sort()
+
             status = 0
 
             msgU = ''
-            format_spec = '{0:17s} {1:<5d}' + ' '*8 + '{2:<5d}\n'
-            for user, info in users.iteritems():
+            format_spec = '{0:22s} {1:<5d}' + ' '*13 + '{2:<5d}\n'
+            for user in users_ordered:
                 msgU += format_spec.format( user,
-                                            info.n_used_cores,
-                                            info.n_queue)
+                                            users[user].n_used_cores,
+                                            users[user].n_queue)
             if (msgU):
-                msgU = 'user' + ' '*10 + 'using cores' + ' '*3 + 'queue size\n' + '-'*50 + '\n' + msgU + '='*50 + '\n'
+                msgU = headerU + msgU + sep2
             else:
                 msgU = 'No users.\n'
 
             msgN = ''
-            format_spec = '{0:15s} {1:<5d} {2:<5d}' + ' '*2 + '{3:>7.1f} {4:>7.1f}\n'
+            format_spec = '{0:20s} {1:<5d} {2:<5d}' + ' '*2 + '{3:>7.1f} {4:>7.1f} {5:>7.1f}\n'
             nodes_check_lock.acquire()
             for node in nodes_ordered:
-                msgN += format_spec.format( node,
+                down=' (down)' if not( nodes[node].is_up) else ''
+                msgN += format_spec.format( node + down,
                                             nodes[node].n_used_cores + nodes[node].n_outsiders,
                                             nodes[node].max_cores,
+                                            nodes[node].total_mem - nodes[node].free_mem_real,
                                             nodes[node].total_mem - nodes[node].free_mem,
                                             nodes[node].total_mem)
             nodes_check_lock.release()
             if (msgN):
-                msgN = '-'*50 + '\n' + msgN + '='*50 + '\n'
-                msgN = ' '*18 + 'cores' + ' '*10 + 'memory (GB)\n' + 'node' + ' '*11 + 'used  total' + ' '*7 + 'used  total' + '\n' + msgN
+                msgN = sep1 + msgN + sep2
+                msgN = headerN + msgN
             else:
                 msgN = 'No nodes.\n'
 
@@ -634,6 +667,9 @@ def handle_client( check_nodes):
             continue
 
 
+
+
+
 # Check nodes temporarily
 class CHECK_NODES( threading.Thread):
     def __init__( self):
@@ -645,11 +681,16 @@ class CHECK_NODES( threading.Thread):
 
         while not self.finish.is_set():
             for node in nodes:
+
                 nodes_check_lock.acquire()
-                N_outsiders -= nodes[node].n_outsiders
-                nodes[node].outsiders()
-                N_outsiders += nodes[node].n_outsiders
-                nodes[node].memory()
+
+                nodes[node].is_up = nodes[node].is_ssh_working()
+                if (nodes[node].is_up):
+                    N_outsiders -= nodes[node].n_outsiders
+                    nodes[node].outsiders()
+                    N_outsiders += nodes[node].n_outsiders
+                    nodes[node].memory()
+
                 nodes_check_lock.release()
 
             sleep( nodes_check_time)
