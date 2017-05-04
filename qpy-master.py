@@ -408,7 +408,7 @@ class JOB():
         command += 'export QPY_NODE=' + str( self.node) + '; '
         command += 'export QPY_N_CORES=' + str( self.n_cores) + '; '
         command += 'export QPY_MEM=' + str( self.mem) + '; '
-        command += 'ulimit -Sv ' + str( self.mem*1048576) + '; '
+#        command += 'ulimit -Sv ' + str( self.mem*1048576) + '; '
         for sf in source_these_files:
            command += 'source ' + sf + '; '
         command += 'cd ' + self.info[1] + '; ' 
