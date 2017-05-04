@@ -482,7 +482,7 @@ class JOB():
         try:
             options,command = self.parser.parse_args( command.split())
             self.n_cores = int(options.cores)
-            self.mem = int(options.memory)
+            self.mem = float(options.memory)
             if (options.cpScript == None and options.orScript == None):
                 self.use_script_copy = use_script_copy
             elif (options.cpScript != None and options.orScript != None):

@@ -596,7 +596,7 @@ def handle_client( check_nodes):
                     if (len(job) > 3):
                         nodes[job[1]].free_mem += job[3]
                     else: # for old version of qpy-mster
-                        nodes[job[1]].free_mem = 5.0
+                        nodes[job[1]].free_mem += 5.0
                     users[user].n_used_cores += job[2]
                 N_used_cores += users[user].n_used_cores
                 N_used_min_cores += min( users[user].min_cores, users[user].n_used_cores)
