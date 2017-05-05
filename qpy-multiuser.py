@@ -186,12 +186,12 @@ class USER():
             if (num_cores == 1):
                 for node, info in nodes.iteritems():
                     free = info.max_cores - info.n_outsiders - info.n_used_cores
-                    if (not(info.pref_multicores) and free > best_free and info.free_mem > mem):
+                    if (not(info.pref_multicores) and free > best_free and info.free_mem > mem and info.free_mem_real > mem):
                         best_node = node
                         best_free = free
             if (best_node == None):
                 for node in nodes_list:
-                    if (nodes[node].nodes[node] and
+                    if (nodes[node].is_up and
                         nodes[node].max_cores  - nodes[node].n_outsiders - nodes[node].n_used_cores >= num_cores and
                         nodes[node].free_mem > mem):
                         best_node = node
@@ -594,9 +594,9 @@ def handle_client( check_nodes):
                 for job in users[user].cur_jobs:
                     nodes[job[1]].n_used_cores += job[2]
                     if (len(job) > 3):
-                        nodes[job[1]].free_mem += job[3]
+                        nodes[job[1]].free_mem -= job[3]
                     else: # for old version of qpy-mster
-                        nodes[job[1]].free_mem += 5.0
+                        nodes[job[1]].free_mem -= 5.0
                     users[user].n_used_cores += job[2]
                 N_used_cores += users[user].n_used_cores
                 N_used_min_cores += min( users[user].min_cores, users[user].n_used_cores)
