@@ -17,7 +17,7 @@ import datetime
 from shutil import copyfile
 import termcolor.termcolor as termcolour
 from optparse import OptionParser,OptionError
-from qpy_general_variables import *
+from qpy_common import *
 
 DEVNULL = open( os.devnull, "w")
 
@@ -317,7 +317,6 @@ class JOB():
         self.start_time = None
         self.end_time = None
         self.run_duration = None
-        self.process = None
 
     def set_get_run_duration( self):
         if (self.status == 0):
@@ -408,7 +407,7 @@ class JOB():
         command += 'export QPY_NODE=' + str( self.node) + '; '
         command += 'export QPY_N_CORES=' + str( self.n_cores) + '; '
         command += 'export QPY_MEM=' + str( self.mem) + '; '
-#        command += 'ulimit -Sv ' + str( self.mem*1048576) + '; '
+# kills the job with large mem:       command += 'ulimit -Sv ' + str( self.mem*1048576) + '; '
         for sf in source_these_files:
            command += 'source ' + sf + '; '
         command += 'cd ' + self.info[1] + '; ' 
@@ -417,27 +416,30 @@ class JOB():
         except:
             command += self.info[0]
         command += ' > ' + out_or_err_name( self, '.out') + ' 2> ' + out_or_err_name( self, '.err')
-        self.process = subprocess.Popen(["ssh", self.node, command],
-                                        shell = False,
-                                        stdout=subprocess.PIPE,
-                                        stderr=subprocess.PIPE)
+
+        try:
+            node_exec( self.node, command, get_outerr = False)
+        except:
+            return False
+
         self.start_time = datetime.datetime.today()
         self.status = 1
+        return True
 
-
+    # Return False if the job is not running
+    # and True if it is running or the node is down
+    #
     def is_running( self):
-        command = 'ssh ' + self.node + ' ps -fu ' + user
-        check_ps = subprocess.Popen(command,
-                                    shell = True,
-                                    stdout = subprocess.PIPE,
-                                    stderr = subprocess.PIPE)
-        (std_out, std_err) = check_ps.communicate()
-        re_res = re.search( 'export QPY_JOB_ID=' + str( self.ID) + ';', std_out)
-        if (re_res):
-            return True
-        if (self.process != None):
-            self.process.communicate()
-        return False
+        command = 'ps -fu ' + user
+        try:
+            (std_out, std_err) = node_exec( self.node, command)
+        except:
+            return True # raise a flag indicating node is down?
+        else:
+            re_res = re.search( 'export QPY_JOB_ID=' + str( self.ID) + ';', std_out)
+            if (re_res):
+                return True
+            return False
 
 
     def _scanline(self,line,option_list):
@@ -937,15 +939,12 @@ class JOBS_KILLER( threading.Thread):
             if (verbose):
                 print 'Killing: ' + str( job.ID) + ' on node ' + job.node
 
-            kill_command = 'source ~/.bash_profile; qpy --jobkill ' + str( job.ID)
-            kill_p = subprocess.Popen(["ssh", "-o", "StrictHostKeyChecking=no",
-                                       job.node, kill_command],
-                                      shell=False,
-                                      stdout=subprocess.PIPE,
-                                      stderr=subprocess.PIPE)
-            std_outerr = kill_p.communicate()
-            if (job.process != None):
-                job.process.communicate()
+            command = 'source ~/.bash_profile; qpy --jobkill ' + str( job.ID)
+            try:
+                (std_out, std_err) = node_exec( job.node, command)
+            except:
+                continue
+
             job.status = 3
             job.end_time = datetime.datetime.today()
             job.set_get_run_duration()
@@ -957,12 +956,10 @@ class JOBS_KILLER( threading.Thread):
             self.jobs.lock_killed.release()
             self.jobs.write_all_jobs()
 
-                        
             if (verbose):
                 print "Killing job " + str( job.ID) + ' on node ' + job.node
-                print "job_kill stdout: ", repr( std_outerr[0])
-                print "job_kill stderr: ", repr( std_outerr[1])
-
+                print "job_kill stdout: ", repr( std_out_err[0])
+                print "job_kill stderr: ", repr( std_out_err[1])
 
             if (self.multiuser_alive.is_set()):
                 multiuser_args = (user, job.ID, self.jobs.queue_size)
@@ -1021,16 +1018,17 @@ class SUB_CTRL( threading.Thread):
                             print "submission_control: submitting job in " + avail_node
                         job = self.jobs.Q.pop()
                         job.node = avail_node
-                        job.run()
-                        self.jobs.lock_running.acquire()
-                        self.jobs.lock_queue.acquire()
-                        self.jobs.queue.remove( job)
-                        self.jobs.queue_size -= 1
-                        self.jobs.running.append( job)
-                        self.jobs.lock_running.release()
-                        self.jobs.lock_queue.release()
+                        success = job.run()
+                        if (success):
+                            self.jobs.lock_running.acquire()
+                            self.jobs.lock_queue.acquire()
+                            self.jobs.queue.remove( job)
+                            self.jobs.queue_size -= 1
+                            self.jobs.running.append( job)
+                            self.jobs.lock_running.release()
+                            self.jobs.lock_queue.release()
+                            jobs_modification = True
 
-                        jobs_modification = True
                 self.jobs.lock_Q.release()
 
             else:
@@ -1100,16 +1098,6 @@ def handle_qpy( sub_ctrl, check_run, check_multiuser, jobs_killer, jobs, jobId):
             new_job = JOB( jobId, arguments)
             try:
                 new_job.parse_options()
-                jobs.lock_all.acquire()
-                jobs.lock_queue.acquire()
-                jobs.all.append( new_job)
-                jobs.queue.append( new_job)
-                jobs.queue_size += 1
-                jobs.lock_all.release()
-                jobs.lock_queue.release()
-                jobs.lock_Q.acquire()
-                jobs.Q.appendleft( new_job)
-                jobs.lock_Q.release()
                 if (new_job.use_script_copy):
                     first_arg = new_job.info[0].split()[0]
                     script_name = new_job._expand_script_name(first_arg)
@@ -1117,6 +1105,16 @@ def handle_qpy( sub_ctrl, check_run, check_multiuser, jobs_killer, jobs, jobId):
                         copied_script_name = scripts_dir + 'job_script.' + str( new_job.ID)
                         copyfile( script_name, copied_script_name)
                         new_job.cp_script_to_replace = ( first_arg, copied_script_name)
+                jobs.lock_Q.acquire()
+                jobs.lock_all.acquire()
+                jobs.lock_queue.acquire()
+                jobs.all.append( new_job)
+                jobs.queue.append( new_job)
+                jobs.queue_size += 1
+                jobs.Q.appendleft( new_job)
+                jobs.lock_queue.release()
+                jobs.lock_all.release()
+                jobs.lock_Q.release()
                 client_master.send( 'Job ' + str(jobId) + ' received.\n')
                 jobId += 1
                 with open( jobID_file, 'w') as f:

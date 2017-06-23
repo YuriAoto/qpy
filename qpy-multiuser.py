@@ -11,7 +11,7 @@ import re
 import math
 from optparse import OptionParser
 import threading
-from qpy_general_variables import *
+from qpy_common import *
 
 qpy_source_dir = os.path.dirname( os.path.abspath( __file__)) + '/'
 test_run = os.path.isfile( qpy_source_dir + 'test_dir')
@@ -73,57 +73,56 @@ class NODE():
             self.memory()
             self.free_mem = self.total_mem - 5.0
 
-    # Check if the <command> sent by ssh to <address> return the <exp_out> message without errors
+    # Check if the ssh connection is working
     def is_ssh_working( self):
-        ssh = subprocess.Popen(["ssh", "-o", "StrictHostKeyChecking=no", self.name, 'hostname'],
-                                 shell=False,
-                                 stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE)
-        std_outerr = ssh.communicate()
-        out = std_outerr[0]
-        err = std_outerr[1]
-        return not ('No route to host' in err or 'Connection refused' in err or 'Could not resolve hostname' in err) and (self.name in out)
+        command = "echo working"
+        try:
+            (std_out, std_err) = node_exec( self.name, command)
+        except:
+            self.is_up = False
+        else:
+            self.is_up = (std_out.split("\n")[0] == 'working')
+
+        return self.is_up
 
 
     # Get the really used memory
     def memory( self):
         command = "free -g"
-        mem_details = subprocess.Popen(["ssh", self.name , command],
-                                       shell=False,
-                                       stdout=subprocess.PIPE,
-                                       stderr=subprocess.PIPE)
-        std_outerr = mem_details.communicate()
-        mem_stdout = std_outerr[0].split( '\n')
-        self.total_mem = float(mem_stdout[1].split()[1])
-        if (len(mem_stdout) == 5):
-            self.free_mem_real = float(mem_stdout[2].split()[3])
+        try:
+            (std_out, std_err) = node_exec( self.name, command)
+        except:
+            self.is_up = False
+            self.free_mem_real = 0.0
         else:
-            self.free_mem_real = float(mem_stdout[1].split()[6])
+            std_out = std_out.split("\n")
+            self.total_mem = float(std_out[1].split()[1])
+            if (len(std_out) == 5):
+                self.free_mem_real = float(std_out[2].split()[3])
+            else:
+                self.free_mem_real = float(std_out[1].split()[6])
+
         return self.free_mem_real
 
     # Get the number of cores used by outsiders
     def outsiders( self):
 
+        command = "top -b -n1 | sed -n '8,50p'"
         try:
-            command = "top -b -n1 | sed -n '8,50p'"
-            free_details = subprocess.Popen(["ssh", self.name , command],
-                                            shell=False,
-                                            stdout=subprocess.PIPE,
-                                            stderr=subprocess.PIPE)
-            std_outerr = free_details.communicate()
-            ssh_stdout = std_outerr[0].split( '\n')
+            (std_out, std_err) = node_exec( self.name, command)
+        except:
+            self.is_up = False
+            self.n_outsiders = 0
+        else:
+            std_out = std_out.split("\n")
             n_jobs = 0
-            for line in ssh_stdout:
+            for line in std_out:
                 line_spl = line.split()
                 if float(line_spl[8].replace(',','.')) > 50:
                     n_jobs += 1
                 else:
                     break
-
             self.n_outsiders = max(n_jobs - self.n_used_cores, 0)
-
-        except:
-            self.n_outsiders = 0
 
         return self.n_outsiders
 
@@ -684,7 +683,7 @@ class CHECK_NODES( threading.Thread):
 
                 nodes_check_lock.acquire()
 
-                nodes[node].is_up = nodes[node].is_ssh_working()
+                nodes[node].is_ssh_working()
                 if (nodes[node].is_up):
                     N_outsiders -= nodes[node].n_outsiders
                     nodes[node].outsiders()
