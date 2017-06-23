@@ -8,7 +8,7 @@ import sys
 import subprocess
 import re
 import threading
-from qpy_general_variables import *
+from qpy_common import *
 
 # Important variables
 qpy_source_dir = os.path.dirname( os.path.abspath( __file__)) + '/'
