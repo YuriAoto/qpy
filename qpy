@@ -261,9 +261,9 @@ def kill_master_instances():
 
 
 def start_master_driver():
-    sys.stdout.write( "Starting qpy-master driver.\n")
-    sleep( 1)
-#    kill_master_instances()
+    sys.stdout.write( "Starting qpy-master driver... Take a few seconts, be patient.\n")
+    sleep( 5)
+    kill_master_instances()
     subprocess.Popen( qpy_master_command, shell = False)
     exit()
 
