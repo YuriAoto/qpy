@@ -1,60 +1,45 @@
 # qpy - user interface to the qpy-multiuser
 #
 # 31 Dec 2015 - Pradipta and Yuri
-from multiprocessing.connection import Client
 from time import sleep
 import os
 import sys
 import subprocess
 import re
 import threading
-from qpy_common import *
+from qpyCommon import *
 
-# Important variables
-qpy_source_dir = os.path.dirname( os.path.abspath( __file__)) + '/'
-test_run = os.path.isfile( qpy_source_dir + 'test_dir')
-multiuser_address = 'localhost'
+multiuser_address = 'ares4'
 multiuser_key = 'zxcvb'
-if (test_run):
+if (TEST_RUN):
     multiuser_port = 9998
 else:
     multiuser_port = 9999
 
-qpy_multiuser_command = [ 'python', qpy_source_dir + 'qpy-multiuser.py', '>', '/dev/null', '2>', '/dev/null']
+qpy_multiuser_command = [ 'python', QPY_SOURCE_DIR + 'qpy-multiuser.py', '>', '/dev/null']#, '2>', '/dev/null']
 
-keywords={'nodes':        (MULTIUSER_NODES,          'Reaload nodes file. No arguments'),
-          'distribute':   (MULTIUSER_DISTRIBUTE,     'Distribute cores: No arguments'),
-          'status' :      (MULTIUSER_STATUS,         'Show status. No arguments'),
-          'variables' :   (MULTIUSER_SHOW_VARIABLES, 'Show variables. No arguments'),
-          'start':        (MULTIUSER_START,          'Start multiuser execution. No arguments'),
-          'finish':       (MULTIUSER_FINISH,         'Finish the multiuser execution. No arguments'),
-          '__user':       (MULTIUSER_USER,           'Add user. Arguments: user_name'),
-          '__req_core':   (MULTIUSER_REQ_CORE,       'Require a core: Arguments: user_name, jobID, n_cores, mem, queue_size'),
-          '__remove_job': (MULTIUSER_REMOVE_JOB,     'Remove a job: Arguments: user_name, job_ID, queue_size'),
-          }
 
 try:
-    option = keywords[sys.argv[1]][0]
+    option = MULTIUSER_KEYWORDS[sys.argv[1]][0]
 except:
     str_len = 0
-    for opt in keywords:
-        if (keywords[opt][0] < 0):
+    for opt in MULTIUSER_KEYWORDS:
+        if (MULTIUSER_KEYWORDS[opt][0] < 0):
             continue
         if (str_len < len( opt)):
             str_len = len( opt)
     format_spc = '{0:' + str( str_len+1) + 's}'
     usage_msg =  'Usage: ' + sys.argv[0] +  ' <option> [<arguments>].\n'
     usage_msg += 'Options:'
-    for opt in keywords:
-        if (keywords[opt][0] < 0):
+    for opt in MULTIUSER_KEYWORDS:
+        if (MULTIUSER_KEYWORDS[opt][0] < 0):
             continue
-        usage_msg += '\n  ' + format_spc.format( opt+':') + ' ' + keywords[opt][1]
+        usage_msg += '\n  ' + format_spc.format( opt+':') + ' ' + MULTIUSER_KEYWORDS[opt][1]
     sys.exit( usage_msg)
 
 
 # Get arguments, according to the option
 arguments = ()
-
 
 # Add user
 if (option == MULTIUSER_USER):
@@ -81,33 +66,28 @@ if (option == MULTIUSER_REMOVE_JOB):
         sys.exit( usage_msg)
 
 
-# Add user
+# remove a job
+if (option == MULTIUSER_SAVE_MESSAGES):
+    try:
+        arguments = [True if (sys.argv[2] == 'true') else False]
+    except:
+        usage_msg = 'Usage: ' + sys.argv[0] +  ' [true,false].'
+        sys.exit( usage_msg)
+
+
+# Start
 if (option == MULTIUSER_START):
     sys.stdout.write( "Starting qpy-multiuser driver.\n")
-    subprocess.Popen( qpy_multiuser_command, shell = False)
+    node_exec('ares4', qpy_multiuser_command, get_outerr = False, mode='popen')
+
     exit()
 
 
-# Try to connect in a thread, to test the connection
-class try_connection( threading.Thread):
-    def __init__( self):
-        threading.Thread.__init__( self)
-        self.conn = None
-    def run( self):
-        self.conn = Client( (multiuser_address, multiuser_port), authkey=multiuser_key)
-
-M = try_connection()
-M.daemon = True
-M.start()
-n = 0
-waiting = 60
-while (M.is_alive()):
-    n += 1
-    if (n == waiting):
-        sys.exit( 'Time for connection exceeded. Are you sure that qpy-multiuser is running?')
-    sleep( 0.05)
-conn = M.conn
-conn.send( (option, arguments))
-message_back = conn.recv()
-sys.stdout.write( str(message_back[0]) + ": " + message_back[1] + '\n')
-conn.close()
+try:
+    msg_back = message_transfer((option, arguments),
+                                multiuser_address, multiuser_port, multiuser_key,
+                                timeout = 3.0)
+except Exception as ex:
+    sys.exit('Time for connection exceeded. Are you sure that qpy-multiuser is running?')
+else:
+    sys.stdout.write('status: ' + str(msg_back[0]) + '\n' + msg_back[1] + '\n')

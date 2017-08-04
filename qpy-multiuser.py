@@ -8,24 +8,25 @@ import os
 import sys
 import subprocess
 import re
+from collections import namedtuple
 import math
 from optparse import OptionParser
 import threading
-from qpy_common import *
+from qpyCommon import *
 
-qpy_source_dir = os.path.dirname( os.path.abspath( __file__)) + '/'
-test_run = os.path.isfile( qpy_source_dir + 'test_dir')
-
-if (test_run):
+if (TEST_RUN):
     qpy_multiuser_dir = os.path.expanduser( '~/.qpy-multiuser-test/')
 else:
     qpy_multiuser_dir = os.path.expanduser( '~/.qpy-multiuser/')
 
 if (not( os.path.isdir( qpy_multiuser_dir))):
     os.makedirs( qpy_multiuser_dir)
+os.chmod( qpy_multiuser_dir, 0700)
 
 nodes_file = qpy_multiuser_dir + 'nodes'
 allowed_users_file = qpy_multiuser_dir + 'allowed_users'
+user_key_file = qpy_multiuser_dir + '.user_key_'
+user_port_file = qpy_multiuser_dir + '.user_port_'
 cores_distribution_file = qpy_multiuser_dir + 'distribution_rules'
 
 nodes_list = []
@@ -41,78 +42,74 @@ nodes_check_lock = threading.RLock()
 nodes_check_alive = True
 nodes_check_time = 300
 
-multiuser_address = 'localhost'
+multiuser_address = 'ares4'
 multiuser_key = 'zxcvb'
-if (test_run):
+if (TEST_RUN):
     multiuser_port = 9998
 else:
     multiuser_port = 9999
 
-parser = OptionParser()
-parser.add_option("-v", "--verbose",
-                  action="store_true", dest="verbose", default=False,
-                  help="print messages")
-(options, args) = parser.parse_args()
-verbose = options.verbose
+verbose = False
 
 
-# Node informations
 class NODE():
+    """A node from the qpy-multiuser point of view.
+
+    Contains:
+
+
+
+    """
     def __init__( self, name, max_cores):
         self.name = name
-        self.is_up = self.is_ssh_working()
         self.max_cores = max_cores
+
+        self.messages = Messages()
+        self.messages.save = True
+
+        self.is_up = False
+
         self.n_used_cores = 0
-        self.n_outsiders = 0
         self.pref_multicores = False
-        self.total_mem = 0
-        self.free_mem = 0
-        self.free_mem_real = 0
+        self.req_mem = 2.0
 
-        if (self.is_up):
-            self.memory()
-            self.free_mem = self.total_mem - 5.0
+        self.total_mem = 0.0
+        self.free_mem_real = 0.0
+        self.n_outsiders = 0
 
-    # Check if the ssh connection is working
     def is_ssh_working( self):
+        """Check if the ssh connection is working."""
         command = "echo working"
         try:
             (std_out, std_err) = node_exec( self.name, command)
         except:
+            self.messages.add('is_ssh_working: Exception: ' + repr(sys.exc_info()[0]))
             self.is_up = False
         else:
             self.is_up = (std_out.split("\n")[0] == 'working')
-
         return self.is_up
 
+    def check(self):
+        """Check several things in the node.
 
-    # Get the really used memory
-    def memory( self):
-        command = "free -g"
-        try:
-            (std_out, std_err) = node_exec( self.name, command)
-        except:
-            self.is_up = False
-            self.free_mem_real = 0.0
-        else:
-            std_out = std_out.split("\n")
-            self.total_mem = float(std_out[1].split()[1])
-            if (len(std_out) == 5):
-                self.free_mem_real = float(std_out[2].split()[3])
-            else:
-                self.free_mem_real = float(std_out[1].split()[6])
+        Returns a named tuple with the information:
 
-        return self.free_mem_real
+        is_up           True if the node is up
+        n_outsiders     the number of cores used by non-qpy processes
+        total_mem       total memory of the node
+        free_mem_real   free memory of node
+        """
 
-    # Get the number of cores used by outsiders
-    def outsiders( self):
+        info = namedtuple('nodeInfo', ['is_up','n_outsiders','total_mem','free_mem_real'])
+        info.is_up = True
 
         command = "top -b -n1 | sed -n '8,50p'"
         try:
-            (std_out, std_err) = node_exec( self.name, command)
+            (std_out, std_err) = node_exec(self.name, command)
         except:
-            self.is_up = False
-            self.n_outsiders = 0
+            self.messages.add('outsiders: Exception: ' + repr(sys.exc_info()[0]))
+            info.is_up = False
+            info.n_outsiders = 0
         else:
             std_out = std_out.split("\n")
             n_jobs = 0
@@ -122,29 +119,115 @@ class NODE():
                     n_jobs += 1
                 else:
                     break
-            self.n_outsiders = max(n_jobs - self.n_used_cores, 0)
+            info.n_outsiders = max(n_jobs - self.n_used_cores, 0)
 
-        return self.n_outsiders
+        command = "free -g"
+        try:
+            (std_out, std_err) = node_exec(self.name, command)
+        except:
+            self.messages.add('memory: Exception: ' + repr(sys.exc_info()[0]))
+            info.is_up = False
+            info.free_mem_real = 0.0
+            info.total_mem = 0.0
+        else:
+            std_out = std_out.split("\n")
+            info.total_mem = float(std_out[1].split()[1])
+            if (len(std_out) == 5):
+                info.free_mem_real = float(std_out[2].split()[3])
+            else:
+                info.free_mem_real = float(std_out[1].split()[6])
+
+        return info
 
 
-# User informations
-# self.min_cores    -> only for the user
-# self.extra_cores  -> preferably for the user
-# self.max_cores    -> maximum that can be used: N_cores - min_cores (of other users)
-# self.n_used_cores -> current number of used cores
-#
 class USER():
-    def __init__( self, name):
+
+    """A user from the qpy-multiuser point of view
+
+    Contains:
+    name       The user
+    port       port to the qpy-master connection 
+    conn_key   key to the qpy-master connection
+
+    min_cores    only for the user
+    extra_cores  preferably for the user
+    max_cores    maximum that can be used: N_cores - min_cores (of other users)
+    n_used_cores current number of used cores
+    cur_jobs     current jobs
+    messages     Debugging messages
+
+
+    """
+
+    def __init__( self, name, port, conn_key):
+        """Initiate the class
+        
+        Arguments:
+        name       The user
+        port       port to the qpy-master connection 
+        conn_key   key to the qpy-master connection
+        """
+        self.messages = Messages()
+        self.messages.save = True
+
         self.name = name
+        self.port = port
+        self.conn_key = conn_key
+
         self.min_cores = 0
         self.extra_cores = 0
         self.max_cores = 0
         self.n_used_cores = 0
         self.n_queue = 0
-        self.cur_jobs = [] # each job = (jobID, node, num_cores, mem)
+        self.cur_jobs = []
 
-    # Add a job, if possible
-    def add_job( self, jobID, num_cores, mem):
+    def remove_job( self, jobID):
+        """Remove the job"""
+        global N_used_cores, N_used_min_cores
+        for job in self.cur_jobs:
+            if (job.ID == jobID):
+                self.n_used_cores -= job.n_cores
+                nodes[job.node].n_used_cores -= job.n_cores
+                nodes[job.node].req_mem -= job.mem
+                N_used_cores -= job.n_cores
+                if (self.n_used_cores < self.min_cores):
+                    N_used_min_cores -= min( job.n_cores, self.min_cores - self.n_used_cores)
+                self.cur_jobs.remove( job)
+                return 0
+        return 1
+
+    def add_job( self, job):
+        """Add job to a specific node."""
+        global N_used_cores, N_used_min_cores
+        
+        self.cur_jobs.append( job)
+        self.n_used_cores += job.n_cores
+        nodes[job.node].n_used_cores += job.n_cores
+        nodes[job.node].req_mem += job.mem
+
+        N_used_cores += job.n_cores
+
+        if (self.n_used_cores < self.min_cores):
+            N_used_min_cores += job.n_cores
+        elif (self.n_used_cores < self.min_cores + job.n_cores):
+            N_used_min_cores += job.n_cores + self.min_cores - self.n_used_cores
+
+        return 0
+
+
+    def request_node( self, jobID, num_cores, mem):
+        """Tries to give a space to the user
+
+        Arguments:
+        jobID      the job ID
+        num_cores  requested number of cores
+        mem        requested memory
+
+        This is the main function of qpy-multiuser.
+        It deceides whether the requested resource can be
+        given or not and, if so, give a node thet fulfills
+        this requirement.
+        """
         global N_used_cores, N_used_min_cores
         space_available = False
         
@@ -185,14 +268,14 @@ class USER():
             if (num_cores == 1):
                 for node, info in nodes.iteritems():
                     free = info.max_cores - info.n_outsiders - info.n_used_cores
-                    if (not(info.pref_multicores) and free > best_free and info.free_mem > mem and info.free_mem_real > mem):
+                    if (not(info.pref_multicores) and free > best_free and (info.total_mem-info.req_mem) > mem and info.free_mem_real > mem):
                         best_node = node
                         best_free = free
             if (best_node == None):
                 for node in nodes_list:
                     if (nodes[node].is_up and
                         nodes[node].max_cores  - nodes[node].n_outsiders - nodes[node].n_used_cores >= num_cores and
-                        nodes[node].free_mem > mem):
+                        nodes[node].total_mem - nodes[node].req_mem > mem):
                         best_node = node
                         break
             nodes_check_lock.release()
@@ -200,40 +283,72 @@ class USER():
             if (best_node == None):
                 return 1
 
-            self.cur_jobs.append( (jobID, best_node, num_cores, mem))
-            self.n_used_cores += num_cores
-            nodes[best_node].n_used_cores += num_cores
-            nodes[best_node].free_mem -= mem
-            N_used_cores += num_cores
-
-            if (self.n_used_cores < self.min_cores):
-                N_used_min_cores += num_cores
-            elif (self.n_used_cores < self.min_cores + num_cores):
-                N_used_min_cores += num_cores + self.min_cores - self.n_used_cores
+            new_job = MULTIUSER_JOB( self.name, jobID, mem, num_cores, best_node)
+            self.add_job( new_job)
 
             return best_node
 
         return 2
 
-    # Remove the job
-    def remove_job( self, jobID):
-        global N_used_cores, N_used_min_cores
-        for job in self.cur_jobs:
-            if (job[0] == jobID):
-                self.n_used_cores -= job[2]
-                nodes[job[1]].n_used_cores -= job[2]
-                nodes[job[1]].free_mem += job[3]
-                N_used_cores -= job[2]
-                if (self.n_used_cores < self.min_cores):
-                    N_used_min_cores -= min( job[2], self.min_cores - self.n_used_cores)
-                self.cur_jobs.remove( job)
-                return 0
-        return 1
 
 
-# Load nodes file
+def write_user_files():
+    """Write the connections information of users in the files."""
+    for user in users:
+        f = open(user_key_file+user, 'w')
+        f.write(users[user].conn_key)
+        f.close()
+        f = open(user_port_file+user, 'w')
+        f.write(str(users[user].port))
+        f.close()
+
+
+def load_users():
+    """Load the users.
+
+    For each user given in the file allowed_users,
+    attempt to obtain the port and the key for the
+    connection with their qpy-master (from MULTIUSER_HANDLER)
+    and request the current running jobs
+    """
+    global users
+    allowed_users = []
+    f = open( allowed_users_file, 'r')
+    for line in f:
+        allowed_users.append( line.strip())
+    f.close()
+    for user in allowed_users:
+        if (os.path.isfile( user_key_file+user) and os.path.isfile( user_port_file+user)):
+            f = open( user_key_file+user, 'r')
+            conn_key = f.read()
+            f.close()
+            f = open( user_port_file+user, 'r')
+            port = int( f.read())
+            f.close()
+            new_user = USER(user, port, conn_key)
+
+            try:
+                cur_jobs = message_transfer((FROM_MULTI_CUR_JOBS, ()),
+                                            'ares4', new_user.port, new_user.conn_key)
+            except:
+                pass
+            else:
+                for job in cur_jobs:
+                    new_user.add_job( job)
+                users[user] = new_user
+
+    distribute_cores()
+
+
 def load_nodes():
+    """Load the nodes
+    
+    The nodes are given in the file nodes_file
+    TODO: Explain the file format
+    
+    """
     global N_cores
+    global nodes_list
     try:
         f = open( nodes_file, 'r')
     except:
@@ -252,11 +367,7 @@ def load_nodes():
         if ('M' in line_spl[2:]):
             nodes_for_multicores.append( line_spl[0])
     f.close()
-    if (verbose):
-        print "load_nodes:"
-        print "nodes: ", nodes_in_file
-        print "cores: ", cores_in_file
-        print "nodes for multi: ", nodes_for_multicores
+    # Put messages
     for n, c in zip( nodes_in_file, cores_in_file):
         if (n in nodes):
             N_cores += c - nodes[n].max_cores
@@ -266,7 +377,6 @@ def load_nodes():
             nodes[n] = new_node
             N_cores += new_node.max_cores
     nodes_to_remove = []
-    global nodes_list
     nodes_list = []
     for n in nodes:
         if (n in nodes_in_file):
@@ -285,8 +395,13 @@ def load_nodes():
     return 0
 
 
-# Distribute cores
-def distribute_cores( ):
+def distribute_cores():
+    """Distributes the cores.
+
+    The distribution is made based on the file cores_distribution_file
+
+    TODO: explain the file format
+    """
     try:
         f = open( cores_distribution_file, 'r')
     except:
@@ -391,24 +506,41 @@ def distribute_cores( ):
     return 0
 
 
-# Get action from client and execute it
-# message from client must be:
-#
-#    int          tuple
-#   (action_type, arguments)
-#              
-#  'arguments' is option dependent. See below.
-#  Message sent back:
-#
-#    int     str
-#   (status, msg)
-#
-def handle_client( check_nodes):
+def handle_client():
+    """Handles the user messages sent from the client
+
+    No arguments
+
+    It opens a new connection using the multiuser connection
+    parameters and waits for messages.
+    When a message is received, it analyzes it, does whatever
+    is needed and returns a message back.
+
+    The message from qpy must be a tuple (action_type, arguments)
+    where action_type can be:
+       MULTIUSER_NODES
+       MULTIUSER_DISTRIBUTE
+       MULTIUSER_SHOW_VARIABLES
+       MULTIUSER_STATUS
+       MULTIUSER_SAVE_MESSAGES
+       MULTIUSER_FINISH
+       MULTIUSER_USER
+       MULTIUSER_REQ_CORE
+       MULTIUSER_REMOVE_JOB
+
+    """
     global N_cores, N_used_cores
     global N_min_cores, N_used_min_cores
     if (verbose):
         print "handle_client: ready"
-    conn = Listener(( multiuser_address, multiuser_port), authkey = multiuser_key)
+    try:
+        print "Waiting..."
+        conn = Listener(( multiuser_address, multiuser_port), authkey = multiuser_key)
+        print "Received"
+    except:
+        print "Error when establishing connection. Is there already a qpy-multiuser instance?"
+        return
+
     while True:
         try:
             client = conn.accept()
@@ -471,7 +603,9 @@ def handle_client( check_nodes):
                 msg += '  n_queue      = ' + str( info.n_queue)      + '\n'
                 msg += '  cur_jobs     :' + '\n'
                 for cj in info.cur_jobs:
-                    msg += '          ' + repr( cj) + '\n'
+                    msg += '          ' + str(cj) + '\n'
+                if (len(info.messages) > 0):
+                    msg += '  Last messages:\n' + str(info.messages) + '----------\n'
             msg += 'nodes:\n'
             for node, info in nodes.iteritems():
                 msg += node + ':\n'
@@ -479,10 +613,12 @@ def handle_client( check_nodes):
                 msg += '  n_used_cores    = ' + str( info.n_used_cores)    + '\n'
                 msg += '  n_outsiders     = ' + str( info.n_outsiders)     + '\n'
                 msg += '  total_mem       = ' + str( info.total_mem)       + '\n'
-                msg += '  free_mem        = ' + str( info.free_mem)        + '\n'
+                msg += '  req_mem         = ' + str( info.req_mem)         + '\n'
                 msg += '  free_mem_real   = ' + str( info.free_mem_real)   + '\n'
                 msg += '  pref_multicores = ' + str( info.pref_multicores) + '\n'
-                msg += '  is_up           = ' + str( info.is_up) + '\n'
+                msg += '  is_up           = ' + str( info.is_up)           + '\n'
+                if (len(info.messages) > 0):
+                    msg += '  Last messages:\n' + str(info.messages) + '----------\n'
             nodes_check_lock.release()
 
         # Show status
@@ -527,7 +663,7 @@ def handle_client( check_nodes):
                                             nodes[node].n_used_cores + nodes[node].n_outsiders,
                                             nodes[node].max_cores,
                                             nodes[node].total_mem - nodes[node].free_mem_real,
-                                            nodes[node].total_mem - nodes[node].free_mem,
+                                            nodes[node].req_mem,
                                             nodes[node].total_mem)
             nodes_check_lock.release()
             if (msgN):
@@ -540,28 +676,54 @@ def handle_client( check_nodes):
             msg += 'There are ' + str( N_used_cores + N_outsiders) + ' out of a total of ' + str( N_cores) + ' cores being used.\n'
 
 
+        # Start saving messages
+        # arguments = (save_messages)
+        elif (action_type == MULTIUSER_SAVE_MESSAGES):
+            for user in users:
+                users[user].messages.save = arguments[0]
+            for node in nodes:
+                nodes[node].messages.save = arguments[0]
+            status = 0
+            msg = 'Save messages set to ' + str(arguments[0])
+
         # Finish qpy-multiuser
         # arguments = ()
         elif (action_type == MULTIUSER_FINISH):
-            check_nodes.finish.set()
             client.send( (0, 'Finishing qpy-multiuser.'))
             client.close()
             break
 
 
-        # Add a user
-        # arguments = (user_name[, cur_jobs])
+        # Add a user or sync user info
+        # arguments = (user_name, port, conn_key, cur_jobs)
         elif (action_type == MULTIUSER_USER):
-            user = arguments[0] # str
-            if (len( arguments) == 2):
-                new_cur_jobs = arguments[1] # list (as USER.cur_jobs)
-            else: 
-                new_cur_jobs = None
+            user = arguments[0]
+            port = arguments[1]
+            conn_key = arguments[2]
+            new_cur_jobs = arguments[3]
+
             if (user in users):
                 status = 0
-                msg = ['User exists.']
+                users[user].port = port
+                users[user].conn_key = conn_key
+
+                same_list = True
+                if (len( new_cur_jobs) != len( users[user].cur_jobs)):
+                    same_list = False
+                else:
+                    for i in range(len(new_cur_jobs)):
+                        if (new_cur_jobs[i] != users[user].cur_jobs[i]):
+                            same_list = False
+                            break
+
+                if (same_list):
+                    status = 0
+                    msg = 'User exists.'
+                else:
+                    status = 1
+                    msg = 'User exists, but with a different job list.'
+
             else:
-                # Add allowed users
                 allowed_users = []
                 try:
                     f = open( allowed_users_file, 'r')
@@ -572,34 +734,20 @@ def handle_client( check_nodes):
                     pass
                 if (user in allowed_users):
                     status = 0
-                    new_user = USER( user)
+                    new_user = USER( user, port, conn_key)
+                    for job in new_cur_jobs:
+                        new_user.add_job( job)
                     users[user] = new_user
+
                     if (distribute_cores() != 0):
                         msg = 'User added. Cores distribution failed.'
                     else:
                         msg = 'User added.'
                 else:
-                    status = 1
+                    status = 2
                     msg = 'Not allowed user.'
-            # replace the cur_jobs list
-            if (user in users and new_cur_jobs != None ):
-                N_used_cores -= users[user].n_used_cores
-                N_used_min_cores -= min( users[user].min_cores, users[user].n_used_cores)
-                for job in users[user].cur_jobs:
-                    nodes[job[1]].n_used_cores -= job[2]
-                    nodes[job[1]].free_mem += job[3]
-                users[user].cur_jobs = new_cur_jobs
-                users[user].n_used_cores = 0
-                for job in users[user].cur_jobs:
-                    nodes[job[1]].n_used_cores += job[2]
-                    if (len(job) > 3):
-                        nodes[job[1]].free_mem -= job[3]
-                    else: # for old version of qpy-mster
-                        nodes[job[1]].free_mem -= 5.0
-                    users[user].n_used_cores += job[2]
-                N_used_cores += users[user].n_used_cores
-                N_used_min_cores += min( users[user].min_cores, users[user].n_used_cores)
 
+            write_user_files()
 
         # Add a job
         # arguments = (user_name, jobID, n_cores, mem, queue_size)
@@ -610,7 +758,7 @@ def handle_client( check_nodes):
             mem        = arguments[3] # float
             queue_size = arguments[4] # int
             try:
-                status = users[user].add_job( jobID, n_cores, mem)
+                status = users[user].request_node( jobID, n_cores, mem)
                 if (isinstance( status, str)): # The node name
                     msg = status
                     status = 0
@@ -660,45 +808,60 @@ def handle_client( check_nodes):
 
         # Send message back
         try:
-            client.send( (status, msg))
+            client.send((status, msg))
         except:
             # TODO: print exception in a log file
             continue
 
 
+class CHECK_NODES(threading.Thread):
 
+    """Checks the nodes regularly
 
+    Contains:
+    finish            an Event that should be set to terminate this Thread
 
-# Check nodes temporarily
-class CHECK_NODES( threading.Thread):
-    def __init__( self):
-        threading.Thread.__init__( self)
+    This Thread enter in the nodes regularly and checks if thuy are up,
+    their memory and outsiders jobs
+
+    This check is done at each nodes_check_time seconds
+
+    """
+
+    def __init__(self):
+        """Initialte the class"""
+        threading.Thread.__init__(self)
         self.finish = threading.Event()
 
-    def run( self):
+    def run(self):
+        """Checks the nodes."""
         global N_outsiders
-
         while not self.finish.is_set():
+            nodes_info = {}
             for node in nodes:
+                print "Checking "+node
+                nodes_info[node] = nodes[node].check()
+                print "Done with "+node
+                print
+            nodes_check_lock.acquire()
+            N_outsiders += nodes_info[node].n_outsiders - nodes[node].n_outsiders
+            for node in nodes:
+                nodes[node].is_up = nodes_info[node].is_up
+                nodes[node].n_outsiders = nodes_info[node].n_outsiders
+                nodes[node].total_mem = nodes_info[node].total_mem
+                nodes[node].free_mem_real = nodes_info[node].free_mem_real
+            nodes_check_lock.release()
+            self.finish.wait(nodes_check_time)
 
-                nodes_check_lock.acquire()
 
-                nodes[node].is_ssh_working()
-                if (nodes[node].is_up):
-                    N_outsiders -= nodes[node].n_outsiders
-                    nodes[node].outsiders()
-                    N_outsiders += nodes[node].n_outsiders
-                    nodes[node].memory()
-
-                nodes_check_lock.release()
-
-            sleep( nodes_check_time)
-
-
+# ---------------------------------------
 load_nodes()
+load_users()
 
 check_nodes = CHECK_NODES()
-check_nodes.daemon = True
 check_nodes.start()
 
-handle_client( check_nodes)
+handle_client()
+
+check_nodes.finish.set()
+
