@@ -15,8 +15,6 @@ from time import sleep
 
 import time
 
-ADDRESS = 'ares4'
-
 QPY_SOURCE_DIR = os.path.dirname( os.path.abspath( __file__)) + '/'
 TEST_RUN = os.path.isfile( QPY_SOURCE_DIR + 'test_dir')
 
@@ -97,6 +95,10 @@ MULTIUSER_KEYWORDS={'nodes':        (MULTIUSER_NODES,          'Reaload nodes fi
                     '__remove_job': (MULTIUSER_REMOVE_JOB,     'Remove a job: Arguments: user_name, job_ID, queue_size'),
                     }
 
+PORT_MIN_MULTI  = 10000
+PORT_MAX_MULTI  = 20000
+PORT_MIN_MASTER = 20001
+PORT_MAX_MASTER = 60000
 
 def get_all_children(x, parent_of):
     """Gets all children and further generations
@@ -135,51 +137,97 @@ def string_to_int_list(x):
     return res
 
 
-def kill_master_instances(user, qpy_master_command):
+def kill_master_instances(user, address, qpy_master_command):
     """Kill all qpy-master instances from this user
     and from the same source directory."""
-    ps_stdout = node_exec('ares4', ["ps", "-fu", user], get_outerr = True, mode='popen')
+    ps_stdout = node_exec(address, ["ps", "-fu", user], get_outerr = True, mode='popen')
     ps_stdout = ps_stdout[0].split( '\n')
     for l in ps_stdout:
         if re.search(qpy_master_command+'$', l) != None:
             pid = l.split()[1]
-            node_exec('ares4', "kill " + pid, get_outerr = False, mode='popen')
+            node_exec(address, "kill " + pid, get_outerr = False, mode='popen')
             sys.stdout.write( 'Killing older qpy-master instance: ' + pid + '\n')
 
 
-def start_master_driver(user, qpy_master_command):
+def start_master_driver(user, address, qpy_master_command):
     """Starts the qpy-master and exits."""
     sys.stdout.write("Starting qpy-master driver... It takes a few seconds, be patient.\n")
     sleep(5.)
-    kill_master_instances(user, qpy_master_command)
-    node_exec('ares4', qpy_master_command + ' > /dev/null 2> /dev/null', get_outerr = False, mode='popen')
+    kill_master_instances(user, address, qpy_master_command)
+    node_exec(address, qpy_master_command + ' > /dev/null 2> /dev/null', get_outerr = False, mode='popen')
     exit()
 
 
-def establish_Listener_connection():
+def establish_Listener_connection(address, port_min, port_max, port=None, conn_key=None):
     """Creates a Listener connection and returns a tuple with the information
 
     Arguments: no arguments
 
     Returns: the tuple (List_master, port, key)
              where List_master is the Listener object
-             port is the port for the connection and
-             key is the key to the connection
+             port is the port for the connection. If None, randomly generates one
+             key is the key to the connection. If None, randomly generates one
 
     """
 
-    random.seed()
-    conn_key = os.urandom(30)
-    while True:
-        port = random.randint(10000, 20000 )
+
+    if conn_key == None:
+        random.seed()
+        conn_key = os.urandom(30)
+    if port == None:
+        while True:
+            port = random.randint(port_min, port_max)
+            try:
+                List_master = connection.Listener((address, port), authkey = conn_key)
+                break
+            except:
+                pass
+    else:
         try:
-            List_master = connection.Listener((ADDRESS, port), authkey = conn_key)
-            break
+            List_master = connection.Listener((address, port), authkey = conn_key)
         except:
-            pass
+            List_master = None
     return (List_master, port, conn_key)
+    
 
+def write_conn_files(f_name, address, port, conn_key):
+    """Write the connection information to files."""
+    f = open(f_name+'_address', 'w')
+    f.write(address)
+    f.close()
+    f = open(f_name+'_port', 'w')
+    f.write(str(port))
+    f.close()
+    f = open(f_name+'_conn_key', 'w')
+    f.write(conn_key)
+    f.close()
 
+def read_address_file(f_name):
+    """Reads the connection address from file."""
+    try:
+        f = open(f_name+'_address', 'r')
+        address = f.read().strip()
+        f.close()
+    except:
+        address = 'localhost'
+    return address
+
+def read_conn_files(f_name):
+    """Reads the connection information from files."""
+    address = read_address_file(f_name)
+    try:
+        f = open(f_name+'_port', 'r')
+        port = int(f.read())
+        f.close()
+    except:
+        port = None
+    try:
+        f = open(f_name+'_conn_key', 'r')
+        conn_key = f.read()
+        f.close()
+    except:
+        conn_key = None
+    return address, port, conn_key
 
 
 def true_or_false(v):
@@ -285,7 +333,21 @@ def node_exec(node, command, get_outerr = True, mode="paramiko"):
 
     """
 
-    if (mode == "paramiko"):
+    if node == 'localhost':
+
+        if isinstance(command, str):
+            command = command.split()
+        if (get_outerr):
+            ssh = subprocess.Popen(command, shell = False,
+                                   stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE)
+            std_outerr = ssh.communicate()
+            return(std_outerr)
+        else:
+            ssh = subprocess.Popen(command, shell = False)
+            return
+
+    elif (mode == "paramiko"):
         if isinstance(command, list):
             command = ' '.join(command)
         ssh = paramiko.SSHClient()

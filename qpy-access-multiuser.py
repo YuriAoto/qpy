@@ -9,15 +9,15 @@ import re
 import threading
 from qpyCommon import *
 
-multiuser_address = 'ares4'
-multiuser_key = 'zxcvb'
+
 if (TEST_RUN):
-    multiuser_port = 9998
+    qpy_multiuser_dir = os.path.expanduser( '~/.qpy-multiuser-test/')
 else:
-    multiuser_port = 9999
+    qpy_multiuser_dir = os.path.expanduser( '~/.qpy-multiuser/')
 
-qpy_multiuser_command = [ 'python', QPY_SOURCE_DIR + 'qpy-multiuser.py', '>', '/dev/null']#, '2>', '/dev/null']
-
+multiuser_conn_file = qpy_multiuser_dir + '.multiuser_connection'
+multiuser_address, multiuser_port, multiuser_key = read_conn_files(multiuser_conn_file)
+qpy_multiuser_command = [ 'python', QPY_SOURCE_DIR + 'qpy-multiuser.py'] #, '>', '/dev/null'], '2>', '/dev/null']
 
 try:
     option = MULTIUSER_KEYWORDS[sys.argv[1]][0]
@@ -44,9 +44,9 @@ arguments = ()
 # Add user
 if (option == MULTIUSER_USER):
     try:
-        arguments = (sys.argv[2], [])
+        arguments = (sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5])
     except:
-        usage_msg =  'Usage: ' + sys.argv[0] +  ' __user <user_name>.'
+        usage_msg =  'Usage: ' + sys.argv[0] +  ' __user <user_name> <address> <port> <conn_key>.'
         sys.exit( usage_msg)
 
 # Request a core
@@ -78,16 +78,16 @@ if (option == MULTIUSER_SAVE_MESSAGES):
 # Start
 if (option == MULTIUSER_START):
     sys.stdout.write( "Starting qpy-multiuser driver.\n")
-    node_exec('ares4', qpy_multiuser_command, get_outerr = False, mode='popen')
+    node_exec(multiuser_address, qpy_multiuser_command, get_outerr = False, mode='popen')
 
     exit()
-
 
 try:
     msg_back = message_transfer((option, arguments),
                                 multiuser_address, multiuser_port, multiuser_key,
                                 timeout = 3.0)
 except Exception as ex:
+    print ex
     sys.exit('Time for connection exceeded. Are you sure that qpy-multiuser is running?')
 else:
     sys.stdout.write('status: ' + str(msg_back[0]) + '\n' + msg_back[1] + '\n')

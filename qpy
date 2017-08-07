@@ -18,8 +18,7 @@ if (TEST_RUN):
 else:
     qpy_dir = os.path.expanduser( '~/.qpy/')
 
-port_file = qpy_dir + '/port'
-key_file = qpy_dir + '/conn_key'
+master_conn_file = qpy_dir + '.master_connection'
 tutorial_file = QPY_SOURCE_DIR + '/tutorial'
 
 qpy_master_command = 'python ' + QPY_SOURCE_DIR + 'qpy-master.py'
@@ -189,30 +188,26 @@ elif (option == JOBTYPE_TUTORIAL):
     exit()
 
 
-try:
-    f = open(port_file, 'r')
-    port = int(f.read())
-    f.close()
-    f = open(key_file, 'r')
-    conn_key = f.read()
-    f.close()
-except:
+
+address, port, conn_key = read_conn_files(master_conn_file)
+
+if (port == None or conn_key == None):
     if (start_qpy_master):
-        start_master_driver(user, qpy_master_command)
+        start_master_driver(user, address, qpy_master_command)
     else:
         sys.exit('Problem to get the connection information. Are you sure that qpy-master is running?')
 
 try:
     master_msg = message_transfer((option, arguments),
-                                  ADDRESS,
+                                  address,
                                   port,
                                   conn_key,
                                   timeout = 3.0)
 except:
     if (start_qpy_master):
-        os.remove(port_file)
-        os.remove(key_file)
-        start_master_driver(user, qpy_master_command)
+        os.remove(master_conn_file+'_port')
+        os.remove(master_conn_file+'_conn_key')
+        start_master_driver(user, address, qpy_master_command)
     sys.exit('Time for connection exceeded. Are you sure that qpy-master is running?')
 
 ansi_escape = re.compile(r'\x1b[^m]*m')
@@ -221,4 +216,4 @@ if (not(sys.stdout.isatty())):
 sys.stdout.write(master_msg)
 
 if (start_qpy_master):
-    start_master_driver(user, qpy_master_command)
+    start_master_driver(user, address, qpy_master_command)

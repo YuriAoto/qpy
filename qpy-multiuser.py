@@ -2,7 +2,6 @@
 #
 # 26 December 2015 - Pradipta and Yuri
 # 06 January 2016 - Pradipta and Yuri
-from multiprocessing.connection import Listener
 from time import sleep
 import os
 import sys
@@ -25,9 +24,9 @@ os.chmod( qpy_multiuser_dir, 0700)
 
 nodes_file = qpy_multiuser_dir + 'nodes'
 allowed_users_file = qpy_multiuser_dir + 'allowed_users'
-user_key_file = qpy_multiuser_dir + '.user_key_'
-user_port_file = qpy_multiuser_dir + '.user_port_'
 cores_distribution_file = qpy_multiuser_dir + 'distribution_rules'
+user_conn_file = qpy_multiuser_dir + '.connection_'
+multiuser_conn_file = qpy_multiuser_dir + '.multiuser_connection'
 
 nodes_list = []
 nodes = {}
@@ -42,21 +41,10 @@ nodes_check_lock = threading.RLock()
 nodes_check_alive = True
 nodes_check_time = 300
 
-multiuser_address = 'ares4'
-multiuser_key = 'zxcvb'
-if (TEST_RUN):
-    multiuser_port = 9998
-else:
-    multiuser_port = 9999
-
-verbose = False
-
-
 class NODE():
     """A node from the qpy-multiuser point of view.
 
     Contains:
-
 
 
     """
@@ -159,7 +147,7 @@ class USER():
 
     """
 
-    def __init__( self, name, port, conn_key):
+    def __init__( self, name, address, port, conn_key):
         """Initiate the class
         
         Arguments:
@@ -171,6 +159,7 @@ class USER():
         self.messages.save = True
 
         self.name = name
+        self.address = address
         self.port = port
         self.conn_key = conn_key
 
@@ -291,18 +280,6 @@ class USER():
         return 2
 
 
-
-def write_user_files():
-    """Write the connections information of users in the files."""
-    for user in users:
-        f = open(user_key_file+user, 'w')
-        f.write(users[user].conn_key)
-        f.close()
-        f = open(user_port_file+user, 'w')
-        f.write(str(users[user].port))
-        f.close()
-
-
 def load_users():
     """Load the users.
 
@@ -318,18 +295,13 @@ def load_users():
         allowed_users.append( line.strip())
     f.close()
     for user in allowed_users:
-        if (os.path.isfile( user_key_file+user) and os.path.isfile( user_port_file+user)):
-            f = open( user_key_file+user, 'r')
-            conn_key = f.read()
-            f.close()
-            f = open( user_port_file+user, 'r')
-            port = int( f.read())
-            f.close()
-            new_user = USER(user, port, conn_key)
-
+        print user
+        address, port, conn_key = read_conn_files(user_conn_file + user)
+        if (port != None and conn_key != None):
+            new_user = USER(user, address, port, conn_key)
             try:
                 cur_jobs = message_transfer((FROM_MULTI_CUR_JOBS, ()),
-                                            'ares4', new_user.port, new_user.conn_key)
+                                            new_user.address, new_user.port, new_user.conn_key)
             except:
                 pass
             else:
@@ -412,9 +384,6 @@ def distribute_cores():
     min_cores = 0
     users_min = {}
     users_extra = {}
-    if (verbose):
-        print 'distribute_cores:'
-        print 'dist_type: ' + dist_type
     if (len( line_spl) > 1):
         if (line_spl[1] != 'minimum'):
             return -2
@@ -483,9 +452,6 @@ def distribute_cores():
                 break
             users_extra[user] += int(math.copysign(1,left_cores))
             left_cores += math.copysign(1,-left_cores)
-    if (verbose):
-        print 'users_min:   ', users_min
-        print 'users_extra: ', users_extra
     # Finally put into the users variable
     global N_min_cores, N_used_min_cores
     N_min_cores = 0
@@ -531,12 +497,17 @@ def handle_client():
     """
     global N_cores, N_used_cores
     global N_min_cores, N_used_min_cores
-    if (verbose):
-        print "handle_client: ready"
+
+    multiuser_address, multiuser_port, multiuser_key = read_conn_files(multiuser_conn_file)
+
     try:
-        print "Waiting..."
-        conn = Listener(( multiuser_address, multiuser_port), authkey = multiuser_key)
-        print "Received"
+        conn, multiuser_port, multiuser_key = establish_Listener_connection(multiuser_address,
+                                                                            PORT_MIN_MULTI, PORT_MAX_MULTI,
+                                                                            port=multiuser_port,
+                                                                            conn_key=multiuser_key)
+
+        write_conn_files(multiuser_conn_file, multiuser_address, multiuser_port, multiuser_key)
+
     except:
         print "Error when establishing connection. Is there already a qpy-multiuser instance?"
         return
@@ -548,9 +519,6 @@ def handle_client():
         except:
             # TODO: print exception in a log file
             continue
-        if (verbose):
-            print "Received: " + str(action_type) + " -> " + str(arguments)
-
 
         # Reload the nodes
         # arguments = ()
@@ -698,12 +666,14 @@ def handle_client():
         # arguments = (user_name, port, conn_key, cur_jobs)
         elif (action_type == MULTIUSER_USER):
             user = arguments[0]
-            port = arguments[1]
-            conn_key = arguments[2]
-            new_cur_jobs = arguments[3]
+            address = arguments[1]
+            port = arguments[2]
+            conn_key = arguments[3]
+            new_cur_jobs = arguments[4]
 
             if (user in users):
                 status = 0
+                users[user].address = address
                 users[user].port = port
                 users[user].conn_key = conn_key
 
@@ -734,7 +704,7 @@ def handle_client():
                     pass
                 if (user in allowed_users):
                     status = 0
-                    new_user = USER( user, port, conn_key)
+                    new_user = USER(user, address, port, conn_key)
                     for job in new_cur_jobs:
                         new_user.add_job( job)
                     users[user] = new_user
@@ -747,7 +717,11 @@ def handle_client():
                     status = 2
                     msg = 'Not allowed user.'
 
-            write_user_files()
+            for user in users:
+                write_conn_files(user_conn_file+user, 
+                                 users[user].address,
+                                 users[user].port,
+                                 users[user].conn_key)
 
         # Add a job
         # arguments = (user_name, jobID, n_cores, mem, queue_size)

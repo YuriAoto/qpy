@@ -37,11 +37,11 @@ else:
     qpy_dir = os.path.expanduser( '~/.qpy/')
 scripts_dir = qpy_dir + '/scripts/'
 notes_dir = qpy_dir + '/notes/'
-port_file = qpy_dir + '/port'
-key_file = qpy_dir + '/conn_key'
 jobID_file = qpy_dir + '/next_jobID'
 all_jobs_file = qpy_dir + '/all_jobs'
 config_file = qpy_dir + '/config'
+multiuser_conn_file = qpy_dir + '.multiuser_connection'
+master_conn_file = qpy_dir + '.master_connection'
 
 if (not(os.path.isdir(qpy_dir))):
     os.makedirs(qpy_dir)
@@ -53,19 +53,15 @@ if (not(os.path.isdir(scripts_dir))):
 if (not(os.path.isdir(notes_dir))):
     os.makedirs(notes_dir)
 
-if (os.path.isfile(port_file)):
-    sys.exit('The file ' + port_file +' was found. Is there a qpy-master instance running?')
+if (os.path.isfile(master_conn_file+'_port')):
+    sys.exit('A connection file was found. Is there a qpy-master instance running?')
 
-if (os.path.isfile(key_file)):
-    sys.exit('The file ' + key_file + ' was found. Is there a qpy-master instance running?')
+if (os.path.isfile(master_conn_file+'_conn_key')):
+    sys.exit('A connection file was found. Is there a qpy-master instance running?')
 
-
-multiuser_address = 'ares4'
-multiuser_key = 'zxcvb'
-if (TEST_RUN):
-    multiuser_port = 9998
-else:
-    multiuser_port = 9999
+multiuser_address, multiuser_port, multiuser_key = read_conn_files(multiuser_conn_file)
+if (multiuser_port == None or multiuser_key == None):
+    sys.exit("Information for multiuser connection could not be obtained. Contact your administrator.")
 
 
 class JobParser(OptionParser):
@@ -703,7 +699,7 @@ class CHECK_RUN(threading.Thread):
                             os.remove(job.cp_script_to_replace[1])
 
                     try:
-                        msg_back = message_transfer((MULTIUSER_REMOVE_JOB, 
+                        msg_back = message_transfer((MULTIUSER_REMOVE_JOB,
                                                      (user, job.ID, len(self.jobs.queue))),
                                                     multiuser_address, multiuser_port, multiuser_key)
                     except:
@@ -944,7 +940,10 @@ class MULTIUSER_HANDLER( threading.Thread):
         self.jobs = jobs
         self.multiuser_alive = multiuser_alive
         self.config = config
-        (self.Listener_master, self.port, self.conn_key) = establish_Listener_connection()
+        self.address = read_address_file(master_conn_file)
+
+        (self.Listener_master, self.port, self.conn_key) = establish_Listener_connection(self.address,
+                                                                                         PORT_MIN_MASTER, PORT_MAX_MASTER)
         self.add_to_multiuser()
 
     def run( self):
@@ -978,7 +977,7 @@ class MULTIUSER_HANDLER( threading.Thread):
         multiuser_cur_jobs = self.jobs.multiuser_cur_jobs()
         try:
             msg_back = message_transfer((MULTIUSER_USER,
-                                         (user,self.port, self.conn_key, multiuser_cur_jobs)),
+                                         (user, self.address, self.port, self.conn_key, multiuser_cur_jobs)),
                                         multiuser_address, multiuser_port, multiuser_key)
         except:
             self.multiuser_alive.clear()
@@ -1018,14 +1017,10 @@ def handle_qpy(jobs, sub_ctrl, jobs_killer, config):
 
     
     """
-    (Listener_master, port, conn_key) = establish_Listener_connection()
-
-    f = open(port_file, 'w', 0)
-    f.write(str( port))
-    f.close()
-    f = open(key_file, 'w', 0)
-    f.write(conn_key)
-    f.close()
+    address = read_address_file(master_conn_file)
+    (Listener_master, port, conn_key) = establish_Listener_connection(address,
+                                                                      PORT_MIN_MASTER, PORT_MAX_MASTER)
+    write_conn_files(master_conn_file, address, port, conn_key)
 
     job_id = Job_Id(jobID_file)
 
@@ -1285,6 +1280,6 @@ sub_ctrl.finish.set()
 check_run.finish.set()
 jobs_killer.to_kill.put('kill')
 message_transfer((FROM_MULTI_FINISH, ()),
-                 'ares4', multiuser_handler.port,multiuser_handler.conn_key)
-os.remove(port_file)
-os.remove(key_file)
+                 multiuser_handler.address, multiuser_handler.port,multiuser_handler.conn_key)
+os.remove(master_conn_file+'_port')
+os.remove(master_conn_file+'_conn_key')
