@@ -25,8 +25,8 @@ os.chmod( qpy_multiuser_dir, 0700)
 nodes_file = qpy_multiuser_dir + 'nodes'
 allowed_users_file = qpy_multiuser_dir + 'allowed_users'
 cores_distribution_file = qpy_multiuser_dir + 'distribution_rules'
-user_conn_file = qpy_multiuser_dir + '.connection_'
-multiuser_conn_file = qpy_multiuser_dir + '.multiuser_connection'
+user_conn_file = qpy_multiuser_dir + 'connection_'
+multiuser_conn_file = qpy_multiuser_dir + 'multiuser_connection'
 
 nodes_list = []
 nodes = {}

@@ -545,6 +545,8 @@ class Configurations():
                 key = l_spl[0]
                 if (key == 'checkFMT'):
                     val = l.strip()[10:-1]
+                elif (key == 'job_fmt_pattern'):
+                    val = l.strip()[17:-1]
                 elif (len(l_spl) == 1):
                     val = ()
                 elif (len(l_spl) == 2):

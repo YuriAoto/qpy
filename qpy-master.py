@@ -40,8 +40,8 @@ notes_dir = qpy_dir + '/notes/'
 jobID_file = qpy_dir + '/next_jobID'
 all_jobs_file = qpy_dir + '/all_jobs'
 config_file = qpy_dir + '/config'
-multiuser_conn_file = qpy_dir + '.multiuser_connection'
-master_conn_file = qpy_dir + '.master_connection'
+multiuser_conn_file = qpy_dir + 'multiuser_connection'
+master_conn_file = qpy_dir + 'master_connection'
 
 if (not(os.path.isdir(qpy_dir))):
     os.makedirs(qpy_dir)

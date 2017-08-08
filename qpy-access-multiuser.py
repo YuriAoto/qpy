@@ -15,9 +15,9 @@ if (TEST_RUN):
 else:
     qpy_multiuser_dir = os.path.expanduser( '~/.qpy-multiuser/')
 
-multiuser_conn_file = qpy_multiuser_dir + '.multiuser_connection'
+multiuser_conn_file = qpy_multiuser_dir + 'multiuser_connection'
 multiuser_address, multiuser_port, multiuser_key = read_conn_files(multiuser_conn_file)
-qpy_multiuser_command = [ 'python', QPY_SOURCE_DIR + 'qpy-multiuser.py'] #, '>', '/dev/null'], '2>', '/dev/null']
+qpy_multiuser_command = [ 'python', QPY_SOURCE_DIR + 'qpy-multiuser.py', '>', '/dev/null', '2>', '/dev/null']
 
 try:
     option = MULTIUSER_KEYWORDS[sys.argv[1]][0]
