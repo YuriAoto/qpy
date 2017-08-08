@@ -312,7 +312,7 @@ def message_transfer(msg, address, port, key, timeout=5.0):
     conn.close()
     return back_msg
 
-def node_exec(node, command, get_outerr = True, mode="paramiko"):
+def node_exec(node, command, get_outerr = True, mode="paramiko", pKey_file = None):
     """ Execute a command by ssh
     
     Arguments:
@@ -350,10 +350,14 @@ def node_exec(node, command, get_outerr = True, mode="paramiko"):
     elif (mode == "paramiko"):
         if isinstance(command, list):
             command = ' '.join(command)
+        if pKey_file is not None:
+            k = paramiko.RSAKey.from_private_key_file(pKey_file)
+        else:
+            k = None
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         try:
-            ssh.connect(node)
+            ssh.connect(node, pkey = k)
         except paramiko.BadHostKeyException:
             raise Exception( "SSH error: server\'s host key could not be verified")
         except paramiko.AuthenticationException:
@@ -374,6 +378,7 @@ def node_exec(node, command, get_outerr = True, mode="paramiko"):
 
         else:
             ssh.exec_command(command)
+            sleep(1.)
             ssh.close()
             return
 
@@ -535,6 +540,7 @@ class Configurations():
         self.sleep_time_sub_ctrl = 1
         self.sleep_time_check_run = 10
         self.source_these_files = ['~/.bash_profile']
+        self.ssh_p_key_file = None
 
         if (os.path.isfile(self.config_file)):
             f = open(self.config_file, 'r')
@@ -627,6 +633,15 @@ class Configurations():
                 msg = "maxMessages set to " + str(self.messages.max_len)
                 status = 0
 
+        elif (k == 'ssh_p_key_file' or k == 'ssh_pKey'):
+            if (v == 'None'):
+                self.ssh_p_key_file = None
+            else:
+                self.ssh_p_key_file = v
+
+            msg = "ssh_pKey set to " + str(self.ssh_p_key_file)
+            status = 0
+
         elif (k == 'cleanMessages'):
             self.messages.clean()
             msg = "Messages were cleand."
@@ -705,6 +720,7 @@ class Configurations():
         f.write('saveMessages ' + str(self.messages.save)   + '\n')
         f.write('maxMessages '  + str(self.messages.max_len)+ '\n')
         f.write('checkFMT '     +repr(self.job_fmt_pattern) + '\n')
+        f.write('ssh_pKey '     + str(self.ssh_p_key_file) + '\n')
         f.write('copyScripts '  + str(self.use_script_copy) + '\n')
         f.write('colour '       + str(self.use_colour)      + '\n')
         f.write('coloursScheme '
@@ -728,6 +744,8 @@ class Configurations():
         msg += 'Using coloured check: ' + str(self.use_colour) + '\n'
         msg += 'Sleeping time in submission control: ' + str(self.sleep_time_sub_ctrl) + '\n'
         msg += 'Sleeping time in check run: ' + str(self.sleep_time_check_run) + '\n'
+        if self.ssh_p_key_file is not None:
+            msg += 'Using ssh private key from ' + self.ssh_p_key_file + '\n'
         if (len(self.source_these_files)):
             msg += 'These files are sourced when running a job:\n'
             for i in self.source_these_files:

@@ -218,20 +218,24 @@ class JOB():
             command += self.info[0]
         command += ' > ' + out_or_err_name( self, '.out') + ' 2> ' + out_or_err_name( self, '.err')
 
-        node_exec(self.node, command, get_outerr = False)
+        try:
+            node_exec(self.node, command, get_outerr = False, pKey_file = config.ssh_p_key_file)
+        except:
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            raise Exception( "Exception in run: " + str(exc_value))
 
         self.start_time = datetime.datetime.today()
         self.status = JOB_ST_RUNNING
 
 
-    def is_running(self):
+    def is_running(self, config):
         """Returns True if the job is running
         
         Raises exceptions from the SSH connection if the 
         connection to the node is not successful
         """
         command = 'ps -fu ' + user
-        (std_out, std_err) = node_exec(self.node, command)
+        (std_out, std_err) = node_exec(self.node, command, pKey_file = config.ssh_p_key_file)
         re_res = re.search('export QPY_JOB_ID=' + str( self.ID) + ';', std_out)
         if (re_res):
             return True
@@ -683,7 +687,7 @@ class CHECK_RUN(threading.Thread):
                 jobs_to_check = list(self.jobs.running)
             for job in jobs_to_check:
                 try:
-                    is_running = job.is_running()
+                    is_running = job.is_running(self.config)
                 except:
                     self.config.messages.add('CHECK_RUN: Exception in is_running: ' + repr(sys.exc_info()[0]))
                     is_running = True
@@ -764,7 +768,7 @@ class JOBS_KILLER( threading.Thread):
             try:
                 if (job.status != JOB_ST_RUNNING):
                     raise
-                (std_out, std_err) = node_exec(job.node, command)
+                (std_out, std_err) = node_exec(job.node, command, pKey_file = self.config.ssh_p_key_file)
             except:
                 pass
             else:
@@ -873,7 +877,7 @@ class SUB_CTRL(threading.Thread):
                                 job.run(self.config)
                             except:
                                 # If it's not running, we have to tell qpy-multiuser back somehow...
-                                self.config.messages.add("SUB_CTRL: exception when submitting job: " + repr(sys.exc_info()[0]))
+                                self.config.messages.add("SUB_CTRL: exception when submitting job: " + repr(sys.exc_info()[1]))
                                 job.node = None
                                 self.job.append(job, self.jobs.queue)
                                 self.job.append(job, self.jobs.Q)
@@ -1274,7 +1278,7 @@ sub_ctrl = SUB_CTRL(jobs, multiuser_handler, config)
 sub_ctrl.start()
 
 handle_qpy(jobs, sub_ctrl, jobs_killer, config)
-
+    
 # Finishing qpy-master
 sub_ctrl.finish.set()
 check_run.finish.set()
