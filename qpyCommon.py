@@ -5,13 +5,19 @@
 from multiprocessing import connection
 import termcolor.termcolor as termcolour
 import threading
-import paramiko
 import random
 import os
 import re
 import sys
 import subprocess
 from time import sleep
+try:
+    import paramiko
+    is_paramiko = True
+    # Check version??
+else:
+    is_paramiko = False
+
 
 import time
 
@@ -347,7 +353,7 @@ def node_exec(node, command, get_outerr = True, mode="paramiko", pKey_file = Non
             ssh = subprocess.Popen(command, shell = False)
             return
 
-    elif (mode == "paramiko"):
+    elif (mode == "paramiko" and is_paramiko):
         if isinstance(command, list):
             command = ' '.join(command)
         if pKey_file is not None:
