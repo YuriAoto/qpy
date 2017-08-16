@@ -15,7 +15,7 @@ try:
     import paramiko
     is_paramiko = True
     # Check version??
-else:
+except:
     is_paramiko = False
 
 
