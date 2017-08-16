@@ -92,14 +92,20 @@ if (option == JOBTYPE_CHECK):
             else:
                 arguments['status'] = [x]
         else:
-            try:
-                new_jobids = string_to_int_list( x)
-            except:
-                sys.exit( 'Unknown pattern for checking jobs: ' + x)
-            if ('job_id' in arguments):
-                arguments['job_id'].extend( new_jobids)
+            if (os.path.isdir(x)):
+                if 'dir' in arguments:
+                    arguments['dir'].append(os.path.abspath(x))
+                else:
+                    arguments['dir'] = [os.path.abspath(x)]
             else:
-                arguments['job_id'] = new_jobids
+                try:
+                    new_jobids = string_to_int_list( x)
+                except:
+                    sys.exit( 'Unknown pattern for checking jobs: ' + x)
+                if ('job_id' in arguments):
+                    arguments['job_id'].extend( new_jobids)
+                else:
+                    arguments['job_id'] = new_jobids
 
 # Config
 elif (option == JOBTYPE_CONFIG):

@@ -335,13 +335,16 @@ class JOB():
         Return a boolean, indicating whether this job obbeys the dictionary pattern or not
         empty pattern means that everthing is required
         """
-        req = not ( "status" in pattern
-                    or "job_id" in pattern)
+        req = not ("status" in pattern
+                   or "job_id" in pattern
+                   or "dir" in pattern)
         for k in pattern:
             if (k == 'status'):
                 req = req or JOB_STATUS[self.status] in pattern[k]
             elif ( k == "job_id"):
                 req = req or self.ID in pattern[k]
+            elif k == 'dir':
+                req = req or self.info[1] in pattern[k]
         return req
 
 
