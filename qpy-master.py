@@ -1187,6 +1187,7 @@ def handle_qpy(jobs, sub_ctrl, jobs_killer, config):
             n_jobs = 0
             for i in arguments:
                 arg_is_id = isinstance( i, int)
+                arg_is_dir = isinstance( i, str) and os.path.isdir(i)
                 ij = 0
                 with jobs.lock:
                     while (ij < len( jobs.all)):
@@ -1194,6 +1195,7 @@ def handle_qpy(jobs, sub_ctrl, jobs_killer, config):
                         remove = False
                         if (job.status > 1):
                             remove = arg_is_id and i == job.ID
+                            remove = remove or (arg_is_dir and i == job.info[1])
                             remove = remove or not( arg_is_id) and i == 'all'
                             remove = remove or not( arg_is_id) and i == JOB_STATUS[job.status]
                             if (remove):

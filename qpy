@@ -124,6 +124,8 @@ elif (option == JOBTYPE_KILL or option == JOBTYPE_CLEAN):
         except:
             if (x == 'all' or x in JOB_STATUS[status_bound[0]:status_bound[1]]):
                 arguments.append( x)
+            elif (os.path.isdir(x)):
+                arguments.append(os.path.abspath(x))
             else:
                 sys.exit( 'Range with wrong format or invalid status: ' + x)
 
