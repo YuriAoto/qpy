@@ -19,7 +19,7 @@ else:
     qpy_dir = os.path.expanduser( '~/.qpy/')
 
 master_conn_file = qpy_dir + 'master_connection'
-tutorial_file = QPY_SOURCE_DIR + '/tutorial'
+tutorial_file = QPY_SOURCE_DIR + '/doc/tutorial'
 
 qpy_master_command = 'python ' + QPY_SOURCE_DIR + 'qpy-master.py'
 
