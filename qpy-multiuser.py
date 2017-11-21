@@ -45,8 +45,8 @@ nodes_check_time = 300
 
 
 
-logging.basicConfig(filename=multiuser_log_file,level=logging.WARNING)
-
+logging.basicConfig(filename=multiuser_log_file,level=logging.DEBUG)
+#logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
 
 class NODE():
     """A node from the qpy-multiuser point of view.
@@ -91,6 +91,7 @@ class NODE():
         try:
             (std_out, std_err) = node_exec(self.name, command)
         except:
+            logging.exception("finding the number of untracked jobs failed for node: %s",self.name)
             self.messages.add('outsiders: Exception: ' + repr(sys.exc_info()[0]))
             info.is_up = False
             info.n_outsiders = 0
@@ -109,6 +110,7 @@ class NODE():
         try:
             (std_out, std_err) = node_exec(self.name, command)
         except:
+            logging.exception("finding the the free memory failed for node: %s",self.name)
             self.messages.add('memory: Exception: ' + repr(sys.exc_info()[0]))
             info.is_up = False
             info.free_mem_real = 0.0
@@ -120,7 +122,7 @@ class NODE():
                 info.free_mem_real = float(std_out[2].split()[3])
             else:
                 info.free_mem_real = float(std_out[1].split()[6])
-
+            logging.info("node %s is up",self.name)
         return info
 
 
@@ -505,7 +507,7 @@ def handle_client():
         write_conn_files(multiuser_conn_file, multiuser_address, multiuser_port, multiuser_key)
 
     except:
-        logging.error("Error when establishing connection. Is there already a qpy-multiuser instance?")
+        logging.exception("Error when establishing connection. Is there already a qpy-multiuser instance?")
         return
 
     while True:
@@ -514,7 +516,9 @@ def handle_client():
         try:
             client = conn.accept()
             (action_type, arguments) = client.recv()
+            logging.info("Received request: %s arguments:%s",str(action_type), str(arguments))
         except:
+            logging.exception("Connection failed")
             # TODO: print exception in a log file
             continue
 
@@ -812,10 +816,9 @@ class CHECK_NODES(threading.Thread):
             nodes_info = {}
             try:
                 for node in nodes:
-                    print "Checking "+node
+                    logging.info("checking %s",node)
                     nodes_info[node] = nodes[node].check()
-                    print "Done with "+node
-                    print
+                    logging.info("done with %s",node)
                 nodes_check_lock.acquire()
                 N_outsiders += nodes_info[node].n_outsiders - nodes[node].n_outsiders
                 for node in nodes:
@@ -825,7 +828,7 @@ class CHECK_NODES(threading.Thread):
                     nodes[node].free_mem_real = nodes_info[node].free_mem_real
                 nodes_check_lock.release()
             except:
-                logging.error('Exception at CHECK_NODES:'  + repr(sys.exc_info()[0]) + ',' + repr(sys.exc_info()[1]) + ',' + repr(sys.exc_info()[1]))
+                logging.exception("Error in CHECK_NODES")
             self.finish.wait(nodes_check_time)
 
 
