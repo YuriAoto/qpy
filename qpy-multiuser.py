@@ -72,17 +72,6 @@ class NODE():
         self.free_mem_real = 0.0
         self.n_outsiders = 0
 
-    def is_ssh_working( self):
-        """Check if the ssh connection is working."""
-        command = "echo working"
-        try:
-            (std_out, std_err) = node_exec( self.name, command)
-        except:
-            self.messages.add('is_ssh_working: Exception: ' + repr(sys.exc_info()[0]))
-            self.is_up = False
-        else:
-            self.is_up = (std_out.split("\n")[0] == 'working')
-        return self.is_up
 
     def check(self):
         """Check several things in the node.
