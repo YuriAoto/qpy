@@ -499,7 +499,8 @@ def handle_redistribute_cores(args):
         -3: 'Cores distribution failed. Not enough cores.',
     }.get(status, default='Cores distribution failed.')
 
-
+#---------------------------------------#
+#  formatting functions. 
 def format_general_variables():
     variables = [
         ('N_cores', N_cores),
@@ -569,7 +570,56 @@ def handle_show_variables(args):
             thenodes = format_nodes(nodes)
         )
 
+def handle_show_status(args):
+    """handles a request for the general multiuser status
 
+    args : () or (user_name)
+    """
+    sep1 = '-'*60 + '\n'
+    sep2 = '='*60 + '\n'
+    headerN =  '                       cores              memory (GB)\n'
+    headerN += 'node                used  total      used     req   total\n'
+    headerU =  'user                using cores        queue size\n' + sep1
+
+    msgU = ''
+    format_spec = '{0:22s} {1:<5d}' + ' '*13 + '{2:<5d}\n'
+    for user in sorted(users):
+        msgU += format_spec.format( user,
+                                    users[user].n_used_cores,
+                                    users[user].n_queue)
+    msgU = headerU + msgU + sep2 if msgU else 'No users.\n'
+
+    msgN = ''
+    format_spec = '{0:20s} {1:<5d} {2:<5d}' + ' '*2 + '{3:>7.1f} {4:>7.1f} {5:>7.1f}\n'
+    with nodes_check_lock:
+        for node in nodes:
+            down=' (down)' if not( nodes[node].is_up) else ''
+            msgN += format_spec.format( node + down,
+                                        nodes[node].n_used_cores + nodes[node].n_outsiders,
+                                        nodes[node].max_cores,
+                                        nodes[node].total_mem - nodes[node].free_mem_real,
+                                        nodes[node].req_mem,
+                                        nodes[node].total_mem)
+    msgN = headerN + sep1 + msgN + sep2 if msgN else 'No nodes.\n'
+    status = 0
+    msg_used_cores = 'There are {0} out of a total of {1} cores being used.\n'.format(
+        N_used_cores + N_outsiders,
+        N_cores)
+    return status, msgU +msgN + msg_used_cores
+        
+def handle_save_messages(args):
+    """handles a request to start saving messages
+
+    args: (save_messages)
+    """
+    for user in users:
+        users[user].messages.save= args[0]
+    for node in nodes:
+        nodes[node].messages.save= args[0]
+    status = 0
+    return status, 'Save messages set to {0}.\n'.format(args[0])
+    
+    
 def handle_client():
     """Handles the user messages sent from the client
 
@@ -641,67 +691,13 @@ def handle_client():
         # Show status
         # arguments = () or (user_name)
         elif (action_type == MULTIUSER_STATUS):
-
-            sep1 = '-'*60 + '\n'
-            sep2 = '='*60 + '\n'
-            headerN =  '                       cores              memory (GB)\n'
-            headerN += 'node                used  total      used     req   total\n'
-            headerU =  'user                using cores        queue size\n' + sep1
-
-            nodes_ordered = []
-            for node in nodes:
-                nodes_ordered.append( node)
-            nodes_ordered.sort()
-
-            users_ordered = []
-            for user in users:
-                users_ordered.append( user)
-            users_ordered.sort()
-
-            status = 0
-
-            msgU = ''
-            format_spec = '{0:22s} {1:<5d}' + ' '*13 + '{2:<5d}\n'
-            for user in users_ordered:
-                msgU += format_spec.format( user,
-                                            users[user].n_used_cores,
-                                            users[user].n_queue)
-            if (msgU):
-                msgU = headerU + msgU + sep2
-            else:
-                msgU = 'No users.\n'
-
-            msgN = ''
-            format_spec = '{0:20s} {1:<5d} {2:<5d}' + ' '*2 + '{3:>7.1f} {4:>7.1f} {5:>7.1f}\n'
-            nodes_check_lock.acquire()
-            for node in nodes_ordered:
-                down=' (down)' if not( nodes[node].is_up) else ''
-                msgN += format_spec.format( node + down,
-                                            nodes[node].n_used_cores + nodes[node].n_outsiders,
-                                            nodes[node].max_cores,
-                                            nodes[node].total_mem - nodes[node].free_mem_real,
-                                            nodes[node].req_mem,
-                                            nodes[node].total_mem)
-            nodes_check_lock.release()
-            if (msgN):
-                msgN = sep1 + msgN + sep2
-                msgN = headerN + msgN
-            else:
-                msgN = 'No nodes.\n'
-
-            msg = msgU + msgN
-            msg += 'There are ' + str( N_used_cores + N_outsiders) + ' out of a total of ' + str( N_cores) + ' cores being used.\n'
+            status,msg = handle_show_status(arguments)
 
 
         # Start saving messages
         # arguments = (save_messages)
         elif (action_type == MULTIUSER_SAVE_MESSAGES):
-            for user in users:
-                users[user].messages.save = arguments[0]
-            for node in nodes:
-                nodes[node].messages.save = arguments[0]
-            status = 0
-            msg = 'Save messages set to ' + str(arguments[0])
+            status,msg = handle_save_messages(arguments)
 
         # Finish qpy-multiuser
         # arguments = ()
