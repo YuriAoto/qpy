@@ -46,7 +46,7 @@ nodes_check_time = 300
 
 
 logging.basicConfig(filename=multiuser_log_file,level=logging.DEBUG)
-#logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
+logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
 
 class NODE():
     """A node from the qpy-multiuser point of view.
@@ -470,6 +470,18 @@ def distribute_cores():
     return 0
 
 
+def handle_reload_nodes(args):
+    """ handles a request to reload the nodes
+
+    args: ()
+    """
+    status = load_nodes()
+    return status,{0: 'Nodes loaded.',
+            -1 : 'Nodes loading failed. Problem when openning {0}.'.format( nodes_file),
+            -2 : 'Nodes loading failed. Check {0}.'.format( nodes_file),
+    }.get(status, 'Nodes loading failed.')
+
+
 def handle_client():
     """Handles the user messages sent from the client
 
@@ -519,21 +531,12 @@ def handle_client():
             logging.info("Received request: %s arguments:%s",str(action_type), str(arguments))
         except:
             logging.exception("Connection failed")
-            # TODO: print exception in a log file
             continue
 
         # Reload the nodes
         # arguments = ()
         if (action_type == MULTIUSER_NODES):
-            status = load_nodes()
-            if (status == 0):
-                msg = 'Nodes loaded.'
-            elif (status == -1):
-                msg = 'Nodes loading failed. Problem when openning ' + nodes_file + '.'
-            elif (status == -2):
-                msg = 'Nodes loading failed. Check ' + nodes_file + '.'
-            else:
-                msg = 'Nodes loading failed.'
+            status,msg = handle_reload_nodes(arguments)
 
 
         # Redistribute cores
