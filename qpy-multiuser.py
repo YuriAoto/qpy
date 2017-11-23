@@ -469,6 +469,8 @@ def distribute_cores():
         users[user].max_cores = N_cores - N_min_cores + users[user].min_cores
     return 0
 
+#-----------------------------------------------------------------
+#  handle_yyy methods. Take the arguments of a request and return the string to be send back.
 
 def handle_reload_nodes(args):
     """ handles a request to reload the nodes
@@ -481,6 +483,17 @@ def handle_reload_nodes(args):
             -2 : 'Nodes loading failed. Check {0}.'.format( nodes_file),
     }.get(status, 'Nodes loading failed.')
 
+def handle_redistribute_cores(args):
+    """handles a request to redistribute cores.
+
+    args: ()
+    """
+    status = distribute_cores()
+    return status,{0:'Cores distributed.',
+    -1: 'Cores distribution failed. Problem when openning {0}.'.format(cores_distribution_file),
+     -2: 'Cores distribution failed. Check {0}.'.format(cores_distribution_file),
+     -3:  'Cores distribution failed. Not enough cores.',
+    }.get(status, 'Cores distribution failed.')
 
 def handle_client():
     """Handles the user messages sent from the client
@@ -542,17 +555,7 @@ def handle_client():
         # Redistribute cores
         # arguments = ()
         elif (action_type == MULTIUSER_DISTRIBUTE):
-            status = distribute_cores()
-            if (status == 0):
-                msg = 'Cores distributed.'
-            elif (status == -1):
-                msg = 'Cores distribution failed. Problem when openning ' + cores_distribution_file + '.'
-            elif (status == -2):
-                msg = 'Cores distribution failed. Check ' + cores_distribution_file + '.'
-            elif (status == -3):
-                msg = 'Cores distribution failed. Not enough cores.'
-            else:
-                msg = 'Cores distribution failed.'
+            status,msg = handle_redistribute_cores(arguments)
 
 
         # Show important variables
