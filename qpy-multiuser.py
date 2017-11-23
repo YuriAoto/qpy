@@ -477,10 +477,12 @@ def handle_reload_nodes(args):
 
     args: ()
     """
+    assert len(()) ==0
     status = load_nodes()
-    return status,{0: 'Nodes loaded.',
-            -1 : 'Nodes loading failed. Problem when openning {0}.'.format( nodes_file),
-            -2 : 'Nodes loading failed. Check {0}.'.format( nodes_file),
+    return status,{
+        0  : 'Nodes loaded.',
+        -1 : 'Nodes loading failed. Problem when openning {0}.'.format( nodes_file),
+        -2 : 'Nodes loading failed. Check {0}.'.format( nodes_file),
     }.get(status, 'Nodes loading failed.')
 
 def handle_redistribute_cores(args):
@@ -488,12 +490,85 @@ def handle_redistribute_cores(args):
 
     args: ()
     """
+    assert len(()) ==0
     status = distribute_cores()
-    return status,{0:'Cores distributed.',
-    -1: 'Cores distribution failed. Problem when openning {0}.'.format(cores_distribution_file),
-     -2: 'Cores distribution failed. Check {0}.'.format(cores_distribution_file),
-     -3:  'Cores distribution failed. Not enough cores.',
-    }.get(status, 'Cores distribution failed.')
+    return status,{
+        0 : 'Cores distributed.',
+        -1: 'Cores distribution failed. Problem when openning {0}.'.format(cores_distribution_file),
+        -2: 'Cores distribution failed. Check {0}.'.format(cores_distribution_file),
+        -3: 'Cores distribution failed. Not enough cores.',
+    }.get(status, default='Cores distribution failed.')
+
+
+def format_general_variables():
+    variables = [
+        ('N_cores', N_cores),
+        ('N_min_cores', N_min_cores),
+        ('N_used_cores', N_used_cores),
+        ('N_used_min_cores', N_used_min_cores),
+        ('N_outsiders',N_outsiders),
+        ]
+    format_spec = '{0: <16} = {1}'
+    return '\n'.join( format_spec.format(*pair) for pair in variables)
+
+def format_jobs(jobs):
+    format_spec='          {0}'
+    return '\n'.join(format_spec.format(job)for job in jobs)
+
+def format_messages(messages):
+    return '  Last messages:\n' + str(info.messages) + '----------'
+
+def format_user(user,info):
+    fields = [
+        ('min_cores',info.min_cores),
+        ('extra_cores',info.extra_cores),
+        ('max_cores',info.max_cores),
+        ('n_used_cores',info.n_used_cores),
+        ('n_queue',info.n_queue),
+    ]
+    format_spec = '  {0: <12} = {1}'
+    infos = '\n'.join( format_spec.format(*pair) for pair in fields)
+    current_jobs = format_jobs(info.cur_jobs)
+    messages = "\n"+format_messages(info.messages) if len(info.messages) >0 else ''
+    return '\n'.join([user,
+                     infos,
+                     current_jobs]) + messages
+def format_users(users):
+    return "\n".join(format_user(user,info) for user,info in users.iteritems())
+
+def format_node(node,info):
+    fields = [
+        ('max_cores',info.max_cores),
+        ('n_used_cores',info.n_used_cores),
+        ('n_outsiders',info.n_outsiders),
+        ('total_mem',info.total_mem),
+        ('req_mem',info.req_mem),
+        ('free_mem_real',info.free_mem_real),
+        ('pref_multicores',info.pref_multicores),
+        ('is_up',info.is_up),
+    ]
+    format_spec = '  {0: <15} = {1}'
+    infos = '\n'.join( format_spec.format(*pair) for pair in fields)
+    messages = "\n"+format_messages(info.messages) if len(info.messages) >0 else ''
+    return infos + messages
+
+def format_nodes(nodes):
+    return "\n".join(format_node(node,info) for node,info in nodes.iteritems())
+
+
+def handle_show_variables(args):
+    """handles a request to show the variables defining the current status of this service
+    
+    args: ()
+    """
+    assert len(()) == 0
+    with nodes_check_lock:
+        return 0,"{general}\n{theusers}\n{thenodes}\n".format(
+            general=format_general_variables(),
+            theusers = format_users(users),
+            thenodes = format_nodes(nodes)
+        )
+
 
 def handle_client():
     """Handles the user messages sent from the client
@@ -561,41 +636,7 @@ def handle_client():
         # Show important variables
         # arguments = ()
         elif (action_type == MULTIUSER_SHOW_VARIABLES):
-            status = 0
-            nodes_check_lock.acquire()
-            msg = ''
-            msg += 'N_cores          = ' + str( N_cores)           + '\n'
-            msg += 'N_min_cores      = ' + str( N_min_cores)       + '\n'
-            msg += 'N_used_cores     = ' + str( N_used_cores)      + '\n'
-            msg += 'N_used_min_cores = ' + str( N_used_min_cores)  + '\n'
-            msg += 'N_outsiders      = ' + str( N_outsiders)       + '\n'
-            msg += 'users:\n'
-            for user, info in users.iteritems():
-                msg += user + ':\n'
-                msg += '  min_cores    = ' + str( info.min_cores)    + '\n'
-                msg += '  extra_cores  = ' + str( info.extra_cores)  + '\n'
-                msg += '  max_cores    = ' + str( info.max_cores)    + '\n'
-                msg += '  n_used_cores = ' + str( info.n_used_cores) + '\n'
-                msg += '  n_queue      = ' + str( info.n_queue)      + '\n'
-                msg += '  cur_jobs     :' + '\n'
-                for cj in info.cur_jobs:
-                    msg += '          ' + str(cj) + '\n'
-                if (len(info.messages) > 0):
-                    msg += '  Last messages:\n' + str(info.messages) + '----------\n'
-            msg += 'nodes:\n'
-            for node, info in nodes.iteritems():
-                msg += node + ':\n'
-                msg += '  max_cores       = ' + str( info.max_cores)       + '\n'
-                msg += '  n_used_cores    = ' + str( info.n_used_cores)    + '\n'
-                msg += '  n_outsiders     = ' + str( info.n_outsiders)     + '\n'
-                msg += '  total_mem       = ' + str( info.total_mem)       + '\n'
-                msg += '  req_mem         = ' + str( info.req_mem)         + '\n'
-                msg += '  free_mem_real   = ' + str( info.free_mem_real)   + '\n'
-                msg += '  pref_multicores = ' + str( info.pref_multicores) + '\n'
-                msg += '  is_up           = ' + str( info.is_up)           + '\n'
-                if (len(info.messages) > 0):
-                    msg += '  Last messages:\n' + str(info.messages) + '----------\n'
-            nodes_check_lock.release()
+            status,msg = handle_show_variables(arguments)
 
         # Show status
         # arguments = () or (user_name)
