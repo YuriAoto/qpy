@@ -619,7 +619,44 @@ def handle_save_messages(args):
     status = 0
     return status, 'Save messages set to {0}.\n'.format(args[0])
     
-    
+def handle_sync_user_info(args):
+    """handles a request to synchronize user info
+
+    args: user_name, address,port, conn_key, cur_jobs
+    """
+    user,address,port,conn_key,new_cur_jobs = args
+    try:
+        if user in users:
+            users[user].address = address
+            users[user].port = port
+            users[user].conn_key = conn_key
+            same_list = len(new_cur_jobs) == len(users[user].cur_jobs) \
+                        and all(new_job == old_job for new_job, old_job in zip(new_cur_jobs, users[user].cur_jobs))
+            return ( 0,'User exists' ) if same_list else (1, 'User exists but with a different job list.')
+        else:
+            try:
+                with open(allowed_users_file,'r') as f:
+                    allowed_users =  list(line.strip() for line in f)
+            except:
+                allowed_users = []
+            if user in allowed_users:
+                new_user = USER(user, address, port, conn_key)
+                for job in new_cur_jobs:
+                    new_user.add_job(job)
+                users[user] = new_user
+                return (0,'User added') if distribute_cores() == 0 else \
+                    (0, 'User added. Cores distribution failed.')
+            else:
+                return 2,'Not allowed user'
+    finally:
+        for user in users:
+            write_conn_files(user_conn_file+user,
+                             users[user].address,
+                             users[user].port,
+                             users[user].conn_key)
+
+
+
 def handle_client():
     """Handles the user messages sent from the client
 
@@ -710,63 +747,8 @@ def handle_client():
         # Add a user or sync user info
         # arguments = (user_name, port, conn_key, cur_jobs)
         elif (action_type == MULTIUSER_USER):
-            user = arguments[0]
-            address = arguments[1]
-            port = arguments[2]
-            conn_key = arguments[3]
-            new_cur_jobs = arguments[4]
+            status, msg = handle_sync_user_info(arguments)
 
-            if (user in users):
-                status = 0
-                users[user].address = address
-                users[user].port = port
-                users[user].conn_key = conn_key
-
-                same_list = True
-                if (len( new_cur_jobs) != len( users[user].cur_jobs)):
-                    same_list = False
-                else:
-                    for i in range(len(new_cur_jobs)):
-                        if (new_cur_jobs[i] != users[user].cur_jobs[i]):
-                            same_list = False
-                            break
-
-                if (same_list):
-                    status = 0
-                    msg = 'User exists.'
-                else:
-                    status = 1
-                    msg = 'User exists, but with a different job list.'
-
-            else:
-                allowed_users = []
-                try:
-                    f = open( allowed_users_file, 'r')
-                    for line in f:
-                        allowed_users.append( line.strip())
-                    f.close()
-                except:
-                    pass
-                if (user in allowed_users):
-                    status = 0
-                    new_user = USER(user, address, port, conn_key)
-                    for job in new_cur_jobs:
-                        new_user.add_job( job)
-                    users[user] = new_user
-
-                    if (distribute_cores() != 0):
-                        msg = 'User added. Cores distribution failed.'
-                    else:
-                        msg = 'User added.'
-                else:
-                    status = 2
-                    msg = 'Not allowed user.'
-
-            for user in users:
-                write_conn_files(user_conn_file+user, 
-                                 users[user].address,
-                                 users[user].port,
-                                 users[user].conn_key)
 
         # Add a job
         # arguments = (user_name, jobID, n_cores, mem, queue_size)
