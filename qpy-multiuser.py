@@ -656,6 +656,31 @@ def handle_sync_user_info(args):
                              users[user].conn_key)
 
 
+def handle_add_job(args):
+    """ handles request to add a job
+
+    args: (user_name, jobID, n_cores, mem, queue_size)
+    """
+    user, jobID, n_cores, mem, queue_size = args
+    assert isinstance(user,str)
+    assert isinstance(jobID,int)
+    assert isinstance(n_cores,int)
+    assert isinstance(mem,float)
+    assert isinstance(queue_size,int)
+    try:
+        status = users[user].request_node(jobID,n_cores,mem)
+        if isinstance(status,str):
+            users[user].n_queue = queue_size -1
+            return 0,status
+        else:
+            users[user].n_queue = queue_size -1
+            return (1,'No node with this requirement.') if status == 1 \
+                else (2,'No free cores.')
+    except KeyError:
+        return -1, 'User does not exists.'
+    except Exception as ex:
+        return -2,"WARNING: An exception of type {0} occured - add a job.\nArguments:\n{1|r}\nContact the qpy-team.".format(type(ex).__name__, ex.args)
+
 
 def handle_client():
     """Handles the user messages sent from the client
@@ -753,31 +778,7 @@ def handle_client():
         # Add a job
         # arguments = (user_name, jobID, n_cores, mem, queue_size)
         elif (action_type == MULTIUSER_REQ_CORE):
-            user       = arguments[0] # str
-            jobID      = arguments[1] # int
-            n_cores    = arguments[2] # int
-            mem        = arguments[3] # float
-            queue_size = arguments[4] # int
-            try:
-                status = users[user].request_node( jobID, n_cores, mem)
-                if (isinstance( status, str)): # The node name
-                    msg = status
-                    status = 0
-                    users[user].n_queue = queue_size - 1
-                else:
-                    users[user].n_queue = queue_size
-                    if (status == 1):
-                        msg = 'No node with this requirement.'
-                    elif (status == 2):
-                        msg = 'No free cores.'
-            except KeyError:
-                status = -1
-                msg = 'User does not exists.'
-            except Exception as ex:
-                status = -2
-                template = "WARNING: An exception of type {0} occured - add a job.\nArguments:\n{1!r}\nContact the qpy-team."
-                msg = template.format(type(ex).__name__, ex.args)
-
+            status, msg = handle_add_job(arguments)
 
         # Remove a job
         # arguments = (user_name, jobID, queue_size)
