@@ -75,17 +75,6 @@ class NODE():
         self.free_mem_real = 0.0
         self.n_outsiders = 0
 
-    def is_ssh_working( self):
-        """Check if the ssh connection is working."""
-        command = "echo working"
-        try:
-            (std_out, std_err) = node_exec( self.name, command)
-        except:
-            logging.exception("Exception at is_ssh_working (%s)",self.name)
-            self.is_up = False
-        else:
-            self.is_up = (std_out.split("\n")[0] == 'working')
-        return self.is_up
 
     def check(self):
         """Check several things in the node.
@@ -105,8 +94,8 @@ class NODE():
         try:
             (std_out, std_err) = node_exec(self.name, command)
         except:
-            logging.exception("Exception at node_exec, executing top (%s)",self.name)
-#            self.messages.add('outsiders: Exception: ' + repr(sys.exc_info()[0]))
+            logging.exception("finding the number of untracked jobs failed for node: %s",self.name)
+            self.messages.add('outsiders: Exception: ' + repr(sys.exc_info()[0]))
             info.is_up = False
             info.n_outsiders = 0
         else:
@@ -124,10 +113,8 @@ class NODE():
         try:
             (std_out, std_err) = node_exec(self.name, command)
         except:
-
-            logging.exception("Exception at node_exec, executing free (%s)",self.name)
-#            self.messages.add('memory: Exception: ' + repr(sys.exc_info()[0]))
-
+            logging.exception("finding the the free memory failed for node: %s",self.name)
+            self.messages.add('memory: Exception: ' + repr(sys.exc_info()[0]))
             info.is_up = False
             info.free_mem_real = 0.0
             info.total_mem = 0.0
@@ -138,7 +125,7 @@ class NODE():
                 info.free_mem_real = float(std_out[2].split()[3])
             else:
                 info.free_mem_real = float(std_out[1].split()[6])
-
+            logging.info("node %s is up",self.name)
         return info
 
 
@@ -534,7 +521,9 @@ def handle_client():
         try:
             client = conn.accept()
             (action_type, arguments) = client.recv()
+            logging.info("Received request: %s arguments:%s",str(action_type), str(arguments))
         except:
+            logging.exception("Connection failed")
             # TODO: print exception in a log file
             continue
 
@@ -833,19 +822,19 @@ class CHECK_NODES(threading.Thread):
             nodes_info = {}
             try:
                 for node in nodes:
-                    print "Checking "+node
+                    logging.info("checking %s",node)
                     nodes_info[node] = nodes[node].check()
-                    print "Done with "+node
-                    print
-                with nodes_check_lock:
-                    N_outsiders += nodes_info[node].n_outsiders - nodes[node].n_outsiders
-                    for node in nodes:
-                        nodes[node].is_up = nodes_info[node].is_up
-                        nodes[node].n_outsiders = nodes_info[node].n_outsiders
-                        nodes[node].total_mem = nodes_info[node].total_mem
-                        nodes[node].free_mem_real = nodes_info[node].free_mem_real
+                    logging.info("done with %s",node)
+                nodes_check_lock.acquire()
+                N_outsiders += nodes_info[node].n_outsiders - nodes[node].n_outsiders
+                for node in nodes:
+                    nodes[node].is_up = nodes_info[node].is_up
+                    nodes[node].n_outsiders = nodes_info[node].n_outsiders
+                    nodes[node].total_mem = nodes_info[node].total_mem
+                    nodes[node].free_mem_real = nodes_info[node].free_mem_real
+                nodes_check_lock.release()
             except:
-                logging.exception("Exception at check_nodes (%s)", self.name)
+                logging.exception("Error in CHECK_NODES")
             self.finish.wait(nodes_check_time)
 
 
