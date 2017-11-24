@@ -13,6 +13,7 @@ from optparse import OptionParser
 import threading
 from qpyCommon import *
 import logging
+import traceback
 
 if (TEST_RUN):
     qpy_multiuser_dir = os.path.expanduser( '~/.qpy-multiuser-test/')
@@ -28,7 +29,7 @@ allowed_users_file = qpy_multiuser_dir + 'allowed_users'
 cores_distribution_file = qpy_multiuser_dir + 'distribution_rules'
 user_conn_file = qpy_multiuser_dir + 'connection_'
 multiuser_conn_file = qpy_multiuser_dir + 'multiuser_connection'
-multiuser_log_file = qpy_multiuser_dir + 'multiuser_log'
+multiuser_log_file = qpy_multiuser_dir + 'log_multiuser'
 
 nodes_list = []
 nodes = {}
@@ -43,9 +44,11 @@ nodes_check_lock = threading.RLock()
 nodes_check_alive = True
 nodes_check_time = 300
 
+logging.basicConfig(filename=multiuser_log_file,
+                    level=logging.WARNING,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-
-logging.basicConfig(filename=multiuser_log_file,level=logging.WARNING)
+logging.info('Starting qpy-multiuser.')
 
 
 class NODE():
@@ -78,7 +81,7 @@ class NODE():
         try:
             (std_out, std_err) = node_exec( self.name, command)
         except:
-            self.messages.add('is_ssh_working: Exception: ' + repr(sys.exc_info()[0]))
+            logging.exception("Exception at is_ssh_working (%s)",self.name)
             self.is_up = False
         else:
             self.is_up = (std_out.split("\n")[0] == 'working')
@@ -102,7 +105,8 @@ class NODE():
         try:
             (std_out, std_err) = node_exec(self.name, command)
         except:
-            self.messages.add('outsiders: Exception: ' + repr(sys.exc_info()[0]))
+            logging.exception("Exception at node_exec, executing top (%s)",self.name)
+#            self.messages.add('outsiders: Exception: ' + repr(sys.exc_info()[0]))
             info.is_up = False
             info.n_outsiders = 0
         else:
@@ -120,7 +124,10 @@ class NODE():
         try:
             (std_out, std_err) = node_exec(self.name, command)
         except:
-            self.messages.add('memory: Exception: ' + repr(sys.exc_info()[0]))
+
+            logging.exception("Exception at node_exec, executing free (%s)",self.name)
+#            self.messages.add('memory: Exception: ' + repr(sys.exc_info()[0]))
+
             info.is_up = False
             info.free_mem_real = 0.0
             info.total_mem = 0.0
@@ -516,12 +523,14 @@ def handle_client():
         write_conn_files(multiuser_conn_file, multiuser_address, multiuser_port, multiuser_key)
 
     except:
+        logging.exception("Exception when establishing connection (%s)", self.name)
+        return
+    if conn is None:
         logging.error("Error when establishing connection. Is there already a qpy-multiuser instance?")
         return
 
+    logging.info("Starting main loop.")
     while True:
-        logging.info("Starting main loop.")
-
         try:
             client = conn.accept()
             (action_type, arguments) = client.recv()
@@ -742,6 +751,7 @@ def handle_client():
             queue_size = arguments[4] # int
             try:
                 status = users[user].request_node( jobID, n_cores, mem)
+                logging.info('Job requested by ' + user)
                 if (isinstance( status, str)): # The node name
                     msg = status
                     status = 0
@@ -827,16 +837,15 @@ class CHECK_NODES(threading.Thread):
                     nodes_info[node] = nodes[node].check()
                     print "Done with "+node
                     print
-                nodes_check_lock.acquire()
-                N_outsiders += nodes_info[node].n_outsiders - nodes[node].n_outsiders
-                for node in nodes:
-                    nodes[node].is_up = nodes_info[node].is_up
-                    nodes[node].n_outsiders = nodes_info[node].n_outsiders
-                    nodes[node].total_mem = nodes_info[node].total_mem
-                    nodes[node].free_mem_real = nodes_info[node].free_mem_real
-                nodes_check_lock.release()
+                with nodes_check_lock:
+                    N_outsiders += nodes_info[node].n_outsiders - nodes[node].n_outsiders
+                    for node in nodes:
+                        nodes[node].is_up = nodes_info[node].is_up
+                        nodes[node].n_outsiders = nodes_info[node].n_outsiders
+                        nodes[node].total_mem = nodes_info[node].total_mem
+                        nodes[node].free_mem_real = nodes_info[node].free_mem_real
             except:
-                logging.error('Exception at CHECK_NODES:'  + repr(sys.exc_info()[0]) + ',' + repr(sys.exc_info()[1]) + ',' + repr(sys.exc_info()[1]))
+                logging.exception("Exception at check_nodes (%s)", self.name)
             self.finish.wait(nodes_check_time)
 
 
@@ -850,7 +859,7 @@ check_nodes.start()
 try:
     handle_client()
 except:
-    logging.error('Exception at handle_client:'  + repr(sys.exc_info()[0]) + ',' + repr(sys.exc_info()[1]) + ',' + repr(sys.exc_info()[1]))
+    logging.exception("Exception at handle_client (%s)",self.name)
 
 
 logging.info('Finishing main thread of qpy-multiuser')
