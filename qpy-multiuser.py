@@ -681,6 +681,24 @@ def handle_add_job(args):
     except Exception as ex:
         return -2,"WARNING: An exception of type {0} occured - add a job.\nArguments:\n{1|r}\nContact the qpy-team.".format(type(ex).__name__, ex.args)
 
+def handle_remove_job(args):
+    """handles a request to remove a job
+
+    args : (user_name, jobID, queue_size)
+    """
+    user, jobID, queue_size = args
+    assert isinstance(user, str)
+    assert isinstance(jobID, int)
+    assert isinstance( queue_size, int)
+    try:
+        status = users[user].remove_job(jobID)
+        users[user].n_queue = queue_size
+        return status,{0:'Job removed.',
+                       1:'Job not found'}[status]
+    except KeyError:
+        return -1,'User does not exists.'
+    except Exception as ex:
+        return -2,'WARNING: an exception of type {0} occured - remove a job.\nArguments:\n{1!r}\nContact the qpy-team.'.format(type(ex).__name__, ex.args)
 
 def handle_client():
     """Handles the user messages sent from the client
@@ -783,29 +801,10 @@ def handle_client():
         # Remove a job
         # arguments = (user_name, jobID, queue_size)
         elif (action_type == MULTIUSER_REMOVE_JOB):
-            user       = arguments[0] # str
-            jobID      = arguments[1] # int
-            queue_size = arguments[2] # int
-            try:
-                status = users[user].remove_job( jobID)
-                users[user].n_queue = queue_size
-                if (status == 0):
-                    msg = 'Job removed.'
-                elif (status == 1):
-                    msg = 'Job not found.'
-            except KeyError:
-                status = -1
-                msg = 'User does not exists.'
-            except Exception as ex:
-                status = -2
-                template = "WARNING: An exception of type {0} occured - remove a job.\nArguments:\n{1!r}\nContact the qpy-team."
-                msg = template.format(type(ex).__name__, ex.args)
-
-
+            status, msg = handle_remove_job(arguments)
         # Unknown option
         else:
-            status = -1
-            msg = 'Unknown option: ' + str( action_type)
+            status, msg =  -1, 'Unknown option: ' + str( action_type)
 
 
         # Send message back
