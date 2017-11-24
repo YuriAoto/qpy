@@ -46,7 +46,7 @@ nodes_check_time = 300
 
 
 logging.basicConfig(filename=multiuser_log_file,level=logging.DEBUG)
-logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
+#logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
 
 class NODE():
     """A node from the qpy-multiuser point of view.
@@ -739,80 +739,98 @@ def handle_client():
     except:
         logging.exception("Error when establishing connection. Is there already a qpy-multiuser instance?")
         return
-
+    if conn is None:
+        return
+    
     while True:
         logging.info("Starting main loop.")
 
         try:
             client = conn.accept()
             (action_type, arguments) = client.recv()
-            logging.info("Received request: %s arguments:%s",str(action_type), str(arguments))
         except:
             logging.exception("Connection failed")
-            continue
-
-        # Reload the nodes
-        # arguments = ()
-        if (action_type == MULTIUSER_NODES):
-            status,msg = handle_reload_nodes(arguments)
-
-
-        # Redistribute cores
-        # arguments = ()
-        elif (action_type == MULTIUSER_DISTRIBUTE):
-            status,msg = handle_redistribute_cores(arguments)
-
-
-        # Show important variables
-        # arguments = ()
-        elif (action_type == MULTIUSER_SHOW_VARIABLES):
-            status,msg = handle_show_variables(arguments)
-
-        # Show status
-        # arguments = () or (user_name)
-        elif (action_type == MULTIUSER_STATUS):
-            status,msg = handle_show_status(arguments)
-
-
-        # Start saving messages
-        # arguments = (save_messages)
-        elif (action_type == MULTIUSER_SAVE_MESSAGES):
-            status,msg = handle_save_messages(arguments)
-
-        # Finish qpy-multiuser
-        # arguments = ()
-        elif (action_type == MULTIUSER_FINISH):
-            client.send( (0, 'Finishing qpy-multiuser.'))
-            client.close()
-            break
-
-
-        # Add a user or sync user info
-        # arguments = (user_name, port, conn_key, cur_jobs)
-        elif (action_type == MULTIUSER_USER):
-            status, msg = handle_sync_user_info(arguments)
-
-
-        # Add a job
-        # arguments = (user_name, jobID, n_cores, mem, queue_size)
-        elif (action_type == MULTIUSER_REQ_CORE):
-            status, msg = handle_add_job(arguments)
-
-        # Remove a job
-        # arguments = (user_name, jobID, queue_size)
-        elif (action_type == MULTIUSER_REMOVE_JOB):
-            status, msg = handle_remove_job(arguments)
-        # Unknown option
         else:
-            status, msg =  -1, 'Unknown option: ' + str( action_type)
-
-
-        # Send message back
+            logging.info("Received request: %s arguments:%s",str(action_type), str(arguments))
         try:
-            client.send((status, msg))
-        except:
-            # TODO: print exception in a log file
-            continue
+            # Reload the nodes
+            # arguments = ()
+            if (action_type == MULTIUSER_NODES):
+                status,msg = handle_reload_nodes(arguments)
+
+
+            # Redistribute cores
+            # arguments = ()
+            elif (action_type == MULTIUSER_DISTRIBUTE):
+                status,msg = handle_redistribute_cores(arguments)
+
+
+            # Show important variables
+            # arguments = ()
+            elif (action_type == MULTIUSER_SHOW_VARIABLES):
+                status,msg = handle_show_variables(arguments)
+
+            # Show status
+            # arguments = () or (user_name)
+            elif (action_type == MULTIUSER_STATUS):
+                status,msg = handle_show_status(arguments)
+
+
+            # Start saving messages
+            # arguments = (save_messages)
+            elif (action_type == MULTIUSER_SAVE_MESSAGES):
+                status,msg = handle_save_messages(arguments)
+
+            # Finish qpy-multiuser
+            # arguments = ()
+            elif (action_type == MULTIUSER_FINISH):
+                client.send( (0, 'Finishing qpy-multiuser.'))
+                client.close()
+                break
+
+
+            # Add a user or sync user info
+            # arguments = (user_name, port, conn_key, cur_jobs)
+            elif (action_type == MULTIUSER_USER):
+                status, msg = handle_sync_user_info(arguments)
+
+
+            # Add a job
+            # arguments = (user_name, jobID, n_cores, mem, queue_size)
+            elif (action_type == MULTIUSER_REQ_CORE):
+                status, msg = handle_add_job(arguments)
+
+            # Remove a job
+            # arguments = (user_name, jobID, queue_size)
+            elif (action_type == MULTIUSER_REMOVE_JOB):
+                status, msg = handle_remove_job(arguments)
+            # Unknown option
+            else:
+                status, msg =  -1, 'Unknown option: ' + str( action_type)
+        except Exception as ex:
+            logging.exception("An error occured")
+            template = 'WARNING: an exception of type {0} occured.\nArguments:\n{1!r}\nContact the qpy-team.'
+            try:
+                client.send((-10,template.format(type(ex).__name__, ex.args) ))
+            except Exception:
+                logging.exception("An error occured while returning a message.")
+                pass
+        except BaseException as ex:
+            logging.exception("An error occured")
+            template = 'WARNING: an exception of type {0} occured.\nArguments:\n{1!r}\nContact the qpy-team. qpy-multiuser is shutting down.'
+            try:
+                client.send((-10,template.format(type(ex).__name__, ex.args) ))
+            except Exception:
+                logging.exception("An error occured while returning a message.")
+                pass
+            finally:
+                break
+        else:
+            try:
+                client.send( (status,msg))
+            except:
+                logging.exception("An error occured while returning a message.")
+                continue
 
 
 class CHECK_NODES(threading.Thread):
