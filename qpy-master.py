@@ -17,6 +17,8 @@ from shutil import copyfile
 import termcolor.termcolor as termcolour
 from optparse import OptionParser,OptionError
 from qpyCommon import *
+import logging
+import traceback
 
 class MyError(Exception):
     def __init__(self,msg):
@@ -42,6 +44,8 @@ all_jobs_file = qpy_dir + '/all_jobs'
 config_file = qpy_dir + '/config'
 multiuser_conn_file = qpy_dir + 'multiuser_connection'
 master_conn_file = qpy_dir + 'master_connection'
+master_log_file = qpy_dir + 'master_log'
+
 
 if (not(os.path.isdir(qpy_dir))):
     os.makedirs(qpy_dir)
@@ -62,6 +66,18 @@ if (os.path.isfile(master_conn_file+'_conn_key')):
 multiuser_address, multiuser_port, multiuser_key = read_conn_files(multiuser_conn_file)
 if (multiuser_port == None or multiuser_key == None):
     sys.exit("Information for multiuser connection could not be obtained. Contact your administrator.")
+
+logging.basicConfig(filename=master_log_file,level=logging.WARNING)
+
+def print_log_except(msg):
+    exc_type, exc_value, exc_traceback = sys.exc_info()
+    log_message = msg + ':\n'
+    log_message += "  Value: " + str(exc_value) + "\n"
+    log_message += "  Type:  " + str(exc_type) + "\n"
+    log_message += "  Traceback:\n"
+    for tb in traceback.extract_tb(exc_traceback):
+        log_message + "    in {0}, line {1:d}: {2}, {3}\n".format(tb[0], tb[1], str(tb[2]), tb[3])
+    logging.exception(log_message)    
 
 
 class JobParser(OptionParser):
@@ -221,8 +237,8 @@ class JOB():
         try:
             node_exec(self.node, command, get_outerr = False, pKey_file = config.ssh_p_key_file)
         except:
-            exc_type, exc_value, exc_traceback = sys.exc_info()
-            raise Exception( "Exception in run: " + str(exc_value))
+            print_log_except("Exception in run")
+            raise Exception( "Exception in run: " + str(sys.exc_info()[1]))
 
         self.start_time = datetime.datetime.today()
         self.status = JOB_ST_RUNNING
@@ -692,6 +708,7 @@ class CHECK_RUN(threading.Thread):
                 try:
                     is_running = job.is_running(self.config)
                 except:
+                    print_log_except('Exception in CHECK_RUN.is_running')
                     self.config.messages.add('CHECK_RUN: Exception in is_running: ' + repr(sys.exc_info()[0]))
                     is_running = True
                 if (not is_running and job.status == JOB_ST_RUNNING):
@@ -711,6 +728,7 @@ class CHECK_RUN(threading.Thread):
                                                     multiuser_address, multiuser_port, multiuser_key)
                     except:
                         self.multiuser_alive.clear()
+                        print_log_except('Exception in CHECK_RUN message transfer')
                         self.config.messages.add('CHECK_RUN: Exception in message transfer: ' + repr(sys.exc_info()[0]))
                     else:
                         self.multiuser_alive.set()
@@ -789,6 +807,7 @@ class JOBS_KILLER( threading.Thread):
                                                 multiuser_address, multiuser_port, multiuser_key)
                 except:
                     self.multiuser_alive.clear()
+                    print_log_except('Exception in JOBS_KILLER message transfer')
                     self.config.messages.add('JOBS_KILLER: Exception in message transfer: ' + repr(sys.exc_info()[0]))
                 else:
                     self.multiuser_alive.set()
@@ -864,6 +883,7 @@ class SUB_CTRL(threading.Thread):
                     except:
                         self.multiuser_handler.multiuser_alive.clear()
                         self.config.messages.add('SUB_CTRL: Exception in message transfer: ' + str(sys.exc_info()[0]) + '; ' + str(sys.exc_info()[1]))
+                        print_log_except('Exception in SUB_CTRL message transfer')
                         self.skip_job_sub = 30
                     else:
                         self.multiuser_handler.multiuser_alive.set()
@@ -881,6 +901,7 @@ class SUB_CTRL(threading.Thread):
                             except:
                                 # If it's not running, we have to tell qpy-multiuser back somehow...
                                 self.config.messages.add("SUB_CTRL: exception when submitting job: " + repr(sys.exc_info()[1]))
+                                print_log_except("Exception in SUB_CTRL when submitting job")
                                 job.node = None
                                 self.job.append(job, self.jobs.queue)
                                 self.job.append(job, self.jobs.Q)
@@ -989,6 +1010,7 @@ class MULTIUSER_HANDLER( threading.Thread):
         except:
             self.multiuser_alive.clear()
             self.config.messages.add('MULTIUSER_HANDLER: Exception in message transfer: ' + repr(sys.exc_info()[0]) + ' ' + repr(sys.exc_info()[1]))
+            print_log_except('Exception in MULTIUSER_HANDLER message transfer')
         else:
             if (msg_back[0] ==  2):
                 self.multiuser_alive.clear()
@@ -1282,9 +1304,14 @@ multiuser_handler.start()
 sub_ctrl = SUB_CTRL(jobs, multiuser_handler, config)
 sub_ctrl.start()
 
-handle_qpy(jobs, sub_ctrl, jobs_killer, config)
+try:
+    handle_qpy(jobs, sub_ctrl, jobs_killer, config)
+except:
+    print_log_except('Exception at handle_qpy')
+
     
 # Finishing qpy-master
+logging.info("Finishing qpy-master")
 sub_ctrl.finish.set()
 check_run.finish.set()
 jobs_killer.to_kill.put('kill')
