@@ -665,7 +665,7 @@ def handle_add_job(args):
     assert isinstance(user,str)
     assert isinstance(jobID,int)
     assert isinstance(n_cores,int)
-    assert isinstance(mem,float)
+    assert isinstance(mem,float) or isinstance(mem,int)
     assert isinstance(queue_size,int)
     try:
         status = users[user].request_node(jobID,n_cores,mem)
