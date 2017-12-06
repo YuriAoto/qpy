@@ -85,9 +85,9 @@ def configure_root_logger(base_file):
         )
     ch.setFormatter(formatter)
     rootLogger.addHandler(ch)
-    # ch2 = logging.StreamHandler(sys.stdout)
-    # ch2.setFormatter(formatter)
-    # rootLogger.addHandler(ch)
+    #ch2 = logging.StreamHandler(sys.stdout)
+    #ch2.setFormatter(formatter)
+    #rootLogger.addHandler(ch2)
     return rootLogger
 
 logger = configure_root_logger(master_log_file)
@@ -119,7 +119,7 @@ class JobParser(OptionParser):
     def print_help(self):
         raise HelpException(self.format_help())
 
-class JOB():
+class JOB(object):
 
     """The job, submitted by the user that will run on a node
 
@@ -133,6 +133,7 @@ class JOB():
 
     """
 
+    __slots__=("ID","info","n_cores","mem","node","status","use_script_copy","cp_script_to_replace","re_run","queue_time","start_time","end_time","runDuration","parser")
     def __init__(self, jobID, job_info, config):
         """Initiate the class
 
