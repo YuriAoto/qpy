@@ -13,6 +13,8 @@ from optparse import OptionParser
 import threading
 from qpyCommon import *
 import logging
+import logging.handlers
+import traceback
 
 if (TEST_RUN):
     qpy_multiuser_dir = os.path.expanduser( '~/.qpy-multiuser-test/')
@@ -28,7 +30,7 @@ allowed_users_file = qpy_multiuser_dir + 'allowed_users'
 cores_distribution_file = qpy_multiuser_dir + 'distribution_rules'
 user_conn_file = qpy_multiuser_dir + 'connection_'
 multiuser_conn_file = qpy_multiuser_dir + 'multiuser_connection'
-multiuser_log_file = qpy_multiuser_dir + 'multiuser_log'
+multiuser_log_file = qpy_multiuser_dir + 'multiuser.log'
 
 nodes_list = []
 nodes = {}
@@ -43,10 +45,7 @@ nodes_check_lock = threading.RLock()
 nodes_check_alive = True
 nodes_check_time = 300
 
-
-
-logging.basicConfig(filename=multiuser_log_file,level=logging.DEBUG)
-#logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
+logger = configure_root_logger(multiuser_log_file, logging.DEBUG)
 
 class NODE():
     """A node from the qpy-multiuser point of view.
@@ -91,7 +90,7 @@ class NODE():
         try:
             (std_out, std_err) = node_exec(self.name, command)
         except:
-            logging.exception("finding the number of untracked jobs failed for node: %s",self.name)
+            logger.exception("finding the number of untracked jobs failed for node: %s",self.name)
             self.messages.add('outsiders: Exception: ' + repr(sys.exc_info()[0]))
             info.is_up = False
             info.n_outsiders = 0
@@ -110,7 +109,7 @@ class NODE():
         try:
             (std_out, std_err) = node_exec(self.name, command)
         except:
-            logging.exception("finding the the free memory failed for node: %s",self.name)
+            logger.exception("finding the the free memory failed for node: %s",self.name)
             self.messages.add('memory: Exception: ' + repr(sys.exc_info()[0]))
             info.is_up = False
             info.free_mem_real = 0.0
@@ -122,7 +121,7 @@ class NODE():
                 info.free_mem_real = float(std_out[2].split()[3])
             else:
                 info.free_mem_real = float(std_out[1].split()[6])
-            logging.info("node %s is up",self.name)
+            logger.info("node %s is up",self.name)
         return info
 
 
@@ -737,21 +736,21 @@ def handle_client():
         write_conn_files(multiuser_conn_file, multiuser_address, multiuser_port, multiuser_key)
 
     except:
-        logging.exception("Error when establishing connection. Is there already a qpy-multiuser instance?")
+        logger.exception("Error when establishing connection. Is there already a qpy-multiuser instance?")
         return
     if conn is None:
         return
     
     while True:
-        logging.info("Starting main loop.")
+        logger.info("Starting main loop.")
 
         try:
             client = conn.accept()
             (action_type, arguments) = client.recv()
         except:
-            logging.exception("Connection failed")
+            logger.exception("Connection failed")
         else:
-            logging.info("Received request: %s arguments:%s",str(action_type), str(arguments))
+            logger.info("Received request: %s arguments:%s",str(action_type), str(arguments))
         try:
             # Reload the nodes
             # arguments = ()
@@ -808,20 +807,20 @@ def handle_client():
             else:
                 status, msg =  -1, 'Unknown option: ' + str( action_type)
         except Exception as ex:
-            logging.exception("An error occured")
+            logger.exception("An error occured")
             template = 'WARNING: an exception of type {0} occured.\nArguments:\n{1!r}\nContact the qpy-team.'
             try:
                 client.send((-10,template.format(type(ex).__name__, ex.args) ))
             except Exception:
-                logging.exception("An error occured while returning a message.")
+                logger.exception("An error occured while returning a message.")
                 pass
         except BaseException as ex:
-            logging.exception("An error occured")
+            logger.exception("An error occured")
             template = 'WARNING: an exception of type {0} occured.\nArguments:\n{1!r}\nContact the qpy-team. qpy-multiuser is shutting down.'
             try:
                 client.send((-10,template.format(type(ex).__name__, ex.args) ))
             except Exception:
-                logging.exception("An error occured while returning a message.")
+                logger.exception("An error occured while returning a message.")
                 pass
             finally:
                 break
@@ -829,7 +828,7 @@ def handle_client():
             try:
                 client.send( (status,msg))
             except:
-                logging.exception("An error occured while returning a message.")
+                logger.exception("An error occured while returning a message.")
                 continue
 
 
@@ -859,9 +858,9 @@ class CHECK_NODES(threading.Thread):
             nodes_info = {}
             try:
                 for node in nodes:
-                    logging.info("checking %s",node)
+                    logger.info("checking %s",node)
                     nodes_info[node] = nodes[node].check()
-                    logging.info("done with %s",node)
+                    logger.info("done with %s",node)
                 nodes_check_lock.acquire()
                 N_outsiders += nodes_info[node].n_outsiders - nodes[node].n_outsiders
                 for node in nodes:
@@ -871,7 +870,7 @@ class CHECK_NODES(threading.Thread):
                     nodes[node].free_mem_real = nodes_info[node].free_mem_real
                 nodes_check_lock.release()
             except:
-                logging.exception("Error in CHECK_NODES")
+                logger.exception("Error in CHECK_NODES")
             self.finish.wait(nodes_check_time)
 
 
@@ -885,9 +884,9 @@ check_nodes.start()
 try:
     handle_client()
 except:
-    logging.error('Exception at handle_client:'  + repr(sys.exc_info()[0]) + ',' + repr(sys.exc_info()[1]) + ',' + repr(sys.exc_info()[1]))
+    logger.error('Exception at handle_client:'  + repr(sys.exc_info()[0]) + ',' + repr(sys.exc_info()[1]) + ',' + repr(sys.exc_info()[1]))
 
 
-logging.info('Finishing main thread of qpy-multiuser')
+logger.info('Finishing main thread of qpy-multiuser')
 check_nodes.finish.set()
 

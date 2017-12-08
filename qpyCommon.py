@@ -20,6 +20,9 @@ except:
 
 
 import time
+import logging
+import logging.handlers
+import traceback
 
 QPY_SOURCE_DIR = os.path.dirname( os.path.abspath( __file__)) + '/'
 TEST_RUN = os.path.isfile( QPY_SOURCE_DIR + 'test_dir')
@@ -105,6 +108,40 @@ PORT_MIN_MULTI  = 10000
 PORT_MAX_MULTI  = 20000
 PORT_MIN_MASTER = 20001
 PORT_MAX_MASTER = 60000
+
+
+
+def configure_root_logger(base_file,level):
+    rootLogger = logging.getLogger()
+    rootLogger.setLevel(level)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# note that the TimedRotatingFileHandler adds time info to the filenames e.g.:
+# mylog.log-> mylog.log.2017-12-...
+# change every day at midnight; one week should be enough
+    ch = logging.handlers.TimedRotatingFileHandler(
+        filename = str(base_file),
+        when='midnight',
+        interval=1,
+        backupCount = 7,
+        delay=False
+        )
+    ch.setFormatter(formatter)
+    rootLogger.addHandler(ch)
+    #ch2 = logging.StreamHandler(sys.stdout)
+    #ch2.setFormatter(formatter)
+    #rootLogger.addHandler(ch2)
+    return rootLogger
+
+def print_log_exception(msg):
+    exc_type, exc_value, exc_traceback = sys.exc_info()
+    log_message = msg + ':\n'
+    log_message += "  Value: " + str(exc_value) + "\n"
+    log_message += "  Type:  " + str(exc_type) + "\n"
+    log_message += "  Traceback:\n"
+    for tb in traceback.extract_tb(exc_traceback):
+        log_message + "    in {0}, line {1:d}: {2}, {3}\n".format(tb[0], tb[1], str(tb[2]), tb[3])
+    logger.error(log_message)    
+
 
 def get_all_children(x, parent_of):
     """Gets all children and further generations

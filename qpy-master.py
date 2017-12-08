@@ -68,40 +68,7 @@ multiuser_address, multiuser_port, multiuser_key = read_conn_files(multiuser_con
 if (multiuser_port == None or multiuser_key == None):
     sys.exit("Information for multiuser connection could not be obtained. Contact your administrator.")
 
-
-def configure_root_logger(base_file):
-    rootLogger = logging.getLogger()
-    rootLogger.setLevel(logging.WARNING)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-# note that the TimedRotatingFileHandler adds time info to the filenames e.g.:
-# mylog.log-> mylog.log.2017-12-...
-# change every day at midnight; one week should be enough
-    ch = logging.handlers.TimedRotatingFileHandler(
-        filename = str(base_file),
-        when='midnight',
-        interval=1,
-        backupCount = 7,
-        delay=False
-        )
-    ch.setFormatter(formatter)
-    rootLogger.addHandler(ch)
-    #ch2 = logging.StreamHandler(sys.stdout)
-    #ch2.setFormatter(formatter)
-    #rootLogger.addHandler(ch2)
-    return rootLogger
-
-logger = configure_root_logger(master_log_file)
-
-def print_log_exception(msg):
-    exc_type, exc_value, exc_traceback = sys.exc_info()
-    log_message = msg + ':\n'
-    log_message += "  Value: " + str(exc_value) + "\n"
-    log_message += "  Type:  " + str(exc_type) + "\n"
-    log_message += "  Traceback:\n"
-    for tb in traceback.extract_tb(exc_traceback):
-        log_message + "    in {0}, line {1:d}: {2}, {3}\n".format(tb[0], tb[1], str(tb[2]), tb[3])
-    logger.error(log_message)    
-
+logger = configure_root_logger(master_log_file, logging.WARNING)
 
 class JobParser(OptionParser):
     """An Option Parser that does not exit the program but just raises a ParseError
