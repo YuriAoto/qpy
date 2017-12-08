@@ -672,7 +672,7 @@ def handle_add_job(args):
             users[user].n_queue = queue_size -1
             return 0,status
         else:
-            users[user].n_queue = queue_size -1
+            users[user].n_queue = queue_size
             return (1,'No node with this requirement.') if status == 1 \
                 else (2,'No free cores.')
     except KeyError:
