@@ -516,7 +516,7 @@ def format_jobs(jobs):
     return '\n'.join(format_spec.format(job)for job in jobs)
 
 def format_messages(messages):
-    return '  Last messages:\n' + str(info.messages) + '----------'
+    return '  Last messages:\n' + str(messages) + '----------'
 
 def format_user(user,info):
     fields = [
