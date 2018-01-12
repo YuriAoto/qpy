@@ -13,6 +13,7 @@ from optparse import OptionParser
 import threading
 from qpyCommon import *
 import logging
+import logging.handlers
 import traceback
 
 if (TEST_RUN):
@@ -29,7 +30,7 @@ allowed_users_file = qpy_multiuser_dir + 'allowed_users'
 cores_distribution_file = qpy_multiuser_dir + 'distribution_rules'
 user_conn_file = qpy_multiuser_dir + 'connection_'
 multiuser_conn_file = qpy_multiuser_dir + 'multiuser_connection'
-multiuser_log_file = qpy_multiuser_dir + 'log_multiuser'
+multiuser_log_file = qpy_multiuser_dir + 'multiuser.log'
 
 nodes_list = []
 nodes = {}
@@ -44,12 +45,8 @@ nodes_check_lock = threading.RLock()
 nodes_check_alive = True
 nodes_check_time = 300
 
-logging.basicConfig(filename=multiuser_log_file,
-                    level=logging.WARNING,
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-logging.info('Starting qpy-multiuser.')
-
+logger = configure_root_logger(multiuser_log_file, logging.DEBUG)
 
 class NODE():
     """A node from the qpy-multiuser point of view.
@@ -94,7 +91,7 @@ class NODE():
         try:
             (std_out, std_err) = node_exec(self.name, command)
         except:
-            logging.exception("finding the number of untracked jobs failed for node: %s",self.name)
+            logger.exception("finding the number of untracked jobs failed for node: %s",self.name)
             self.messages.add('outsiders: Exception: ' + repr(sys.exc_info()[0]))
             info.is_up = False
             info.n_outsiders = 0
@@ -113,7 +110,7 @@ class NODE():
         try:
             (std_out, std_err) = node_exec(self.name, command)
         except:
-            logging.exception("finding the the free memory failed for node: %s",self.name)
+            logger.exception("finding the the free memory failed for node: %s",self.name)
             self.messages.add('memory: Exception: ' + repr(sys.exc_info()[0]))
             info.is_up = False
             info.free_mem_real = 0.0
@@ -125,7 +122,7 @@ class NODE():
                 info.free_mem_real = float(std_out[2].split()[3])
             else:
                 info.free_mem_real = float(std_out[1].split()[6])
-            logging.info("node %s is up",self.name)
+            logger.info("node %s is up",self.name)
         return info
 
 
@@ -472,6 +469,236 @@ def distribute_cores():
         users[user].max_cores = N_cores - N_min_cores + users[user].min_cores
     return 0
 
+#-----------------------------------------------------------------
+#  handle_yyy methods. Take the arguments of a request and return the string to be send back.
+
+def handle_reload_nodes(args):
+    """ handles a request to reload the nodes
+
+    args: ()
+    """
+    assert len(()) ==0
+    status = load_nodes()
+    return status,{
+        0  : 'Nodes loaded.',
+        -1 : 'Nodes loading failed. Problem when openning {0}.'.format( nodes_file),
+        -2 : 'Nodes loading failed. Check {0}.'.format( nodes_file),
+    }.get(status, 'Nodes loading failed.')
+
+def handle_redistribute_cores(args):
+    """handles a request to redistribute cores.
+
+    args: ()
+    """
+    assert len(()) ==0
+    status = distribute_cores()
+    return status,{
+        0 : 'Cores distributed.',
+        -1: 'Cores distribution failed. Problem when openning {0}.'.format(cores_distribution_file),
+        -2: 'Cores distribution failed. Check {0}.'.format(cores_distribution_file),
+        -3: 'Cores distribution failed. Not enough cores.',
+    }.get(status, default='Cores distribution failed.')
+
+#---------------------------------------#
+#  formatting functions. 
+def format_general_variables():
+    variables = [
+        ('N_cores', N_cores),
+        ('N_min_cores', N_min_cores),
+        ('N_used_cores', N_used_cores),
+        ('N_used_min_cores', N_used_min_cores),
+        ('N_outsiders',N_outsiders),
+        ]
+    format_spec = '{0: <16} = {1}'
+    return '\n'.join( format_spec.format(*pair) for pair in variables)
+
+def format_jobs(jobs):
+    format_spec='          {0}'
+    return '\n'.join(format_spec.format(job)for job in jobs)
+
+def format_messages(messages):
+    return '  Last messages:\n' + str(messages) + '----------'
+
+def format_user(user,info):
+    fields = [
+        ('min_cores',info.min_cores),
+        ('extra_cores',info.extra_cores),
+        ('max_cores',info.max_cores),
+        ('n_used_cores',info.n_used_cores),
+        ('n_queue',info.n_queue),
+    ]
+    format_spec = '  {0: <12} = {1}'
+    infos = '\n'.join( format_spec.format(*pair) for pair in fields)
+    current_jobs = format_jobs(info.cur_jobs)
+    messages = "\n"+format_messages(info.messages) if len(info.messages) >0 else ''
+    return '\n'.join([user,
+                     infos,
+                     current_jobs]) + messages
+def format_users(users):
+    return "\n".join(format_user(user,info) for user,info in users.iteritems())
+
+def format_node(node,info):
+    fields = [
+        ('max_cores',info.max_cores),
+        ('n_used_cores',info.n_used_cores),
+        ('n_outsiders',info.n_outsiders),
+        ('total_mem',info.total_mem),
+        ('req_mem',info.req_mem),
+        ('free_mem_real',info.free_mem_real),
+        ('pref_multicores',info.pref_multicores),
+        ('is_up',info.is_up),
+    ]
+    format_spec = '  {0: <15} = {1}'
+    infos = '\n'.join( format_spec.format(*pair) for pair in fields)
+    messages = "\n"+format_messages(info.messages) if len(info.messages) >0 else ''
+    return infos + messages
+
+def format_nodes(nodes):
+    return "\n".join(format_node(node,info) for node,info in nodes.iteritems())
+
+
+def handle_show_variables(args):
+    """handles a request to show the variables defining the current status of this service
+    
+    args: ()
+    """
+    assert len(()) == 0
+    with nodes_check_lock:
+        return 0,"{general}\n{theusers}\n{thenodes}\n".format(
+            general=format_general_variables(),
+            theusers = format_users(users),
+            thenodes = format_nodes(nodes)
+        )
+
+def handle_show_status(args):
+    """handles a request for the general multiuser status
+
+    args : () or (user_name)
+    """
+    sep1 = '-'*60 + '\n'
+    sep2 = '='*60 + '\n'
+    headerN =  '                       cores              memory (GB)\n'
+    headerN += 'node                used  total      used     req   total\n'
+    headerU =  'user                using cores        queue size\n' + sep1
+
+    msgU = ''
+    format_spec = '{0:22s} {1:<5d}' + ' '*13 + '{2:<5d}\n'
+    for user in sorted(users):
+        msgU += format_spec.format( user,
+                                    users[user].n_used_cores,
+                                    users[user].n_queue)
+    msgU = headerU + msgU + sep2 if msgU else 'No users.\n'
+
+    msgN = ''
+    format_spec = '{0:20s} {1:<5d} {2:<5d}' + ' '*2 + '{3:>7.1f} {4:>7.1f} {5:>7.1f}\n'
+    with nodes_check_lock:
+        for node in nodes:
+            down=' (down)' if not( nodes[node].is_up) else ''
+            msgN += format_spec.format( node + down,
+                                        nodes[node].n_used_cores + nodes[node].n_outsiders,
+                                        nodes[node].max_cores,
+                                        nodes[node].total_mem - nodes[node].free_mem_real,
+                                        nodes[node].req_mem,
+                                        nodes[node].total_mem)
+    msgN = headerN + sep1 + msgN + sep2 if msgN else 'No nodes.\n'
+    status = 0
+    msg_used_cores = 'There are {0} out of a total of {1} cores being used.\n'.format(
+        N_used_cores + N_outsiders,
+        N_cores)
+    return status, msgU +msgN + msg_used_cores
+        
+def handle_save_messages(args):
+    """handles a request to start saving messages
+
+    args: (save_messages)
+    """
+    for user in users:
+        users[user].messages.save= args[0]
+    for node in nodes:
+        nodes[node].messages.save= args[0]
+    status = 0
+    return status, 'Save messages set to {0}.\n'.format(args[0])
+    
+def handle_sync_user_info(args):
+    """handles a request to synchronize user info
+
+    args: user_name, address,port, conn_key, cur_jobs
+    """
+    user,address,port,conn_key,new_cur_jobs = args
+    try:
+        if user in users:
+            users[user].address = address
+            users[user].port = port
+            users[user].conn_key = conn_key
+            same_list = len(new_cur_jobs) == len(users[user].cur_jobs) \
+                        and all(new_job == old_job for new_job, old_job in zip(new_cur_jobs, users[user].cur_jobs))
+            return ( 0,'User exists' ) if same_list else (1, 'User exists but with a different job list.')
+        else:
+            try:
+                with open(allowed_users_file,'r') as f:
+                    allowed_users =  list(line.strip() for line in f)
+            except:
+                allowed_users = []
+            if user in allowed_users:
+                new_user = USER(user, address, port, conn_key)
+                for job in new_cur_jobs:
+                    new_user.add_job(job)
+                users[user] = new_user
+                return (0,'User added') if distribute_cores() == 0 else \
+                    (0, 'User added. Cores distribution failed.')
+            else:
+                return 2,'Not allowed user'
+    finally:
+        for user in users:
+            write_conn_files(user_conn_file+user,
+                             users[user].address,
+                             users[user].port,
+                             users[user].conn_key)
+
+
+def handle_add_job(args):
+    """ handles request to add a job
+
+    args: (user_name, jobID, n_cores, mem, queue_size)
+    """
+    user, jobID, n_cores, mem, queue_size = args
+    assert isinstance(user,str)
+    assert isinstance(jobID,int)
+    assert isinstance(n_cores,int)
+    assert isinstance(mem,float) or isinstance(mem,int)
+    assert isinstance(queue_size,int)
+    try:
+        status = users[user].request_node(jobID,n_cores,mem)
+        if isinstance(status,str):
+            users[user].n_queue = queue_size -1
+            return 0,status
+        else:
+            users[user].n_queue = queue_size
+            return (1,'No node with this requirement.') if status == 1 \
+                else (2,'No free cores.')
+    except KeyError:
+        return -1, 'User does not exists.'
+    except Exception as ex:
+        return -2,"WARNING: An exception of type {0} occured - add a job.\nArguments:\n{1|r}\nContact the qpy-team.".format(type(ex).__name__, ex.args)
+
+def handle_remove_job(args):
+    """handles a request to remove a job
+
+    args : (user_name, jobID, queue_size)
+    """
+    user, jobID, queue_size = args
+    assert isinstance(user, str)
+    assert isinstance(jobID, int)
+    assert isinstance( queue_size, int)
+    try:
+        status = users[user].remove_job(jobID)
+        users[user].n_queue = queue_size
+        return status,{0:'Job removed.',
+                       1:'Job not found'}[status]
+    except KeyError:
+        return -1,'User does not exists.'
+    except Exception as ex:
+        return -2,'WARNING: an exception of type {0} occured - remove a job.\nArguments:\n{1!r}\nContact the qpy-team.'.format(type(ex).__name__, ex.args)
 
 def handle_client():
     """Handles the user messages sent from the client
@@ -510,290 +737,99 @@ def handle_client():
         write_conn_files(multiuser_conn_file, multiuser_address, multiuser_port, multiuser_key)
 
     except:
-        logging.exception("Exception when establishing connection (%s)", self.name)
+        logger.exception("Error when establishing connection. Is there already a qpy-multiuser instance?")
         return
     if conn is None:
-        logging.error("Error when establishing connection. Is there already a qpy-multiuser instance?")
         return
-
-    logging.info("Starting main loop.")
+    
     while True:
+        logger.info("Starting main loop.")
         try:
             client = conn.accept()
             (action_type, arguments) = client.recv()
-            logging.info("Received request: %s arguments:%s",str(action_type), str(arguments))
         except:
-            logging.exception("Connection failed")
-            # TODO: print exception in a log file
-            continue
-
-        # Reload the nodes
-        # arguments = ()
-        if (action_type == MULTIUSER_NODES):
-            status = load_nodes()
-            if (status == 0):
-                msg = 'Nodes loaded.'
-            elif (status == -1):
-                msg = 'Nodes loading failed. Problem when openning ' + nodes_file + '.'
-            elif (status == -2):
-                msg = 'Nodes loading failed. Check ' + nodes_file + '.'
-            else:
-                msg = 'Nodes loading failed.'
-
-
-        # Redistribute cores
-        # arguments = ()
-        elif (action_type == MULTIUSER_DISTRIBUTE):
-            status = distribute_cores()
-            if (status == 0):
-                msg = 'Cores distributed.'
-            elif (status == -1):
-                msg = 'Cores distribution failed. Problem when openning ' + cores_distribution_file + '.'
-            elif (status == -2):
-                msg = 'Cores distribution failed. Check ' + cores_distribution_file + '.'
-            elif (status == -3):
-                msg = 'Cores distribution failed. Not enough cores.'
-            else:
-                msg = 'Cores distribution failed.'
-
-
-        # Show important variables
-        # arguments = ()
-        elif (action_type == MULTIUSER_SHOW_VARIABLES):
-            status = 0
-            nodes_check_lock.acquire()
-            msg = ''
-            msg += 'N_cores          = ' + str( N_cores)           + '\n'
-            msg += 'N_min_cores      = ' + str( N_min_cores)       + '\n'
-            msg += 'N_used_cores     = ' + str( N_used_cores)      + '\n'
-            msg += 'N_used_min_cores = ' + str( N_used_min_cores)  + '\n'
-            msg += 'N_outsiders      = ' + str( N_outsiders)       + '\n'
-            msg += 'users:\n'
-            for user, info in users.iteritems():
-                msg += user + ':\n'
-                msg += '  min_cores    = ' + str( info.min_cores)    + '\n'
-                msg += '  extra_cores  = ' + str( info.extra_cores)  + '\n'
-                msg += '  max_cores    = ' + str( info.max_cores)    + '\n'
-                msg += '  n_used_cores = ' + str( info.n_used_cores) + '\n'
-                msg += '  n_queue      = ' + str( info.n_queue)      + '\n'
-                msg += '  cur_jobs     :' + '\n'
-                for cj in info.cur_jobs:
-                    msg += '          ' + str(cj) + '\n'
-                if (len(info.messages) > 0):
-                    msg += '  Last messages:\n' + str(info.messages) + '----------\n'
-            msg += 'nodes:\n'
-            for node, info in nodes.iteritems():
-                msg += node + ':\n'
-                msg += '  max_cores       = ' + str( info.max_cores)       + '\n'
-                msg += '  n_used_cores    = ' + str( info.n_used_cores)    + '\n'
-                msg += '  n_outsiders     = ' + str( info.n_outsiders)     + '\n'
-                msg += '  total_mem       = ' + str( info.total_mem)       + '\n'
-                msg += '  req_mem         = ' + str( info.req_mem)         + '\n'
-                msg += '  free_mem_real   = ' + str( info.free_mem_real)   + '\n'
-                msg += '  pref_multicores = ' + str( info.pref_multicores) + '\n'
-                msg += '  is_up           = ' + str( info.is_up)           + '\n'
-                if (len(info.messages) > 0):
-                    msg += '  Last messages:\n' + str(info.messages) + '----------\n'
-            nodes_check_lock.release()
-
-        # Show status
-        # arguments = () or (user_name)
-        elif (action_type == MULTIUSER_STATUS):
-
-            sep1 = '-'*60 + '\n'
-            sep2 = '='*60 + '\n'
-            headerN =  '                       cores              memory (GB)\n'
-            headerN += 'node                used  total      used     req   total\n'
-            headerU =  'user                using cores        queue size\n' + sep1
-
-            nodes_ordered = []
-            for node in nodes:
-                nodes_ordered.append( node)
-            nodes_ordered.sort()
-
-            users_ordered = []
-            for user in users:
-                users_ordered.append( user)
-            users_ordered.sort()
-
-            status = 0
-
-            msgU = ''
-            format_spec = '{0:22s} {1:<5d}' + ' '*13 + '{2:<5d}\n'
-            for user in users_ordered:
-                msgU += format_spec.format( user,
-                                            users[user].n_used_cores,
-                                            users[user].n_queue)
-            if (msgU):
-                msgU = headerU + msgU + sep2
-            else:
-                msgU = 'No users.\n'
-
-            msgN = ''
-            format_spec = '{0:20s} {1:<5d} {2:<5d}' + ' '*2 + '{3:>7.1f} {4:>7.1f} {5:>7.1f}\n'
-            nodes_check_lock.acquire()
-            for node in nodes_ordered:
-                down=' (down)' if not( nodes[node].is_up) else ''
-                msgN += format_spec.format( node + down,
-                                            nodes[node].n_used_cores + nodes[node].n_outsiders,
-                                            nodes[node].max_cores,
-                                            nodes[node].total_mem - nodes[node].free_mem_real,
-                                            nodes[node].req_mem,
-                                            nodes[node].total_mem)
-            nodes_check_lock.release()
-            if (msgN):
-                msgN = sep1 + msgN + sep2
-                msgN = headerN + msgN
-            else:
-                msgN = 'No nodes.\n'
-
-            msg = msgU + msgN
-            msg += 'There are ' + str( N_used_cores + N_outsiders) + ' out of a total of ' + str( N_cores) + ' cores being used.\n'
-
-
-        # Start saving messages
-        # arguments = (save_messages)
-        elif (action_type == MULTIUSER_SAVE_MESSAGES):
-            for user in users:
-                users[user].messages.save = arguments[0]
-            for node in nodes:
-                nodes[node].messages.save = arguments[0]
-            status = 0
-            msg = 'Save messages set to ' + str(arguments[0])
-
-        # Finish qpy-multiuser
-        # arguments = ()
-        elif (action_type == MULTIUSER_FINISH):
-            client.send( (0, 'Finishing qpy-multiuser.'))
-            client.close()
-            break
-
-
-        # Add a user or sync user info
-        # arguments = (user_name, port, conn_key, cur_jobs)
-        elif (action_type == MULTIUSER_USER):
-            user = arguments[0]
-            address = arguments[1]
-            port = arguments[2]
-            conn_key = arguments[3]
-            new_cur_jobs = arguments[4]
-
-            if (user in users):
-                status = 0
-                users[user].address = address
-                users[user].port = port
-                users[user].conn_key = conn_key
-
-                same_list = True
-                if (len( new_cur_jobs) != len( users[user].cur_jobs)):
-                    same_list = False
-                else:
-                    for i in range(len(new_cur_jobs)):
-                        if (new_cur_jobs[i] != users[user].cur_jobs[i]):
-                            same_list = False
-                            break
-
-                if (same_list):
-                    status = 0
-                    msg = 'User exists.'
-                else:
-                    status = 1
-                    msg = 'User exists, but with a different job list.'
-
-            else:
-                allowed_users = []
-                try:
-                    f = open( allowed_users_file, 'r')
-                    for line in f:
-                        allowed_users.append( line.strip())
-                    f.close()
-                except:
-                    pass
-                if (user in allowed_users):
-                    status = 0
-                    new_user = USER(user, address, port, conn_key)
-                    for job in new_cur_jobs:
-                        new_user.add_job( job)
-                    users[user] = new_user
-
-                    if (distribute_cores() != 0):
-                        msg = 'User added. Cores distribution failed.'
-                    else:
-                        msg = 'User added.'
-                else:
-                    status = 2
-                    msg = 'Not allowed user.'
-
-            for user in users:
-                write_conn_files(user_conn_file+user, 
-                                 users[user].address,
-                                 users[user].port,
-                                 users[user].conn_key)
-
-        # Add a job
-        # arguments = (user_name, jobID, n_cores, mem, queue_size)
-        elif (action_type == MULTIUSER_REQ_CORE):
-            user       = arguments[0] # str
-            jobID      = arguments[1] # int
-            n_cores    = arguments[2] # int
-            mem        = arguments[3] # float
-            queue_size = arguments[4] # int
-            try:
-                status = users[user].request_node( jobID, n_cores, mem)
-                logging.info('Job requested by ' + user)
-                if (isinstance( status, str)): # The node name
-                    msg = status
-                    status = 0
-                    users[user].n_queue = queue_size - 1
-                else:
-                    users[user].n_queue = queue_size
-                    if (status == 1):
-                        msg = 'No node with this requirement.'
-                    elif (status == 2):
-                        msg = 'No free cores.'
-            except KeyError:
-                status = -1
-                msg = 'User does not exists.'
-            except Exception as ex:
-                status = -2
-                template = "WARNING: An exception of type {0} occured - add a job.\nArguments:\n{1!r}\nContact the qpy-team."
-                msg = template.format(type(ex).__name__, ex.args)
-
-
-        # Remove a job
-        # arguments = (user_name, jobID, queue_size)
-        elif (action_type == MULTIUSER_REMOVE_JOB):
-            user       = arguments[0] # str
-            jobID      = arguments[1] # int
-            queue_size = arguments[2] # int
-            try:
-                status = users[user].remove_job( jobID)
-                users[user].n_queue = queue_size
-                if (status == 0):
-                    msg = 'Job removed.'
-                elif (status == 1):
-                    msg = 'Job not found.'
-            except KeyError:
-                status = -1
-                msg = 'User does not exists.'
-            except Exception as ex:
-                status = -2
-                template = "WARNING: An exception of type {0} occured - remove a job.\nArguments:\n{1!r}\nContact the qpy-team."
-                msg = template.format(type(ex).__name__, ex.args)
-
-
-        # Unknown option
+            logger.exception("Connection failed")
         else:
-            status = -1
-            msg = 'Unknown option: ' + str( action_type)
-
-
-        # Send message back
+            logger.info("Received request: %s arguments:%s",str(action_type), str(arguments))
         try:
-            client.send((status, msg))
-        except:
-            # TODO: print exception in a log file
-            continue
+            # Reload the nodes
+            # arguments = ()
+            if (action_type == MULTIUSER_NODES):
+                status,msg = handle_reload_nodes(arguments)
+
+
+            # Redistribute cores
+            # arguments = ()
+            elif (action_type == MULTIUSER_DISTRIBUTE):
+                status,msg = handle_redistribute_cores(arguments)
+
+
+            # Show important variables
+            # arguments = ()
+            elif (action_type == MULTIUSER_SHOW_VARIABLES):
+                status,msg = handle_show_variables(arguments)
+
+            # Show status
+            # arguments = () or (user_name)
+            elif (action_type == MULTIUSER_STATUS):
+                status,msg = handle_show_status(arguments)
+
+
+            # Start saving messages
+            # arguments = (save_messages)
+            elif (action_type == MULTIUSER_SAVE_MESSAGES):
+                status,msg = handle_save_messages(arguments)
+
+            # Finish qpy-multiuser
+            # arguments = ()
+            elif (action_type == MULTIUSER_FINISH):
+                client.send( (0, 'Finishing qpy-multiuser.'))
+                client.close()
+                break
+
+
+            # Add a user or sync user info
+            # arguments = (user_name, port, conn_key, cur_jobs)
+            elif (action_type == MULTIUSER_USER):
+                status, msg = handle_sync_user_info(arguments)
+
+
+            # Add a job
+            # arguments = (user_name, jobID, n_cores, mem, queue_size)
+            elif (action_type == MULTIUSER_REQ_CORE):
+                status, msg = handle_add_job(arguments)
+
+            # Remove a job
+            # arguments = (user_name, jobID, queue_size)
+            elif (action_type == MULTIUSER_REMOVE_JOB):
+                status, msg = handle_remove_job(arguments)
+            # Unknown option
+            else:
+                status, msg =  -1, 'Unknown option: ' + str( action_type)
+        except Exception as ex:
+            logger.exception("An error occured")
+            template = 'WARNING: an exception of type {0} occured.\nArguments:\n{1!r}\nContact the qpy-team.'
+            try:
+                client.send((-10,template.format(type(ex).__name__, ex.args) ))
+            except Exception:
+                logger.exception("An error occured while returning a message.")
+                pass
+        except BaseException as ex:
+            logger.exception("An error occured")
+            template = 'WARNING: an exception of type {0} occured.\nArguments:\n{1!r}\nContact the qpy-team. qpy-multiuser is shutting down.'
+            try:
+                client.send((-10,template.format(type(ex).__name__, ex.args) ))
+            except Exception:
+                logger.exception("An error occured while returning a message.")
+                pass
+            finally:
+                break
+        else:
+            try:
+                client.send( (status,msg))
+            except:
+                logger.exception("An error occured while returning a message.")
+                continue
 
 
 class CHECK_NODES(threading.Thread):
@@ -822,9 +858,9 @@ class CHECK_NODES(threading.Thread):
             nodes_info = {}
             try:
                 for node in nodes:
-                    logging.info("checking %s",node)
+                    logger.info("checking %s",node)
                     nodes_info[node] = nodes[node].check()
-                    logging.info("done with %s",node)
+                    logger.info("done with %s",node)
                 nodes_check_lock.acquire()
                 N_outsiders += nodes_info[node].n_outsiders - nodes[node].n_outsiders
                 for node in nodes:
@@ -834,7 +870,7 @@ class CHECK_NODES(threading.Thread):
                     nodes[node].free_mem_real = nodes_info[node].free_mem_real
                 nodes_check_lock.release()
             except:
-                logging.exception("Error in CHECK_NODES")
+                logger.exception("Error in CHECK_NODES")
             self.finish.wait(nodes_check_time)
 
 
@@ -848,9 +884,9 @@ check_nodes.start()
 try:
     handle_client()
 except:
-    logging.exception("Exception at handle_client (%s)",self.name)
+    logging.exception("Exception at handle_client")
 
 
-logging.info('Finishing main thread of qpy-multiuser')
+logger.info('Finishing main thread of qpy-multiuser')
 check_nodes.finish.set()
 
