@@ -215,7 +215,7 @@ class JOB(object):
         command += 'export QPY_NODE=' + str( self.node) + '; '
         command += 'export QPY_N_CORES=' + str( self.n_cores) + '; '
         command += 'export QPY_MEM=' + str( self.mem) + '; '
-# kills the job with large mem:       command += 'ulimit -Sv ' + str( self.mem*1048576) + '; '
+        command += 'ulimit -Sv ' + str( self.mem*1.5*1048576) + '; '
         for sf in config.source_these_files:
            command += 'source ' + sf + '; '
         command += 'cd ' + self.info[1] + '; ' 
