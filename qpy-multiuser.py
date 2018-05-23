@@ -497,7 +497,7 @@ def handle_redistribute_cores(args):
         -1: 'Cores distribution failed. Problem when openning {0}.'.format(cores_distribution_file),
         -2: 'Cores distribution failed. Check {0}.'.format(cores_distribution_file),
         -3: 'Cores distribution failed. Not enough cores.',
-    }.get(status, default='Cores distribution failed.')
+    }.get(status, 'Cores distribution failed.')
 
 #---------------------------------------#
 #  formatting functions. 
