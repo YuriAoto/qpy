@@ -225,8 +225,9 @@ class JOB(object):
             command += self.info[0]
         command += ' > ' + out_or_err_name( self, '.out') + ' 2> ' + out_or_err_name( self, '.err')
 
+        logger.debug('--->' + command + '<---')
         try:
-            node_exec(self.node, command, get_outerr = False, pKey_file = config.ssh_p_key_file)
+            node_exec(self.node, command, get_outerr = False, pKey_file = config.ssh_p_key_file, localhost_popen_shell=(self.node == 'localhost'))
         except:
             logger.error("Exception in run", exc_info=True)
             raise Exception( "Exception in run: " + str(sys.exc_info()[1]))
@@ -775,8 +776,7 @@ class JOBS_KILLER( threading.Thread):
                 if (job == 'kill'):
                     break
 
-
-            command = 'source ~/.bash_profile; qpy --jobkill ' + str(job.ID)
+            command = QPY_SOURCE_DIR+'/qpy --jobkill ' + str(job.ID)
             try:
                 if (job.status != JOB_ST_RUNNING):
                     raise

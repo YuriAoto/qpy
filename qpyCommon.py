@@ -132,7 +132,7 @@ def configure_root_logger(base_file,level):
     #rootLogger.addHandler(ch2)
     return rootLogger
 
-def print_log_exception(msg):
+def log_exception(msg):
     exc_type, exc_value, exc_traceback = sys.exc_info()
     log_message = msg + ':\n'
     log_message += "  Value: " + str(exc_value) + "\n"
@@ -140,7 +140,7 @@ def print_log_exception(msg):
     log_message += "  Traceback:\n"
     for tb in traceback.extract_tb(exc_traceback):
         log_message + "    in {0}, line {1:d}: {2}, {3}\n".format(tb[0], tb[1], str(tb[2]), tb[3])
-    logger.error(log_message)    
+    return log_message
 
 
 def get_all_children(x, parent_of):
@@ -355,7 +355,7 @@ def message_transfer(msg, address, port, key, timeout=5.0):
     conn.close()
     return back_msg
 
-def node_exec(node, command, get_outerr = True, mode="paramiko", pKey_file = None):
+def node_exec(node, command, get_outerr = True, mode="paramiko", pKey_file = None, localhost_popen_shell=False):
     """ Execute a command by ssh
     
     Arguments:
@@ -378,16 +378,16 @@ def node_exec(node, command, get_outerr = True, mode="paramiko", pKey_file = Non
 
     if node == 'localhost':
 
-        if isinstance(command, str):
+        if isinstance(command, str) and not localhost_popen_shell: # Just to make it work with localhost as node...
             command = command.split()
         if (get_outerr):
-            ssh = subprocess.Popen(command, shell = False,
+            ssh = subprocess.Popen(command, shell = localhost_popen_shell,
                                    stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE)
             std_outerr = ssh.communicate()
             return(std_outerr)
         else:
-            ssh = subprocess.Popen(command, shell = False)
+            ssh = subprocess.Popen(command, shell = localhost_popen_shell)
             return
 
     elif (mode == "paramiko" and is_paramiko):
