@@ -28,6 +28,24 @@ QPY_SOURCE_DIR = os.path.dirname( os.path.abspath( __file__)) + '/'
 TEST_RUN = os.path.isfile( QPY_SOURCE_DIR + 'test_dir')
 
 
+# Important files and paths
+home_dir = os.environ['HOME']
+user = os.environ['USER']
+if (TEST_RUN):
+    qpy_dir = os.path.expanduser( '~/.qpy-test/')
+else:
+    qpy_dir = os.path.expanduser( '~/.qpy/')
+scripts_dir = qpy_dir + '/scripts/'
+notes_dir = qpy_dir + '/notes/'
+jobID_file = qpy_dir + '/next_jobID'
+all_jobs_file = qpy_dir + '/all_jobs'
+config_file = qpy_dir + '/config'
+multiuser_conn_file = qpy_dir + 'multiuser_connection'
+master_conn_file = qpy_dir + 'master_connection'
+master_log_file = qpy_dir + 'master.log'
+
+
+
 MULTIUSER_NODES          = 1
 MULTIUSER_DISTRIBUTE     = 2
 MULTIUSER_STATUS         = 3
@@ -584,6 +602,8 @@ class Configurations():
         self.sleep_time_check_run = 10
         self.source_these_files = ['~/.bash_profile']
         self.ssh_p_key_file = None
+        self.logger_level = 'warning'
+        self.logger = configure_root_logger(master_log_file, logging.WARNING)
 
         if (os.path.isfile(self.config_file)):
             f = open(self.config_file, 'r')
@@ -690,6 +710,32 @@ class Configurations():
             msg = "Messages were cleand."
             status = 0
 
+        elif (k == 'loggerLevel'):
+            if v in ['debug', 'DEBUG']:
+                vnew = logging.DEBUG
+            elif v in ['info', 'INFO']:
+                vnew = logging.INFO
+            elif v in ['warning', 'WARNING']:
+                vnew = logging.WARNING
+            elif v in ['error', 'ERROR']:
+                vnew = logging.ERROR
+            elif v in ['critical', 'CRITICAL']:
+                vnew = logging.CRITICAL
+            else:
+                try:
+                    vnew = int(v)
+                except:
+                    vnew = None
+
+            if vnew is not None:
+                self.logger_level = v
+                self.logger.setLevel(vnew)
+                msg = 'Logger level set to ' + v
+                status = 0
+            else:
+                msg = 'Unknown logging level: ' + v
+                status = 1
+
         elif (k == 'colour' or k == 'use_colour'):
             try:
                 self.use_colour = true_or_false(v)
@@ -762,8 +808,9 @@ class Configurations():
         f.write('paused_jobs '  + str(self.sub_paused)      + '\n')
         f.write('saveMessages ' + str(self.messages.save)   + '\n')
         f.write('maxMessages '  + str(self.messages.max_len)+ '\n')
+        f.write('loggerLevel '  + str(self.logger_level)    + '\n')
         f.write('checkFMT '     +repr(self.job_fmt_pattern) + '\n')
-        f.write('ssh_pKey '     + str(self.ssh_p_key_file) + '\n')
+        f.write('ssh_pKey '     + str(self.ssh_p_key_file)  + '\n')
         f.write('copyScripts '  + str(self.use_script_copy) + '\n')
         f.write('colour '       + str(self.use_colour)      + '\n')
         f.write('coloursScheme '
@@ -804,6 +851,7 @@ class Configurations():
             msg += 'A maximum of ' + str(self.messages.max_len) + ' messages are being saved\n'
         if (len(self.messages) > 0):
             msg += 'Last messages:\n' + str(self.messages) + '\n'
+        msg += 'Logger level: ' + str(self.logger_level) + '\n'
 
         return msg
 
