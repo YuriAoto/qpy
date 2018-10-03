@@ -46,7 +46,7 @@ nodes_check_alive = True
 nodes_check_time = 300
 
 
-logger = configure_root_logger(multiuser_log_file, logging.DEBUG)
+logger = configure_root_logger(multiuser_log_file, logging.WARNING)
 
 class NODE():
     """A node from the qpy-multiuser point of view.
@@ -87,9 +87,11 @@ class NODE():
         info = namedtuple('nodeInfo', ['is_up','n_outsiders','total_mem','free_mem_real'])
         info.is_up = True
 
-        command = "top -b -n1 | sed -n '8,50p'"
+        command = "top -b -n1"# | sed -n '8,50p'"
         try:
             (std_out, std_err) = node_exec(self.name, command)
+            # dumb: should be improved
+            std_out = '\n'.join(std_out.split('\n')[8:max(len(std_out),50)])
         except:
             logger.exception("finding the number of untracked jobs failed for node: %s",self.name)
             self.messages.add('outsiders: Exception: ' + repr(sys.exc_info()[0]))
