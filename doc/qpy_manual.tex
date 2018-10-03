@@ -476,6 +476,8 @@ $ python ${QPY_DIR}/qpy-access-multiuser.py start
 
 \subsection{Add new user}
 
+As \qpy{} usually runs across several machines, make sure that \texttt{ssh} keys are set up! 
+
 To add a new user in \qpy{}, first add his name in the file
 
 \begin{verbatim}
@@ -498,7 +500,7 @@ ${USER}/.qpy/multiuser_connection_port
 ${USER}/.qpy/multiuser_connection_conn_key
 \end{verbatim}
 
-In addition, if you have a dedicated machine to run \qpy{}, add this file to the user's \qpy{} directory:
+In addition, if you have a dedicated machine to run \qpy{}, add this file to the user's \qpy{} directory (note that the above filenames start with \verb+multiuser_*+ while this filename starts with \verb+master_*+):
 
 \begin{verbatim}
 ${USER}/.qpy/master_connection_address
