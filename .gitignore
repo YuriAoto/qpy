@@ -1,8 +1,11 @@
 *pyc
 *~
-doc/Title.tex
 doc/qpy_manual.aux
 doc/qpy_manual.log
 doc/qpy_manual.out
 doc/qpy_manual.toc
+doc/qpy_ref_sheet.aux
+doc/qpy_ref_sheet.log
+doc/qpy_ref_sheet.out
+doc/qpy_ref_sheet.toc
 doc/auto/
