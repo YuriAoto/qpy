@@ -53,6 +53,7 @@ MULTIUSER_SHOW_VARIABLES = 4
 MULTIUSER_FINISH         = 5
 MULTIUSER_START          = 6
 MULTIUSER_SAVE_MESSAGES  = 7
+MULTIUSER_TUTORIAL       = 8
 MULTIUSER_USER           = -1
 MULTIUSER_REQ_CORE       = -2
 MULTIUSER_REMOVE_JOB     = -3
@@ -97,29 +98,30 @@ POSSIBLE_COLOURS = ['yellow',
 
 JOB_FMT_PATTERN_DEF = '%j (%s):%c (on %n; wd: %d)\n'
 
-KEYWORDS={'sub':       (JOBTYPE_SUB       , 'Submit a job. Arguments: the job command'),
-          'check':     (JOBTYPE_CHECK     , 'Check the jobs. Arguments: the desired job status'),
-          'kill':      (JOBTYPE_KILL      , 'Kill jobs. Argument: the jobs id'),
-          'finish':    (JOBTYPE_FINISH    , 'Finish the master execution. No arguments'),
-          'config':    (JOBTYPE_CONFIG    , 'Show the current configuration. No arguments'),
-          'clean':     (JOBTYPE_CLEAN     , 'Remove finished jobs from the list. Arguments: the jobs id'),
-          'tutorial':  (JOBTYPE_TUTORIAL  , 'Run the qpy tutorial. Arguments: optional: a qpy option'),
-          'status':    (JOBTYPE_STATUS    , 'Show current status. No arguments'),
-          'restart':   (JOBTYPE_RESTART   , 'Restart qpy-master. No arguments'),
+KEYWORDS={'sub':       (JOBTYPE_SUB       , 'Submits a job. Arguments: the job command'),
+          'check':     (JOBTYPE_CHECK     , 'Checks the jobs. Arguments: the desired job status'),
+          'kill':      (JOBTYPE_KILL      , 'Kills jobs. Argument: the jobs id'),
+          'finish':    (JOBTYPE_FINISH    , 'Finishes the master execution. No arguments'),
+          'config':    (JOBTYPE_CONFIG    , 'Shows the current configuration. No arguments'),
+          'clean':     (JOBTYPE_CLEAN     , 'Removes finished jobs from the list. Arguments: the jobs id'),
+          'tutorial':  (JOBTYPE_TUTORIAL  , 'Opens the qpy tutorial. Arguments: optional: a pattern'),
+          'status':    (JOBTYPE_STATUS    , 'Shows current status. No arguments'),
+          'restart':   (JOBTYPE_RESTART   , 'Restarts qpy-master. No arguments'),
           'ctrlQueue': (JOBTYPE_CTRLQUEUE , 'Fine control over the queue. Arguments: see tutorial'),
-          'notes':     (JOBTYPE_NOTE      , 'Add and read notes. Arguments: ID and the note')
+          'notes':     (JOBTYPE_NOTE      , 'Adds and reads notes. Arguments: ID and the note')
           }
 
-MULTIUSER_KEYWORDS={'nodes':        (MULTIUSER_NODES,          'Reaload nodes file. No arguments'),
-                    'distribute':   (MULTIUSER_DISTRIBUTE,     'Distribute cores: No arguments'),
-                    'status' :      (MULTIUSER_STATUS,         'Show status. No arguments'),
-                    'variables' :   (MULTIUSER_SHOW_VARIABLES, 'Show variables. No arguments'),
-                    'start':        (MULTIUSER_START,          'Start multiuser execution. No arguments'),
-                    'finish':       (MULTIUSER_FINISH,         'Finish the multiuser execution. No arguments'),
-                    'saveMessages': (MULTIUSER_SAVE_MESSAGES,  'Save messages for debugging. Arguments: true or false'),
-                    '__user':       (MULTIUSER_USER,           'Add user. Arguments: user_name'),
-                    '__req_core':   (MULTIUSER_REQ_CORE,       'Require a core: Arguments: user_name, jobID, n_cores, mem, queue_size'),
-                    '__remove_job': (MULTIUSER_REMOVE_JOB,     'Remove a job: Arguments: user_name, job_ID, queue_size'),
+MULTIUSER_KEYWORDS={'nodes':        (MULTIUSER_NODES,          'Realoads nodes file. No arguments'),
+                    'distribute':   (MULTIUSER_DISTRIBUTE,     'Distributes cores: No arguments'),
+                    'status' :      (MULTIUSER_STATUS,         'Shows status. No arguments'),
+                    'variables' :   (MULTIUSER_SHOW_VARIABLES, 'Shows variables. No arguments'),
+                    'start':        (MULTIUSER_START,          'Starts multiuser execution. No arguments'),
+                    'finish':       (MULTIUSER_FINISH,         'Finishes the multiuser execution. No arguments'),
+                    'saveMessages': (MULTIUSER_SAVE_MESSAGES,  'Saves messages for debugging. Arguments: true or false'),
+                    'tutorial':     (MULTIUSER_TUTORIAL,       'Opens the qpy administrator tutorial. Arguments: optional: a pattern'),
+                    '__user':       (MULTIUSER_USER,           'Adds user. Arguments: user_name'),
+                    '__req_core':   (MULTIUSER_REQ_CORE,       'Requires a core: Arguments: user_name, jobID, n_cores, mem, queue_size'),
+                    '__remove_job': (MULTIUSER_REMOVE_JOB,     'Removes a job: Arguments: user_name, job_ID, queue_size'),
                     }
 
 PORT_MIN_MULTI  = 10000

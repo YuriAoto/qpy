@@ -18,6 +18,7 @@ else:
 multiuser_conn_file = qpy_multiuser_dir + 'multiuser_connection'
 multiuser_address, multiuser_port, multiuser_key = read_conn_files(multiuser_conn_file)
 qpy_multiuser_command = [ 'python', QPY_SOURCE_DIR + 'qpy-multiuser.py', '>', '/dev/null', '2>', '/dev/null']
+tutorial_file = QPY_SOURCE_DIR + '/doc/adm_tutorial'
 
 try:
     option = MULTIUSER_KEYWORDS[sys.argv[1]][0]
@@ -66,7 +67,7 @@ if (option == MULTIUSER_REMOVE_JOB):
         sys.exit( usage_msg)
 
 
-# remove a job
+# save messages
 if (option == MULTIUSER_SAVE_MESSAGES):
     try:
         arguments = [True if (sys.argv[2] == 'true') else False]
@@ -82,6 +83,29 @@ if (option == MULTIUSER_START):
 
     exit()
 
+
+# The qpy administrator tutorial
+elif (option == MULTIUSER_TUTORIAL):
+    
+    pattern = ''
+    for i in sys.argv[2:3]:
+        pattern += i
+    for i in sys.argv[3:]:
+        pattern += ' ' + i
+
+    if (pattern in KEYWORDS):
+        pattern = '--pattern "# ' + pattern + '"'
+    elif (pattern):
+        pattern = '--pattern "' + pattern + '"'
+
+    command = 'less '  + pattern + ' ' + tutorial_file
+    try:
+        subprocess.call( command, shell = True)
+    except:
+        sys.exit( 'Error when loading the tutorial.')
+    exit()
+
+    
 try:
     msg_back = message_transfer((option, arguments),
                                 multiuser_address, multiuser_port, multiuser_key,
