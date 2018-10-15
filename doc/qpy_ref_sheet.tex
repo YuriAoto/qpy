@@ -1,53 +1,43 @@
 \documentclass[a4paper,11pt]{article}
 
 \usepackage[top=1.0cm,left=1.0cm,right=1.0cm,bottom=1.0cm]{geometry}
-\linespread{1.25}
-
 \usepackage[utf8]{inputenc}
 \usepackage[english]{babel}
-
 \usepackage[pdftex]{graphicx}
 \usepackage{pdflscape}
-
 \usepackage{multirow}
 \usepackage{color}
 \usepackage{colortbl}
+\usepackage[most]{tcolorbox}
 
-\usepackage{rotating}
+\linespread{1.25}
 
+\tcbset{
+  frame code={}
+  center title,
+  left=0pt,
+  right=0pt,
+  top=0pt,
+  bottom=0pt,
+  colback=gray!90,
+  colframe=white,
+  width=\dimexpr\textwidth\relax,
+  enlarge left by=0mm,
+  boxsep=5pt,
+  arc=0pt,outer arc=0pt,
+}
 
 \definecolor{RC1}{gray}{0.92}
 \definecolor{RC2}{rgb}{1.0,0.5,0.5}
 \definecolor{RC3}{gray}{1.0}
 
-\newcommand{\qpy}{{\texttt{q}\raisebox{-0.45ex}{\textit{py}}}}
-
-\usepackage[most]{tcolorbox}
-\tcbset{
-    frame code={}
-    center title,
-    left=0pt,
-    right=0pt,
-    top=0pt,
-    bottom=0pt,
-    colback=gray!90,
-    colframe=white,
-    width=\dimexpr\textwidth\relax,
-    enlarge left by=0mm,
-    boxsep=5pt,
-    arc=0pt,outer arc=0pt,
-    }
-
-\usepackage{tikz}
-\usetikzlibrary{calc}
-\usetikzlibrary{positioning}
-\usetikzlibrary{arrows.meta}
+\input{common}
 
 \begin{document}
 \pagenumbering{gobble}
 \begin{landscape}
 
-  \colorbox{RC2}{\textbf{\Huge Cheat Sheet}} \: {\Huge \qpy{}} \: The \textbf{Q}ueue system of \textbf{P}radipta and \textbf{Y}uri made in \textbf{Py}thon - version 0.0, 2018\vspace{0.0cm}
+  \colorbox{RC2}{\textbf{\Huge Cheat Sheet}} \: {\Huge \qpy{}} \: \qpyFull{} - \qpyVersion{}, \qpyYear{}\vspace{0.0cm}
 
   \begin{center}
     \colorbox{RC2}{Basic usage:} {\texttt{qpy <command> [options]}} \colorbox{RC1}{Use \texttt{TAB} for completion and \texttt{?} \texttt{TAB TAB} to display a help}
@@ -177,7 +167,6 @@
   
 \end{landscape}
 \end{document}
-
   
 %%% Local Variables:
 %%% ispell-local-dictionary: "british"

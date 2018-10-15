@@ -1,47 +1,45 @@
 \documentclass[a4paper,12pt]{article}
 
 \usepackage[utf8]{inputenc}
-
 \usepackage[top=2.0cm,left=1.5cm,right=1.5cm,bottom=2.25cm]{geometry}
-\linespread{1.5}
-
-\usepackage{enumerate}
-
 \usepackage[pdftex]{graphicx}
-
 \usepackage{pifont}
 \usepackage{listings}
 \usepackage{xcolor}
 \usepackage{listings}
+\usepackage{enumerate}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{tikz}
 
+\linespread{1.5}
 
 \lstdefinestyle{BashStyle}{
-  basicstyle=\small\sffamily,
+  basicstyle=\small\ttfamily,
   numbers=left,
   numberstyle=\footnotesize,
   numbersep=3pt,
   frame=tb,
-  columns=fullflexible,
+  columns=flexible,
+  escapechar=+,
   backgroundcolor=\color{yellow!20},
   linewidth=0.9\linewidth,
   xleftmargin=0.1\linewidth
 }
 
 \lstdefinestyle{FileStyle}{
-  basicstyle=\small\sffamily,
+  basicstyle=\small\ttfamily,
   numbers=left,
   numberstyle=\footnotesize,
   numbersep=3pt,
   frame=tb,
-  columns=fullflexible,
+  columns=flexible,
   backgroundcolor=\color{blue!20},
   linewidth=0.9\linewidth,
+  escapechar=+,
   xleftmargin=0.1\linewidth
 }
 
-\usepackage{hyperref}
-
-\usepackage{xcolor}
 \definecolor{dark-red}{rgb}{0.4,0.15,0.15}
 \definecolor{dark-blue}{rgb}{0.15,0.15,0.4}
 \definecolor{medium-blue}{rgb}{0,0,0.5}
@@ -54,12 +52,11 @@
 }
 
 \reversemarginpar
-\newcommand{\snote}[1]{\marginpar{\scriptsize{\begin{flushleft}#1\end{flushleft}}}}
 
-\newcommand{\qpy}{\textsc{qpy}}
-
-\usepackage{tikz}
 \usetikzlibrary{positioning}
+
+
+\input{common}
 
 \begin{document}
 
@@ -68,16 +65,14 @@
 \tableofcontents
 
 \newpage
-\section{For users}
+\section{For users}\label{sec:users}
 
-
-\qpy{} is used to submit jobs from a main server and execute them in different nodes, according the availability or the choices given by the user.
+\qpy{} is used to submit jobs from a main server and execute them in different nodes, according the availability or the options given by the user.
 It can handle jobs running in both single and multi processors and it has several options to make a friendly user interaction.
-If you are using \qpy{} for the first time, please read carefully the section \ref{sec:basics}, \emph{Basics}, just bellow.
-For a complete list of commands and their options, see the section \ref{sec:commands}, \emph{Commands}.
+If you are using \qpy{} for the first time, please read carefully the Section \ref{sec:user_basics}, \emph{Basics}, just bellow.
+For a complete list of commands and their options, see the Section \ref{sec:user_commands}, \emph{Commands}.
 
-
-\subsection{Basics}\label{sec:basics}
+\subsection{Basics}\label{sec:user_basics}
 
 \subsubsection{Installation}
 
@@ -85,137 +80,112 @@ The main instalation will probably be done by your system administrator.
 You might have to do, however, the following thing:
 
 Put the following lines in your $\sim$\texttt{/.bash\_profile} or $\sim$\texttt{/.bashrc}:
-
-
 \begin{lstlisting}[style=FileStyle]
-export PATH=<qpy_dir>:$PATH
+export PATH=<qpy_dir>:+\$+PATH
 source <qpy_dir>/bash_completion.sh
 \end{lstlisting}
-
-Your system administrador should tell you what is the \texttt{<qpy\_dir>} directory.
+Your system administrador should tell you which directory should be used in \texttt{<qpy\_dir>}.
 (S)He will might also send you a few files to be placed in your \qpy{} directory, $\sim$\texttt{/.qpy/}.
-It's in this directory that 
+This directory has main configuration files, but in general you do not have to directly access them.
 
 \subsubsection{Initialisation}
 
 The first \qpy{} command one should run is:
-
 \begin{lstlisting}[style=BashStyle]
-$ qpy restart
++\$+ qpy restart
 \end{lstlisting}
-
 This command will set the background environment for using \qpy{}.
-It should also be executed when some new update is done (you will be informed) or if the master node crashes.
-
+It should also be executed when some new update is done (you will be informed), or if the master node crashes.
 
 \subsubsection{Basic concepts and usage}
 
 Every job submmited by \qpy{} has an ID and a status.
-The ID, a fixed integer for a particular job, is unique and identifies your job in the pool of jobs.
-The status are:
+The ID, a fixed integer for a particular job, is unique and identifies your job in the pool of (your) jobs.
+The status can be:
 
 \begin{itemize}
-\item queue   - the job is waiting for allocation
-\item running - the was allocated and is running
-\item done    - the job have run and is finished
-\item killed  - the job had its execution killed by the user
-\item undone  - the job have not been executed (it was killed while in the queue)
+\item \texttt{queue}   - the job is waiting for allocation;
+\item \texttt{running} - the was allocated and is running;
+\item \texttt{done}    - the job have run and is finished;
+\item \texttt{killed}  - the job had its execution killed by the user;
+\item \texttt{undone}  - the job have not been executed (it was killed while in the queue).
 \end{itemize}
 
-When you just submit a job, it has the 'queue' status.
-When a node is allocated for it, it is executed and the status changes to 'running'.
-If the job terminates normally, the status changes to 'done'.
-If you kills the job (that is, stops its execution), the status changes to 'killed'.
-If you kills a job that is still on the queue, it will never be executed and the status changes to 'undone'.
+When you just submit a job, it has the \texttt{queue} status.
+When a node is allocated for it, it is executed and the status changes to \texttt{running}.
+If the job terminates normally, the status changes to \texttt{done}.
+If you kills the job (that is, stops its execution), the status changes to \texttt{killed}.
+If you kills a job that is still waiting for allocation, it will never be executed and the status changes to \texttt{undone}.
 
-
-You can submit a job using the sub command:
-
+You can submit a job using the command \texttt{sub}:
 \begin{lstlisting}[style=BashStyle]
-$ qpy sub <job's execution command>
++\$+ qpy sub <job's execution command>
 \end{lstlisting}
-
-This means that you put, on your queue of jobs, a new job that has to be executed with the command <job's execution command>.
+This means that you put, on your queue of jobs, a new job that has to be executed with the command \texttt{<job's execution command>}.
 \qpy{} will handle it for you from here on!
 
 By the way, all commands in \qpy{} are like this:
-
 \begin{lstlisting}[style=BashStyle]
-$ qpy <cmd> [options]
++\$+ qpy <cmd> [options]
 \end{lstlisting}
-
-where <cmd> is one of the \qpy{} commands and [options] are the otions for that command.
-Of course, these options depend on the actual command <cmd>, some of them are optional, and so on.
-See below for a complete list of commands and the explanation of their several options.
+where \texttt{<cmd>} is one of the \qpy{} commands and \texttt{[options]} are the otions for that command.
+Of course, these options depend on the actual command \texttt{<cmd>}, some of them are optional, some not.
+See below for a complete list of commands and the explanation of their options.
 
 Now that your job is on the list, you probably want to be able to:
-- check the status of your job (or jobs);
-- check the situation of the nodes;
-- eventually kill a unsatisfactory job.
-
+\begin{itemize}
+\item check the status of your job (or jobs);
+\item check the situation of the nodes;
+\item eventually kill an unsatisfactory job.
+\end{itemize}
 This can be done by the following commands:
-
 \begin{lstlisting}[style=BashStyle]
-$ qpy check
++\$+ qpy check
 \end{lstlisting}
-
 This shows a list of all your jobs.
 If you are interested only on a portion of these jobs, say, the ones that are currently running, try:
-
 \begin{lstlisting}[style=BashStyle]
-$ qpy check running
++\$+ qpy check running
 \end{lstlisting}
-
 Another useful \qpy{} command is:
-
 \begin{lstlisting}[style=BashStyle]
-$ qpy status
++\$+ qpy status
 \end{lstlisting}
-
-It will show all the available node, users, how many jobs each one is running and so on.
-If your jobs are for too long on the queue, this command should provide an indication why.
+It will show all the available node, users, how many jobs each one is running, and a few extra information.
+If your jobs are waiting for too long on the queue, this command should provide an indication why.
 
 Sometimes we are not so happy with the development of a job and we want to terminate its execution, without waiting to its normal termination.
 You can do this with:
-
 \begin{lstlisting}[style=BashStyle]
-$ qpy kill <job_ID>
++\$+ qpy kill <job_ID>
 \end{lstlisting}
-
-where <job\_ID> is the ID number of the job.
+where \texttt{<job\_ID>} is the ID number of the job.
 Attention! This is not reversible.
 \qpy{} will not ask you if you are sure to kill the job, so use the command with care.
 
 There are several commands and options in \qpy{}.
-Every command in \qpy{} can be completed automatically by using the TAB key.
-It also gives the possible next arguments which, we hope, would be very helpful for all the users :)
-For instance, if you type:
-
+Every command in \qpy{} can be completed automatically by using the key \texttt{<TAB>}.
+It also gives the possible next arguments which, we hope, will be very helpful.
+Moreover, if you type:
 \begin{lstlisting}[style=BashStyle]
-$ qpy kill ? <TAB> <TAB>
++\$+ qpy kill ? <TAB> <TAB>
 \end{lstlisting}
+where \texttt{<TAB> <TAB>} indicates that you should type the \texttt{<TAB>} key two times, you will receive a brief explanation on the command \texttt{kill}.
 
-where \texttt{<TAB> <TAB>} indicates that you should type the \texttt{TAB} key two times, you will receive a brief explanation on the command sub.
+\subsection{Commands}\label{sec:user_commands}
 
-
-
-\subsection{Commands}\label{sec:commands}
-
-
-The followings are all the commands of \qpy{}.
-The user can run any of these commands as
-
+This section presents a list of all the commands and options of \qpy{}.
+Remember that they should be used as:
 \begin{lstlisting}[style=BashStyle]
-$ qpy <cmd> [options]
++\$+ qpy <cmd> [options]
 \end{lstlisting}
+where \texttt{[options]} depends on the command \texttt{<cmd>}.
 
-where \texttt{[options]} depends on the actual command \texttt{<cmd>}.
+\subsubsection{\texttt{restart}}
 
-
-\subsubsection{restart}
-
-The user can start \qpy{} background environment with this command.
+To start the \qpy{} background environment.
 This command also works as an easy way to finish current session of \qpy{} and start a new, which is most useful when the user wants to update the \qpy{} to its latest version.
+If you are restarting \qpy{} because the background environment has crashed, you might have to remove the file \texttt{master\_connection\_port} from the \qpy{} directory before starting a new \qpy{} session. 
 
 \begin{itemize}
 \item Options:
@@ -226,15 +196,13 @@ This command also works as an easy way to finish current session of \qpy{} and s
   Restart the \qpy background environment:
 
 \begin{lstlisting}[style=BashStyle]
-$ qpy restart
++\$+ qpy restart
 \end{lstlisting}
-
 \end{itemize}  
 
-\subsubsection{finish}
+\subsubsection{\texttt{finish}}
 
 If you feel like done using \qpy{}, please finish the existing \qpy{} environment which is running in background using this command.
-If somehow the qpy-master crashes while using, please remove the '.port' file from the \qpy{} directory before starting a new \qpy{} session. 
 
 \begin{itemize}
 \item Options:
@@ -245,94 +213,160 @@ If somehow the qpy-master crashes while using, please remove the '.port' file fr
   Finishes the background \qpy{} environment:
 
 \begin{lstlisting}[style=BashStyle]
-$ qpy finish
++\$+ qpy finish
 \end{lstlisting}
-  
-\end{itemize}
+  \end{itemize}
 
+\subsubsection{\texttt{sub}}
 
-\subsubsection{sub}
+Used to submit any executable or command.
+The standard output and standard error of that command will be written in the files \texttt{job\_<job\_ID>.out} and \texttt{job\_<job\_ID>.err} respectively.
 
-Submit any executable after the command 'qpy sub'.
-The output and the error file of running that particular script will be written in the files 'job\_<job\_ID>.out' and 'job\_<job\_ID>.err' respectively.
+By default, \qpy{} will allocate one core and 5 GB of RAM for such submission.
+To submit a job that uses more cores (say \texttt{<N>} cores) or a different amount of memory (say \texttt{<M>} GB), one can add this information in two ways.
+The first case is using the options \texttt{-n <N>} or \texttt{-m <M>} after \texttt{qpy sub}, but \emph{before} the executable (or the options will be used as options to the command).
+The second case can be used when submitting a bash script as command.
+In this case, the following lines can be added in the script, that will be recognised by \qpy{}:
 
-Submitting a serial job is the default one for this command.
-To submit a job that uses multi-processor, please add the information of number of processors (N) needed either by putting '-n N' between 'qpy sub' and the executable, or by adding '\#QPY n\_cores=N' in the script running.
-For the first case, do not put the option after the executable as it would then be considered as an option corresponding to the executable. 
-
-\qpy{} also check if enough memory is available in a node before starting a job there.
-The defualt memory it checks for availibility is 5 GB. If a job needs to use more memory (M) please add this information either by putting '-m M' between 'qpy sub' and the executable, or by adding '\#QPY mem=M' in the script running.
-
+\begin{lstlisting}[style=FileStyle]
+  #QPY n_cores=<N>
+  #QPY mem=<M>
+\end{lstlisting}
 
 \begin{itemize}
 \item Options:
   the executable and its arguments;
-  optionally, the the following flags BEFORE the executable:
-
-    -n <n cores>        the number of cores
-    -m <memory>         requested memory, in GB
-
-
+  optionally, the the following flags \emph{before} the executable:
+  \begin{itemize}
+  \item \texttt{-n <N>} \quad   the number of cores
+  \item \texttt{-m <M>} \quad   requested memory, in GB
+  \end{itemize}
+  
 \item Examples:
 
-  Executes the command 'hostname'. Allocates one cores and 5 GB of memory for it (default values):
+  Executes the command \texttt{hostname}. Allocates the default one cores and 5 GB of memory for it:
 
 \begin{lstlisting}[style=BashStyle]
-$ qpy sub hostname
++\$+ qpy sub hostname
 \end{lstlisting}
   
-  Executes the script './script.sh'. Allocates three cores and 10 GB of memory for it:
+  Executes the script \texttt{./script.sh} (that must have the permission to be executed!). Allocates three cores and 10 GB of memory for it:
 
 \begin{lstlisting}[style=BashStyle]
-$ qpy sub -n 3 -m 10 ./script.sh 
++\$+ qpy sub -n 3 -m 10 ./script.sh 
 \end{lstlisting}
-  Executes the command 'ls -ltr':
+  Executes the command \texttt{ls -ltr}:
 
 \begin{lstlisting}[style=BashStyle]
-$ qpy sub ls -ltr
++\$+ qpy sub ls -ltr
 \end{lstlisting}
 
 \end{itemize}
   
-\subsubsection{check}
+\subsubsection{\texttt{check}}
 
-Check the status of all the submitted jobs.
-The command 'qpy check' gives the list of all jobs submitted.
-One can also check jobs of specific status which are: 'running', 'done', 'killed', 'undone' and 'queue' adding the keyword after 'qpy check'
-
+Checks the status of all the submitted jobs, printing a list of jobs.
+If no option is given, the command gives the list of all jobs submitted.
+One can also list just specific jobs, by their status, ID, or directory of submission.
+This information can be passed by the options, and if multiple options are given the jobs that satisfy any of the required property is listed.
+For example a status and a directory are given, this command will list all the jobs with that status plus the jobs that were submitted from the directory.
 
 \begin{itemize}
-
+  
 \item Options:
-  a status
-  a job ID list
+  statuses, job IDs, and/or directories.
+  The job IDs can be passed individually or as a range, such as 100-120.
   
 \item Examples:
 
+  Lists the jobs that are currently running:
+
+  \begin{lstlisting}[style=BashStyle]
++\$+ qpy check running
+  \end{lstlisting}
+
+  Lists the jobs that have been submitted from the current directory
+
+  \begin{lstlisting}[style=BashStyle]
++\$+ qpy check .
+  \end{lstlisting}
+
+  Lists the jobs with ID in the range 100-120, plus the jobs with ID in the range 130-135, plus the job 137:
+
+  \begin{lstlisting}[style=BashStyle]
++\$+ qpy check 100-120 130-135,137
+  \end{lstlisting}
 \end{itemize}
 
-\subsubsection{kill}
+\subsubsection{\texttt{kill}}
 
-Kill a particular jobs using the command 'qpy kill [jobid]'. One can also kill several jobs by providing a list of jobid's or a range of jobid's separated by '-'. Kill 'all'/'running' jobs or jobs in 'queue' by replacing the [jobid] with these keywords. 
-
+Kills a particular job or set of jobs.
+One can kill several jobs by providing several job IDs (with a range, for instance, like in \texttt{check}.
+A status can be used to kill all jobs with that status (\texttt{running} or \texttt{queue}).
+Use \texttt{all} to kill all the jobs (be careful!).
 
 \begin{itemize}
 \item Options:
-  a status ('queue' or 'running')
-
-  a job ID list
-
-  'all'  
+  one or more job IDs, a status (\texttt{queue} or \texttt{running}), or \texttt{all}.
 
 \item Examples:
 
+  Kills the jobs with ID 100, 101, 102, 103, 104, 105, and 108:
+
+  \begin{lstlisting}[style=BashStyle]
++\$+ qpy kill 100-105 108
+  \end{lstlisting}
+
+  Kills all the jobs with status \texttt{queue} (that is, not yet allocated):
+
+  \begin{lstlisting}[style=BashStyle]
++\$+ qpy kill queue
+  \end{lstlisting}
+
+  Kills all jobs:
+
+  \begin{lstlisting}[style=BashStyle]
++\$+ qpy kill all
+  \end{lstlisting}
 \end{itemize}
 
+\subsubsection{\texttt{clean}}
 
-\subsubsection{status}
+Cleans the list of jobs that \qpy{} has currently in memory.
+One can only clean jobs with status \texttt{done}, \texttt{killed}, or \texttt{undone}.
+Similarly to the \texttt{kill} command, the user can clean some specific jobs by the ID, all the jobs with some status, or all jobs.
+One can also clean by the directory of submission.
+It has no effect
 
-This command is mainly useful for the 'multi-user' environment.
-It writes elaborately the number of jobs running for each users and in each of the available nodes. 
+\begin{itemize}
+\item Options:
+  one or more job IDs, a status (\texttt{done}, \texttt{killed}, or \texttt{undone}), \texttt{all}, or a directory.
+
+\item Examples:
+
+  Cleans the jobs with ID 100 to 200:
+
+  \begin{lstlisting}[style=BashStyle]
++\$+ qpy clean 100-200
+  \end{lstlisting}
+
+  Cleans all the jobs with status \texttt{undone} (that ones that have been killed before running):
+
+  \begin{lstlisting}[style=BashStyle]
++\$+ qpy clean undone
+  \end{lstlisting}
+
+  Cleans all the jobs that can be cleaned:
+
+  \begin{lstlisting}[style=BashStyle]
++\$+ qpy clean all
+  \end{lstlisting}
+\end{itemize}
+
+\subsubsection{\texttt{status}}
+
+This command is mainly useful for checking the multi-user environment.
+It writes the number of jobs running for each users, and in each of the available nodes.
 
 \begin{itemize}
 \item Options:
@@ -340,351 +374,461 @@ It writes elaborately the number of jobs running for each users and in each of t
   
 \item Examples:
 
+  \begin{lstlisting}[style=BashStyle]
++\$+ qpy status
+  \end{lstlisting}
 \end{itemize}
 
+\subsubsection{\texttt{config}}
 
-\subsubsection{config}
+This command, if run without option, gives information about the current settings of \qpy{}.
+Feel free to check, it is quite self explanatory.
+These settings can be changed by the same command, giving as option a keyword and a value (or soemtimes a sequence of values):
 
-This command gives informations about some of the variables in \qpy{}.
-Feel free to check.
-It is quite self explanatory.
-One of the advanced feature of this command is to configure the format that 'qpy check' would follow.
-The default format that 'qpy check' uses to write all the jobs is '%j (%s):%c (on %n; wd: %d)\n'.
+\begin{lstlisting}[style=BashStyle]
++\$+ qpy config <keyword> <value> [<value2> ...]
+\end{lstlisting}
 
-It might seem little complicated, but it follows mainly these rules:
-
-\begin{itemize}
-\item \%j : job ID
-\item \%s : job status
-\item \%c : command you used to submit the job
-\item \%d : working directory of your job
-\item \%n : node allocated for your job
-\item \%N : number of cores for your job.
-\item \%R : running time of the job. (time in queue if the job is in queue)
-\item \%Q : actual time when the job is submitted
-\item \%S : actual time when the job has started
-\item \%E : actual time when the job has finished
-\end{itemize}
-
-The user can also change this format to a minimalistic one, by 'qpy config checkFMT \%j:\%s' or anything using the notations defined above. To check the current format, use the command 'qpy config checkFMT' and to change it to the default one, use 'qpy config checkFMT default'.
-
-There are some new options available to format 'qpy check' and have some information about the timing of the jobs. These are:
-
-
-Bash scripts, generally, stops if changes are made in it while it is still running.
-So it is better to have \qpy{} running a copied script which allows to change and reuse the original bash script.
-'qpy config' provides another advanced option to do this by copying the script to the local folder '~/.qpy/scripts' and use it later while running the actual calculation.
-This is very useful while working with a bash script.
-To use this, set it up with 'qpy config copyScripts true', where by default 'copyScripts' is set to 'false'. 
-
-The same thing can also be done for a specific job if the submitted scipt has the line '\#QPY cpScript true' or if the job is submitted using the command 'qpy sub -c [script\_name]'.
-If the 'copyScripts' is set True, then the reverse can be done by adding the line '\#QPY cpScript false' in the script or by submitting the script using the command 'qpy sub -o [script\_name]'.
-
+In the following is a list of possible keywords and what they mean.
 
 \begin{itemize}
-
-\item Options: % Write some options...
-
+\item \texttt{colour true|false}
   
-\item Examples:
+  The output of check is coloured (\texttt{true}) or not (\texttt{false}).
+  Coloured output might not work for some terminals.
+
+\item \texttt{coloursScheme <c queue> <c running> <c done> <c killed> <c undone>}
+
+  Sets the colours to be used in a coloured output of check.
+  Give always five colours, following the order above, that can be:
+  \texttt{grey}, \texttt{red}, \texttt{green}, \texttt{yellow}, \texttt{blue}, \texttt{magenta}, \texttt{cyan}, and \texttt{white}.
+
+\item \texttt{checkFMT '<pattern>'}
+
+  When the command \texttt{check} is used, the jobs are printed in a specific pattern.
+  One can change this with this keyword, where \texttt{<pattern>} is a string (the single quotes above are important!') that may contain one of the ``ampersanded'' modifiers below, that will be replaced by the appropriate content of the job.
+
+  \begin{itemize}
+  \item \%j : job ID
+  \item \%s : job status
+  \item \%c : command you used to submit the job
+  \item \%d : working directory of your job
+  \item \%n : node allocated for your job
+  \item \%N : number of cores for your job.
+  \item \%R : running time of the job. (time in queue if the job is in queue)
+  \item \%Q : actual time when the job is submitted
+  \item \%S : actual time when the job has started
+  \item \%E : actual time when the job has finished
+  \end{itemize}
+
+  It might seem a little complicated, but a example clarifies.
+  The default value is:\\
+  \texttt{\%j (\%s):\%c (on \%n; wd: \%d)\textbackslash n}\\
+  Let us suppose that one has only one job, running a command \texttt{bash my\_script.sh}, with ID 100, submitted from \texttt{/home/user/}, and it is currently running on the node \texttt{comp1}.
+
+  \begin{lstlisting}[style=BashStyle]
++\$+ qpy check
+100 (running):bash my_script.sh (on comp1; wd: /home/users/)
++\$+ qpy config checkFMT '%j: %s\n'
+Check pattern modified to '%j: %s\n'
++\$+ qpy check
+100: running
++\$+ qpy config checkFMT '%j (%s)\n\tSubmitted from %d\n\tStarted at %S\n-----\n'
+Check pattern modified to '%j (%s)\n\tSubmitted from %d\n\tStarted at %S\n-----\n'
++\$+ qpy check
+100 (running)
+        Submitted from /home/users/
+        Started at 2018-10-04 18:01:45.948201
+-----
++\$+ qpy config checkFMT default
+Check pattern restored to the default value: '%j (%s):%c (on %n; wd: %d)\n'.
++\$+ qpy check
+100 (running):bash my_script.sh (on comp1; wd: /home/users/)
+  \end{lstlisting}
+
+  The \texttt{\textbackslash n} is important, and it means ``new line''.
+  Without it, all jobs are printed in the same line.
+  One can also use \texttt{\textbackslash t} to insert a tabulation, as the example shows.
+
+\item \texttt{copyScripts <true|false>}
+
+  Bash scripts, generally, stops if changes are made in it while it is still running.
+  So it is sometimes interesting to have \qpy{} running a copied script which allows to change and reuse the original bash script.
+  If this keyword is set to \texttt{true}, qpy will 
+  'qpy config' provides another advanced option to do this by copying the script to the local folder \texttt{$\sim$/.qpy/scripts} and use it later while running the actual calculation.
+  This is very useful while working with a bash script.
+  To use this, set it up with \texttt{qpy config copyScripts true}, where by default \texttt{copyScripts} is set to \texttt{false}. 
+  
+  The same thing can also be done for a specific job if the submitted script has the line \texttt{\#QPY cpScript true} or if the job is submitted using the command \texttt{qpy sub -c [script\_name]}.
+  If the \texttt{copyScripts} is set True, then the reverse can be done by adding the line \texttt{\#QPY cpScript false} in the script or by submitting the script using the command \texttt{qpy sub -o [script\_name]}.
+  
+\end{itemize}
+
+\begin{itemize}
+
+\item Options: a keyword and a value (or values) for this keyword.
+
+\item Examples: See above for examples for each keyword.
 
 \end{itemize}
 
-\subsubsection{ctrlQueue}
+\subsubsection{\texttt{ctrlQueue}}
 
-ctrlQueue is a command to control and move the jobs in the queue.
-Consider the situation where you  have a long list of jobs in the queue but you have some job(s) of top priority that needs to be done as soon as possible.
-The command ctrlQueue can be used in this situtation to move the priority job(s) up in the queue-list.
+This command controls and move jobs in the queue.
+First the options \texttt{pause} and \texttt{continue} can be used to pause the submission of jobs from the queue to running, or to continue.
+Also, it can be used to move jobs within the queue (\texttt{jump}), and reorganise the order of submission.
+
+\begin{itemize}
+
+\item Options: \texttt{pause}, \texttt{jump}, \texttt{continue}
+
+\item Examples:
+
+Consider the situation where you have a long list of jobs in the queue but you have some job(s) of top priority that needs to be done as soon as possible.
+The command ctrlQueue can be used in this situtation to move the priority job(s) up in the queue.
 These are what you have to follow:
+The queue must first be paused, then ``jump'' the job \texttt{<job ID>} to \texttt{<target>}:
 
-'qpy ctrlQueue pause' : This command needs to be used prior to moving the jobs. This command ensures that no jobs from the queue can be started further. 
+\begin{lstlisting}[style=BashStyle]
+  qpy ctrlQueue pause
+  qpy ctrlQueue jump <job ID> <target>
+  qpy ctlrQueue continue
+\end{lstlisting}
 
-'qpy ctrlQueue jump [job-id-1] [job-id-2] [job-id-3] ... [job-id-n] [job-id-pos]' : This is the main command for moving the jobs. Here all the jobs (1 to n) are moved in the queue to be placed after [job-id-pos] in the queue-list. 
-
-'qpy ctlrQueue continue' : This command remove the pause and let \qpy{} to continue putting jobs from queue to the nodes. 
-
-\begin{itemize}
-
-\item Options:
-
-\item Examples:
+The \texttt{<target>} can be a job ID, \texttt{begin}, or \texttt{end}.
 
 \end{itemize}
 
-\subsubsection{clean}
+\subsubsection{\texttt{tutorial}}
 
-It cleans the list of jobs that one can see using 'qpy check'.
-The user can clean some specific jobs by adding the job id or the specific status of the job.
-The jobs that can be cleaned are 'done', 'killed' and 'undone'. 
-
+Shows a tutorial, that is basically a text version of the ``For ssers'' section of this manual.
 
 \begin{itemize}
-
-\item Options:
-  a status ('done', 'killed' or 'undone')
-  a job ID list
-  'all'  
+\item Options: Optionally, a keyword can be given to be searched in the tutorial
 
 \item Examples:
 
-\end{itemize}
-
-\subsubsection{tutorial}
-
-Shows a tutorial.
-
-\begin{itemize}
-\item Options:
-
-\item Examples:
+  Opens the tutorial and goes to the first occurrence of \texttt{ctrlQueue}:
+  
+  \begin{lstlisting}[style=BashStyle]
+    qpy tutorial ctrlQueue
+  \end{lstlisting}
 
 \end{itemize}
-
-
 
 \newpage
 \section{For administrators}
 
-The duties of the administrator of \qpy{} are basic to maintain the program ``qpy-multiuser'' running and add/remove new users and machines.
+To work as administrator of \qpy{}, it is useful to know a few facts about how \qpy{} works.
+\qpy{} has three levels:
+\begin{enumerate}
+\item the \texttt{qpy}
+\item the \texttt{qpy-master}
+\item the \texttt{qpy-multiuser}
+\end{enumerate}
+The first, \texttt{qpy}, takes care of the interaction of the user with \qpy{}, and its usage is described in the Section \ref{sec:users} of this manual.
+The second is the background environment of \qpy{} \emph{of each user}, and controls the user's jobs.
+The third is the global (or multi-user, as we prefer to say) background environment of \qpy{}, that decides when and where a job can run, by allocating cores and memory to each \texttt{qpy-master}.
+
+All this said, the duties of the administrator of \qpy{} are:
+\begin{itemize}
+\item Maintain the program \texttt{qpy-multiuser} running;
+\item Add/remove new users and machines;
+\item Assist the users with any problems;
+\item Update \qpy{} to newer versions.
+\end{itemize}
 This section explains how this is done.
+First of all, it is a good idea to have a user dedicated to the administration of \qpy{}, what keeps everything more organised.
+We of course strongly discourage using the root for this task, for security reason.
+The administrator of \qpy{} does not need any special permission.
 
 \subsection{Installation}\label{sec:instal_admin}
 
 We assume that you have a copy of \qpy{}, otherwise you wouldn't be reading this manual.
-To set up a new \qpy{} environment, create the following directory in the administrator's home directory:
+To set up a new \qpy{} environment, the following steps must be taken:
+
+\begin{itemize}
+\item Make sure that every user that will use \qpy{} has permission to read the directory where \qpy{} is installed.
+This directory will be (and has been, in Section \ref{sec:user_basics}) called \texttt{<qpy\_dir>}.
+
+\item Create the configuration's directory in the administrator's home directory:
 
 \begin{lstlisting}[style=BashStyle]
-$ mkdir ~/.qpy-multiuser/
++\$+ mkdir +$\sim$+/.qpy-multiuser/
 \end{lstlisting}
-And create the following files:
 
-\begin{verbatim}
-~/.qpy-multiuser/distribution_rules
-~/.qpy-multiuser/allowed_users
-~/.qpy-multiuser/nodes
-~/.qpy-multiuser/multiuser_connection_address
-\end{verbatim}
-
-The content of these files are described in section \ref{sec:files_admin}.
-Create them according to your local needs.
-After this, start the qpy-multiuser with:
+\item Create the following files in this directory:
 
 \begin{lstlisting}[style=BashStyle]
-$ python ${QPY_DIR}/qpy-access-multiuser.py start
++\$+ vi +$\sim$+/.qpy-multiuser/distribution_rules
++\$+ vi +$\sim$+/.qpy-multiuser/allowed_users
++\$+ vi +$\sim$+/.qpy-multiuser/nodes
++\$+ vi +$\sim$+/.qpy-multiuser/multiuser_connection_address
+\end{lstlisting}
+
+The content of these files are described in section \ref{sec:admin_files}.
+Please, read such section carefully and create these files according to your needs before proceeding.
+
+\item Finally, start the multiuser environment of \qpy{}:
+
+\begin{lstlisting}[style=BashStyle]
++\$+ python <qpy_dir>/qpy-access-multiuser.py start
+\end{lstlisting}
+
+\end{itemize}
+
+All the interaction of the administrator with \qpy{} is made with the following command, plus some options:
+
+\begin{lstlisting}[style=BashStyle]
++\$+ python <qpy_dir>/qpy-access-multiuser.py 
+\end{lstlisting}
+
+It is a good idea to define an alias for this by, for example, adding the following in the \qpy{} administrator \texttt{$\sim$/.bashrc}:
+
+\begin{lstlisting}[style=FileStyle]
+  alias qpy-admin='<qpy_dir>/qpy-access-multiuser.py'
 \end{lstlisting}
 
 
 \subsection{Add new user}
 
-As \qpy{} usually runs across several machines, make sure that \texttt{ssh} keys are set up! 
+Let us suppose that a user with username \texttt{<user>} will start using \qpy{}.
+As \qpy{} usually runs across several machines, first make sure that \texttt{<user>} has the ssh keys properly configured, that is, that the user is be able to connect from the master node (where \qpy{} is running) to the slave nodes without password.
+Because the home directory of the master node and the slave nodes must have the same home directory for a correct \qpy{} environment, setting the ssh keys just once should be enough.
+To allow for the new user in \qpy{}, add the username in the file \texttt{$\sim$/.qpy-multiuser/allowed\_users}, one user in each line:
 
-To add a new user in \qpy{}, first add his name in the file
+\begin{lstlisting}[style=BashStyle]
++\$+ cat +$\sim$+/.qpy-multiuser/allowed_users
+<user 1>
+<user 2>
+...
+<user>
+\end{lstlisting}
 
-\begin{verbatim}
-~/.qpy-multiuser/allowed_users
-\end{verbatim}
+After, you have to send the following files to the new user, to be put in his/her \qpy{} directory.
+Something like this:
 
-After, you have to send the following files to the new user:
+\begin{lstlisting}[style=BashStyle]
++\$+ cp +$\sim$+/.qpy-multiuser/multiuser_connection_address /home/<user>/.qpy/
++\$+ cp +$\sim$+/.qpy-multiuser/multiuser_connection_port /home/<user>/.qpy/
++\$+ cp +$\sim$+/.qpy-multiuser/multiuser_connection_conn_key /home/<user>/.qpy/
+\end{lstlisting}
 
-\begin{verbatim}
-~/.qpy-multiuser/multiuser_connection_address
-~/.qpy-multiuser/multiuser_connection_port
-~/.qpy-multiuser/multiuser_connection_conn_key
-\end{verbatim}
+In addition, if you have a dedicated machine to run \qpy{}, copy also the following file file to the user's \qpy{} directory:
 
-These should be placed in the user's \qpy{} directory:
+\begin{lstlisting}[style=BashStyle]
++\$+ cat +$\sim$+/.qpy-multiuser/master_connection_address
+<hostname>
++\$+ cp +$\sim$+/.qpy-multiuser/master_connection_address /home/<user>/.qpy/
+\end{lstlisting}
 
-\begin{verbatim}
-${USER}/.qpy/multiuser_connection_address
-${USER}/.qpy/multiuser_connection_port
-${USER}/.qpy/multiuser_connection_conn_key
-\end{verbatim}
-
-In addition, if you have a dedicated machine to run \qpy{}, add this file to the user's \qpy{} directory (note that the above filenames start with \verb+multiuser_*+ while this filename starts with \verb+master_*+):
-
-\begin{verbatim}
-${USER}/.qpy/master_connection_address
-\end{verbatim}
-
-with the address of the machine where his qpy-master is supposed to run.
-If this file is not present, \qpy{} runs locally.
+If this file is not present in the user's \qpy{} directory, \qpy{} runs locally.
 
 \subsection{Add and remove a node}
 
-To add a new node, add a new line in the file
+To add or remove a node, edit the file \texttt{$\sim$/.qpy-multiuser/nodes} (see Section \ref{sec:admin_files}), and run the following commands:
 
-\begin{verbatim}
-~/.qpy-multiuser/nodes
-\end{verbatim}
-
-with the information about the node (see section \ref{sec:files_admin} for a description of this file).
-Then run:
-
-\begin{verbatim}
-$ python ${QPY_DIR}/qpy-access-multiuser.py nodes
-$ python ${QPY_DIR}/qpy-access-multiuser.py distribute
-\end{verbatim}
-
-
-
+\begin{lstlisting}[style=BashStyle]
++\$+ python <qpy_dir>/qpy-access-multiuser.py nodes
++\$+ python <qpy_dir>/qpy-access-multiuser.py distribute
+\end{lstlisting}
 
 \subsection{Update version}
 
-When a new version of \qpy{} is released, depending where the new changes have been done, you might have to restart the qpy-multiuser:
+When a new version of \qpy{} is released, depending where the new changes have been done, you might have to restart the multiuser background environment:
 
-\begin{verbatim}
-$ python ${QPY_DIR}/qpy-access-multiuser.py finish
-$ python ${QPY_DIR}/qpy-access-multiuser.py start
-\end{verbatim}
+\begin{lstlisting}[style=BashStyle]
++\$+ python <qpy_dir>/qpy-access-multiuser.py finish
++\$+ python <qpy_dir>/qpy-access-multiuser.py start
+\end{lstlisting}
 
-And/or ask all the users to restart their qpy-masters.
+And/or ask all the users to restart their own masters, with:
+
+\begin{lstlisting}[style=BashStyle]
++\$+ qpy restart
+\end{lstlisting}
+
 Whatever is the case, this will be informed in the release's notes.
-
 
 
 \subsection{Commands}
 
 This is a full list of the commands that are available to the administrator:
 
-\begin{lstlisting}[style=BashStyle]
-$ python ${QPY_DIR}/qpy-access-multiuser.py start
+\begin{itemize}
+
+\item \texttt{start}
+  
+  Starts a new qpy-multiuser instance.
+  Run this if you are starting \qpy{} for the first time, if a update is needed or if the machine qhere \qpy{} runs has crashed.
+  
+  \begin{lstlisting}[style=BashStyle]
++\$+ python <qpy_dir>/qpy-access-multiuser.py start
+  \end{lstlisting}
+
+\item \texttt{finish}
+  
+  Finishes the multiuser background environment.
+  \begin{lstlisting}[style=BashStyle]
++\$+ python <qpy_dir>/qpy-access-multiuser.py finish
 \end{lstlisting}
 
-Starts a new qpy-multiuser instance.
-Run this if you are starting \qpy{} for the first time, if a update is needed or if the machine qhere \qpy{} runs has crashed.
 
+\item \texttt{nodes}
+
+  Loads the content of the file \texttt{$\sim$/.qpy-multiuser/nodes}.
+
+  \begin{lstlisting}[style=BashStyle]
++\$+ python <qpy_dir>/qpy-access-multiuser.py nodes
+  \end{lstlisting}
+
+
+\item \texttt{distribute}
+
+  Distributes the cores among the users.
+
+  \begin{lstlisting}[style=BashStyle]
++\$+ python <qpy_dir>/qpy-access-multiuser.py distribute
+  \end{lstlisting}
+
+  
+\item \texttt{variables}
+
+  Lists several internal variables of qpy-multiuser.
+  Used mainly for debugging.
+
+  \begin{lstlisting}[style=BashStyle]
++\$+ python <qpy_dir>/qpy-access-multiuser.py variables
+  \end{lstlisting}
+
+
+\item \texttt{status}
+
+  Show the current status of the users, nodes and cores.
+  It is the same as the command \texttt{status} accessible to the users.
+
+  \begin{lstlisting}[style=BashStyle]
++\$+ python <qpy_dir>/qpy-access-multiuser.py status
+  \end{lstlisting}
+
+
+
+\item \texttt{saveMessages}
+
+  Saves messages from the internals of qpy-multiuser, that will be shown in the ``variables'' command.
+  Mainly for debugging.
+
+  \begin{lstlisting}[style=BashStyle]
++\$+ python <qpy_dir>/qpy-access-multiuser.py saveMessages
+  \end{lstlisting}
+
+
+\end{itemize}
+
+There are some ``cheatting'' commands that the administrator can run, such as artificially adding or removing running jobs of users.
+These commands are not supposed to be used in a normal run, but only if something went wrong and must be manually fixed.
+\textbf{Use only if you know exactly what you are doing!!}
+
+
+\begin{itemize}
+
+\item \texttt{\_\_user}
+
+  Adds a new user to qpy-multiuser. \emph{In a normal run, it is automatically done when the user restart his/her \qpy{}.}
+
+  \begin{lstlisting}[style=BashStyle]
++\$+ python <qpy_dir>/qpy-access-multiuser.py __user <user_name> \
+  <address> <port> <conn_key>
+  \end{lstlisting}
+
+
+\item \texttt{\_\_req\_core}
+
+  Asks for a slot (cores plus memory) to run a job. \emph{In a normal run, it is done by the user's master whenever there is a job in his/her queue.}
+  
 \begin{lstlisting}[style=BashStyle]
-$ python ${QPY_DIR}/qpy-access-multiuser.py finish
++\$+ python <qpy_dir>/qpy-access-multiuser.py __req_core <user_name> \
+  <jobID> <n_cores> <mem> <queue_size>
 \end{lstlisting}
 
-Finishes the qpy-multiuser program
+\item \texttt{\_\_remove\_job}
 
+  Tells the multiuser background environment that a job has finished. \emph{Ina a normal run, it is done by the user's master whenever the job has finished.}
+  
 \begin{lstlisting}[style=BashStyle]
-$ python ${QPY_DIR}/qpy-access-multiuser.py nodes
++\$+ python <qpy_dir>/qpy-access-multiuser.py __remove_job <user_name> \
+  <job_ID> <queue_size>
 \end{lstlisting}
 
-Loads the content of the \texttt{nodes} file.
+\end{itemize}
 
-\begin{lstlisting}[style=BashStyle]
-$ python ${QPY_DIR}/qpy-access-multiuser.py distribute
-\end{lstlisting}
-
-Distribute the cores among the users.
-
-\begin{lstlisting}[style=BashStyle]
-$ python ${QPY_DIR}/qpy-access-multiuser.py variables
-\end{lstlisting}
-
-Lists several internal variables of qpy-multiuser.
-Used mainly to check if something is going wrong.
-
-\begin{lstlisting}[style=BashStyle]
-$ python ${QPY_DIR}/qpy-access-multiuser.py status
-\end{lstlisting}
-
-Show the current status of the users, nodes and cores.
-
-\begin{lstlisting}[style=BashStyle]
-$ python ${QPY_DIR}/qpy-access-multiuser.py saveMessages
-\end{lstlisting}
-
-Saves messages from the internals of qpy-multiuser, that will be shown in the ``variables'' command.
-Mainly for debugging purposes.
-
-\textbf{ATTENTION!}
-
-The next commands are not supposed to be used in a normal run.
-Use them only if you know exactly what you are doing.
-
-\begin{lstlisting}[style=BashStyle]
-$ python ${QPY_DIR}/qpy-access-multiuser.py __user <user_name> <address> <port> <conn_key>
-\end{lstlisting}
-
-Adds a new user to qpy-multiuser.
-
-\begin{lstlisting}[style=BashStyle]
-$ python ${QPY_DIR}/qpy-access-multiuser.py __req_core <user_name> <jobID> <n_cores> <mem> <queue_size>
-\end{lstlisting}
-
-Requires a core from qpy-multiuser.
-
-\begin{lstlisting}[style=BashStyle]
-$ python ${QPY_DIR}/qpy-access-multiuser.py __remove_job <user_name> <job_ID> <queue_size>
-\end{lstlisting}
-
-Removes a job from qpy-multiuser.
-
-
-
-\subsection{Files}\label{sec:files_admin}
+\subsection{Files}\label{sec:admin_files}
 
 This is a list of the files in the qpy-multiuser directory.
+Some of them the administrator should edit to control the behaviour of \qpy{}, some others not.
 
-\begin{verbatim}
-~/.qpy-multiuser/distribution_rules
-\end{verbatim}
+\begin{itemize}
 
-This file defines how the cores are distributed to the users.
-The basic syntax is one of the following:
+\item \texttt{distribution\_rules}
 
-\begin{lstlisting}[style=FileStyle]
+  This file defines how the cores are distributed to the users.
+  The basic syntax is one of the following:
+
+  \begin{lstlisting}[style=FileStyle]
 even minimum <n_cores>
-\end{lstlisting}
+  \end{lstlisting}
 
-This means an even distribution among the users, with at least \texttt{n\_cores} granted for each.
+This means an even distribution among the users, with at least \texttt{<n\_cores>} granted for each.
 
-\begin{verbatim}
-~/.qpy-multiuser/allowed_users
-\end{verbatim}
+\item \texttt{allowed\_users}
 
-A list with all the users that can use the current qpy environment:
+  A list with all the users that can use the \qpy{} environment:
 
-\begin{lstlisting}[style=FileStyle]
+  \begin{lstlisting}[style=FileStyle]
 <user_1>
 <user_2>
 <user_3>
-\end{lstlisting}
+  \end{lstlisting}
 
-\begin{verbatim}
-~/.qpy-multiuser/nodes
-\end{verbatim}
+\item \texttt{nodes}
 
-A list with all the nodes available in the qpy environment.
-Each line has: hostname of the node, followed by the number of cores this node has (or is available to \qpy{}) and, optionally, a ``M'', to indicate that that node has preference for multicore jobs.
+  A list with all the nodes available in the \qpy{} environment.
+  Each line has the information of one node, as shown below:
 
-\begin{lstlisting}[style=FileStyle]
+  \begin{lstlisting}[style=FileStyle]
 <node_1> <n_cores> [M]
 <node_2> <n_cores> [M]
 <node_3> <n_cores> [M]
-\end{lstlisting}
+  \end{lstlisting}
 
-\begin{verbatim}
-~/.qpy-multiuser/multiuser_connection_address
-\end{verbatim}
+  First is the hostname of the node, followed by the number of cores this node has (or is available to \qpy{}) and, optionally, a ``M'', to indicate that that node has preference for multicore jobs.
+  
+\item \texttt{multiuser\_connection\_address}
 
-The address where the qpy-multiuser instance will run.
-If you do not set this, \qpy{} automatically uses the local machine.
-
-\begin{lstlisting}[style=FileStyle]
-<machine_address>
-\end{lstlisting}
-
+  This file simply contains the address where the \texttt{qpy-multiuser} instance will run.
+  If you do not set this, \qpy{} automatically uses the local machine (\texttt{localhost}).
+  \begin{lstlisting}[style=FileStyle]
+<hostname for qpy-multiuser>
+  \end{lstlisting}
+  
+  Optionally, for the sake of organisation mainly, the programs \texttt{qpy-multiuser} and the \texttt{qpy-master} of each user can run on a machine different than the node where the users work and submit their jobs from.
+  For instance, you might have a machine (even a virtual machine) dedicated to \qpy{}.
+  To do this, \texttt{<hostname for qpy-multiuser>} must be the hostname of this machine
+  In this case, the files \texttt{master\_connection\_address} that the users have in their \qpy{} directory should have the correct hostname.
+  
+\end{itemize}
 
 The following files are generated and used by \qpy{}, but the administrator should not alter or delete them.
-They have the information required to make all the message transfers.
+Moreover, these files should not be shared, because they have the information required to make all the message transfers.
+\qpy{} takes care of the permission of the directories \texttt{$\sim$/.qpy-multiuser/} and \texttt{$\sim$/.qpy/} of each user (whose content should also not be shared).
 
-\begin{verbatim}
-~/.qpy-multiuser/multiuser_connection_port
-~/.qpy-multiuser/multiuser_connection_key
-~/.qpy-multiuser/connection_<user>_key
-~/.qpy-multiuser/connection_<user>_key
-~/.qpy-multiuser/connection_<user>_key
-\end{verbatim}
-
-
-
-
-
+\begin{itemize}
+\item \texttt{$\sim$/.qpy-multiuser/multiuser\_connection\_port}
+\item \texttt{$\sim$/.qpy-multiuser/multiuser\_connection\_key}
+\item \texttt{$\sim$/.qpy-multiuser/connection\_<user>\_key}
+\item \texttt{$\sim$/.qpy-multiuser/connection\_<user>\_key}
+\item \texttt{$\sim$/.qpy-multiuser/connection\_<user>\_key}
+\end{itemize}
 
 
 
