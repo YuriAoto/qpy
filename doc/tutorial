@@ -1,6 +1,5 @@
 
 
-
 qpy is used to submit jobs from a main server and execute them in different nodes, according the availability or the choices given by the user.
 It can handle jobs running in both single and multi processors and it has several options to make a friendly user interaction.
 If you are using qpy for the first time, please read carefully the section , Basics, just bellow.
