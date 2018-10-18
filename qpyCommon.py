@@ -28,6 +28,24 @@ QPY_SOURCE_DIR = os.path.dirname( os.path.abspath( __file__)) + '/'
 TEST_RUN = os.path.isfile( QPY_SOURCE_DIR + 'test_dir')
 
 
+# Important files and paths
+home_dir = os.environ['HOME']
+user = os.environ['USER']
+if (TEST_RUN):
+    qpy_dir = os.path.expanduser( '~/.qpy-test/')
+else:
+    qpy_dir = os.path.expanduser( '~/.qpy/')
+scripts_dir = qpy_dir + '/scripts/'
+notes_dir = qpy_dir + '/notes/'
+jobID_file = qpy_dir + '/next_jobID'
+all_jobs_file = qpy_dir + '/all_jobs'
+config_file = qpy_dir + '/config'
+multiuser_conn_file = qpy_dir + 'multiuser_connection'
+master_conn_file = qpy_dir + 'master_connection'
+master_log_file = qpy_dir + 'master.log'
+
+
+
 MULTIUSER_NODES          = 1
 MULTIUSER_DISTRIBUTE     = 2
 MULTIUSER_STATUS         = 3
@@ -134,7 +152,7 @@ def configure_root_logger(base_file,level):
     #rootLogger.addHandler(ch2)
     return rootLogger
 
-def print_log_exception(msg):
+def log_exception(msg):
     exc_type, exc_value, exc_traceback = sys.exc_info()
     log_message = msg + ':\n'
     log_message += "  Value: " + str(exc_value) + "\n"
@@ -142,7 +160,7 @@ def print_log_exception(msg):
     log_message += "  Traceback:\n"
     for tb in traceback.extract_tb(exc_traceback):
         log_message + "    in {0}, line {1:d}: {2}, {3}\n".format(tb[0], tb[1], str(tb[2]), tb[3])
-    logger.error(log_message)    
+    return log_message
 
 
 def get_all_children(x, parent_of):
@@ -357,7 +375,7 @@ def message_transfer(msg, address, port, key, timeout=5.0):
     conn.close()
     return back_msg
 
-def node_exec(node, command, get_outerr = True, mode="paramiko", pKey_file = None):
+def node_exec(node, command, get_outerr = True, mode="paramiko", pKey_file = None, localhost_popen_shell=False):
     """ Execute a command by ssh
     
     Arguments:
@@ -380,16 +398,16 @@ def node_exec(node, command, get_outerr = True, mode="paramiko", pKey_file = Non
 
     if node == 'localhost':
 
-        if isinstance(command, str):
+        if isinstance(command, str) and not localhost_popen_shell: # Just to make it work with localhost as node...
             command = command.split()
         if (get_outerr):
-            ssh = subprocess.Popen(command, shell = False,
+            ssh = subprocess.Popen(command, shell = localhost_popen_shell,
                                    stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE)
             std_outerr = ssh.communicate()
             return(std_outerr)
         else:
-            ssh = subprocess.Popen(command, shell = False)
+            ssh = subprocess.Popen(command, shell = localhost_popen_shell)
             return
 
     elif (mode == "paramiko" and is_paramiko):
@@ -586,6 +604,8 @@ class Configurations():
         self.sleep_time_check_run = 10
         self.source_these_files = ['~/.bash_profile']
         self.ssh_p_key_file = None
+        self.logger_level = 'warning'
+        self.logger = configure_root_logger(master_log_file, logging.WARNING)
 
         if (os.path.isfile(self.config_file)):
             f = open(self.config_file, 'r')
@@ -692,6 +712,32 @@ class Configurations():
             msg = "Messages were cleand."
             status = 0
 
+        elif (k == 'loggerLevel'):
+            if v in ['debug', 'DEBUG']:
+                vnew = logging.DEBUG
+            elif v in ['info', 'INFO']:
+                vnew = logging.INFO
+            elif v in ['warning', 'WARNING']:
+                vnew = logging.WARNING
+            elif v in ['error', 'ERROR']:
+                vnew = logging.ERROR
+            elif v in ['critical', 'CRITICAL']:
+                vnew = logging.CRITICAL
+            else:
+                try:
+                    vnew = int(v)
+                except:
+                    vnew = None
+
+            if vnew is not None:
+                self.logger_level = v
+                self.logger.setLevel(vnew)
+                msg = 'Logger level set to ' + v
+                status = 0
+            else:
+                msg = 'Unknown logging level: ' + v
+                status = 1
+
         elif (k == 'colour' or k == 'use_colour'):
             try:
                 self.use_colour = true_or_false(v)
@@ -764,8 +810,9 @@ class Configurations():
         f.write('paused_jobs '  + str(self.sub_paused)      + '\n')
         f.write('saveMessages ' + str(self.messages.save)   + '\n')
         f.write('maxMessages '  + str(self.messages.max_len)+ '\n')
+        f.write('loggerLevel '  + str(self.logger_level)    + '\n')
         f.write('checkFMT '     +repr(self.job_fmt_pattern) + '\n')
-        f.write('ssh_pKey '     + str(self.ssh_p_key_file) + '\n')
+        f.write('ssh_pKey '     + str(self.ssh_p_key_file)  + '\n')
         f.write('copyScripts '  + str(self.use_script_copy) + '\n')
         f.write('colour '       + str(self.use_colour)      + '\n')
         f.write('coloursScheme '
@@ -806,6 +853,7 @@ class Configurations():
             msg += 'A maximum of ' + str(self.messages.max_len) + ' messages are being saved\n'
         if (len(self.messages) > 0):
             msg += 'Last messages:\n' + str(self.messages) + '\n'
+        msg += 'Logger level: ' + str(self.logger_level) + '\n'
 
         return msg
 
