@@ -79,12 +79,13 @@ class JOB(object):
     info
     n_cores
     mem
+    node_attr
 
     This class has all the information about individual jobs.
 
     """
 
-    __slots__=("ID","info","n_cores","mem","node","status","use_script_copy","cp_script_to_replace","re_run","queue_time","start_time","end_time","runDuration","parser")
+    __slots__=("ID","info","n_cores","mem","node_attr","node","status","use_script_copy","cp_script_to_replace","re_run","queue_time","start_time","end_time","runDuration","parser")
     def __init__(self, jobID, job_info, config):
         """Initiate the class
 
@@ -97,6 +98,7 @@ class JOB(object):
         self.info = job_info
         self.n_cores = 1
         self.mem = 5.0
+        self.node_attr = []
         self.node = None
         self.status = JOB_ST_QUEUE
         self.use_script_copy = config.use_script_copy
@@ -146,7 +148,10 @@ class JOB(object):
             job_str += self.node
         job_str += '---' + str(self.queue_time) + '---' + str(self.start_time) + '---' + str(self.end_time) + '\n'
         job_str += self.info[0] + '\n'
-        job_str += self.info[1] + '\n'
+        job_str += self.info[1]
+        for i in self.node_attr:
+            job_str += ' ' + i
+        job_str += '\n'
         return job_str
 
     def fmt(self, pattern):
@@ -170,7 +175,9 @@ class JOB(object):
                               ('%s', JOB_STATUS[self.status]),
                               ('%c', self.info[0]),
                               ('%d', self.info[1]),
+                              ('%a', ' '.join(self.node_attr)),
                               ('%n', str_node),
+                              ('%A', str_node if self.node is not None else ('[' + ' '.join(self.node_attr) + ']')),
                               ('%Q', str(self.queue_time)),
                               ('%S', str(self.start_time)),
                               ('%E', str(self.end_time)),
@@ -185,6 +192,7 @@ class JOB(object):
         parser=JobParser()
         parser.add_option("-n","--cores", dest="cores", help="set the number of cores", default="1")
         parser.add_option("-m","--mem","--memory",dest="memory",help="set the memory in GB", default="5")
+        parser.add_option("-a","--node_attr","--attributes",dest="node_attr",help="set the attributes for node", default='')
         parser.add_option("-c","--copyScript",dest="cpScript",help="script should be copied",action='store_false')
         parser.add_option("-o","--originalScript",dest="orScript",help="use original script",action='store_false')
         parser.disable_interspersed_args()
@@ -246,6 +254,8 @@ class JOB(object):
                             self.n_cores = int(re_res.group(1))
                         if (attr == 'mem'):
                             self.mem = float(re_res.group(1))
+                        if (attr == 'node_attr'):
+                            self.node_attr = re_res.group(1).split()
                         if (attr == 'cpScript'):
                             self.use_script_copy = True if (re_res.group(1) == 'true') else False
                         option_found=True
@@ -261,9 +271,10 @@ class JOB(object):
         
         @param file_name
         """
-        option_list=[("n_cores"  , re.compile('n_cores[= ]?(\d*)' ) ),
-                     ("mem"      , re.compile('mem[= ]?(\d*)'     ) ),
-                     ("cpScript" , re.compile('cpScript[= ]?(\w*)') )
+        option_list=[("n_cores"  , re.compile('n_cores\s*=?\s*(\d*)' ) ),
+                     ("mem"      , re.compile('mem\s*=?\s*(\d*)'     ) ),
+                     ("node_attr", re.compile('node_attr\s*=?\s*(.+)') ),
+                     ("cpScript" , re.compile('cpScript\s*=?\s*(\w*)') )
                      ]
         try:
             with open( file_name, 'r') as f:
@@ -277,6 +288,10 @@ class JOB(object):
             options,command = self.parser.parse_args( command.split())
             self.n_cores = int(options.cores)
             self.mem = float(options.memory)
+            if options.node_attr:
+                self.node_attr = options.node_attr.split('##')
+            else:
+                self.node_attr = []
             if (options.cpScript == None and options.orScript == None):
                 pass
             elif (options.cpScript != None and options.orScript != None):
@@ -462,7 +477,10 @@ class Job_Collection():
                         elif (i%4 == 3):
                             new_command = line.strip()
                         else:
-                            new_wd = line.strip()
+                            lspl = line.split()
+                            new_wd = lspl[0]
+                            new_node_attr = [] if len(lspl) == 1 else lspl[1:]
+
                             new_job = JOB( int(new_id), [new_command, new_wd], self.config)
                             new_job.n_cores = int( new_n_cores)
                             new_job.mem = float( new_mem)
@@ -484,6 +502,7 @@ class Job_Collection():
                             else:
                                 new_job.node = new_node
                             new_job.status = int( new_status)
+                            new_job.node_attr = new_node_attr
                             self.all.append( new_job)
                             if (new_job.status == JOB_ST_QUEUE):
                                 self.queue.append( new_job)
@@ -849,11 +868,12 @@ class SUB_CTRL(threading.Thread):
                     next_jobID = self.jobs.Q[-1].ID
                     next_Ncores = self.jobs.Q[-1].n_cores
                     next_mem = self.jobs.Q[-1].mem
+                    next_node_attr = self.jobs.Q[-1].node_attr
                     avail_node = None
 
                     try:
                         msg_back = message_transfer((MULTIUSER_REQ_CORE,
-                                                     (user, next_jobID, next_Ncores, next_mem, len(self.jobs.queue))),
+                                                     (user, next_jobID, next_Ncores, next_mem, len(self.jobs.queue), next_node_attr)),
                                                     multiuser_address, multiuser_port, multiuser_key)
                     except:
                         self.multiuser_handler.multiuser_alive.clear()
@@ -1039,6 +1059,18 @@ def handle_qpy(jobs, sub_ctrl, jobs_killer, config):
             new_job = JOB(int(job_id), arguments, config)
             try:
                 new_job.parse_options()
+                if config.default_attr and not new_job.node_attr:
+                    new_job.node_attr = config.default_attr
+                if config.or_attr:
+                    if new_job.node_attr:
+                        new_job.node_attr = ['('] + config.or_attr + [')', 'or', '(']  + new_job.node_attr + [')']
+                    else:
+                        new_job.node_attr = config.or_attr
+                if config.and_attr:
+                    if new_job.node_attr:
+                        new_job.node_attr = ['('] + config.and_attr + [')', 'and', '(']  + new_job.node_attr + [')']
+                    else:
+                        new_job.node_attr = config.and_attr
                 if (new_job.use_script_copy):
                     first_arg = new_job.info[0].split()[0]
                     script_name = new_job._expand_script_name(first_arg)

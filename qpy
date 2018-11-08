@@ -78,8 +78,12 @@ arguments = ()
 # Submit a job
 if (option == JOBTYPE_SUB):
     job = ''
+    next_is_attr = False
     for i in sys.argv[2:]:
+        if next_is_attr:
+            i = i.replace(' ', '##')
         job += ' ' + i
+        next_is_attr = i == '-a' or i == '--node_attr' or i == '--attribute'
     arguments = [job, os.getcwd()]
 
 # Check jobs
