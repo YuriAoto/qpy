@@ -551,7 +551,7 @@ $ python ${QPY_DIR}/qpy-access-multiuser.py start
 \end{lstlisting}
 
 Starts a new qpy-multiuser instance.
-Run this if you are starting \qpy{} for the first time, if a update is needed or if the machine qhere \qpy{} runs has crashed.
+Run this if you are starting \qpy{} for the first time, if a update is needed or if the machine where \qpy{} runs has crashed.
 
 \begin{lstlisting}[style=BashStyle]
 $ python ${QPY_DIR}/qpy-access-multiuser.py finish
@@ -696,7 +696,7 @@ They have the information required to make all the message transfers.
 % Fixed behaviours: environment variables and other things that should never change.
 
 % Typical ideas of the code: main classes and threads
-
+\subsection{Program design}
 
 %\textbf{\Large Fluxograma do projeto}\label{fluxograma}
 \linespread{0.8}
@@ -863,10 +863,6 @@ They have the information required to make all the message transfers.
     
 
 
-
-
-
-
 % Grid
      % \foreach \y in {-15,...,2} {
      %   \node at (-9,\y) {\y};
@@ -883,6 +879,65 @@ They have the information required to make all the message transfers.
 \end{center}
 
 \linespread{1.5}
+
+
+\subsection{Testing}
+
+This section describes the procedure for (locally) testing a modified code. A full protocol for release of a code for production run is not yet developed.
+
+\subsection{Single-User Testing}
+
+For testing the changes as a single user, without interfering with your currently running \qpy{} version, do the following:
+
+It is assumed that you have checked out a local copy of the \qpy{} code from the git repository. We assume the code is in the directory \verb+${TEST_QPY_DIR}+
+
+Now, issue the following commands:
+\begin{lstlisting}[style=BashStyle]
+$ touch ${TEST_QPY_DIR}/test_dir
+$ mkdir ~/.qpy-multiuser-test/
+\end{lstlisting}
+and create the files
+\begin{verbatim}
+~/.qpy-multiuser-test/distribution_rules
+~/.qpy-multiuser-test/allowed_users
+~/.qpy-multiuser-test/nodes
+\end{verbatim}
+with the contents as described in the administration section, see section \ref{sec:instal_admin} and related. The file \verb+test_dir+ will tell the program to run in test mode and to access the directories \verb+~/.qpy-multiuser-test+ (and \verb+~/.qpy-test+) instead of the standard directories without the \verb+-test+ extension.
+
+In \verb+allowed_users+ it is sufficient to only add yourself, the \verb+nodes+ directory may be copied from the running version (and modified, if required).
+
+Now, you can start the local multiuser kernel by
+\begin{lstlisting}[style=BashStyle]
+$ python ${TEST_QPY_DIR}/qpy-access-multiuser.py start
+\end{lstlisting}
+Check the log file \verb+~/.qpy-multiuser-test/multiuser.log+  for problems.
+
+After that, you create your local test user directory
+\begin{lstlisting}[style=BashStyle]
+$ mkdir ~/.qpy-test/
+\end{lstlisting}
+and copy the files
+\begin{verbatim}
+~/.qpy-multiuser-test/multiuser_connection_address
+~/.qpy-multiuser-test/multiuser_connection_port
+~/.qpy-multiuser-test/multiuser_connection_conn_key
+\end{verbatim}
+to \verb+~/.qpy-test/+.
+
+Finally start also the local master kernel by
+\begin{lstlisting}[style=BashStyle]
+$ ${TEST_QPY_DIR}/qpy restart
+\end{lstlisting}
+Errors can be found in \verb+~/.qpy-test/master.log+.
+
+List of recommended tests: TO COME
+
+
+\subsection{Multiuser Testing}
+
+TO COME
+
+
 
 
 
