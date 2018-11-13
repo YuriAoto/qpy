@@ -52,9 +52,9 @@ if (option == MULTIUSER_USER):
 # Request a core
 if (option == MULTIUSER_REQ_CORE):
     try:
-        arguments = (sys.argv[2], int(sys.argv[3]), int(sys.argv[4]), float(sys.argv[5]), int(sys.argv[6]))
+        arguments = (sys.argv[2], int(sys.argv[3]), int(sys.argv[4]), float(sys.argv[5]), int(sys.argv[6]), [] if len(sys.argv) == 7 else sys.argv[7:])
     except:
-        usage_msg = 'Usage: ' + sys.argv[0] +  ' __req_core <user_name> <jobID> <n_cores> <mem> <queue_size>.'
+        usage_msg = 'Usage: ' + sys.argv[0] +  ' __req_core <user_name> <jobID> <n_cores> <mem> <queue_size> [<node_attr>].'
         sys.exit( usage_msg)
 
 # remove a job

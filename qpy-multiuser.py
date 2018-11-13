@@ -72,6 +72,7 @@ class NODE():
         self.free_mem_real = 0.0
         self.n_outsiders = 0
 
+        self.attributes = []
 
     def check(self):
         """Check several things in the node.
@@ -126,6 +127,32 @@ class NODE():
                 info.free_mem_real = float(std_out[1].split()[6])
             logger.info("node %s is up",self.name)
         return info
+
+    def has_attributes(self, node_attr):
+        """Returns True if the node has the
+        attributes described by the list node_attr.
+        It should be a list of strings, such that after joining each entry
+        with space and replacing the attributes by True or False,
+        a valid python logical expression is obtained.
+        Returns True if is not a valid expression.
+
+        """
+        keywords = ['not', 'and', 'or', '(', ')']
+        if len(node_attr) == 0:
+            return True
+        expression = (' '.join(node_attr)).replace('(', ' ( ').replace(')', ' ) ')
+        expression = expression.split()
+        expression = map(lambda x: x if x in keywords else str(x in self.attributes), expression)
+        try:
+            a = eval(' '.join(expression))
+        except:
+            a = True
+
+        logger.debug('In has_attributes: node_attr = ' + str(node_attr))
+        logger.debug('In has_attributes: expression = ' + str(expression))
+        logger.debug('In has_attributes: result (Node) = ' + str(a) + str(self.name))
+
+        return a
 
 
 class USER():
@@ -204,21 +231,24 @@ class USER():
         return 0
 
 
-    def request_node( self, jobID, num_cores, mem):
+    def request_node( self, jobID, num_cores, mem, node_attr):
         """Tries to give a space to the user
 
         Arguments:
         jobID      the job ID
         num_cores  requested number of cores
         mem        requested memory
+        node_attr  attributes that the node must fulfil
 
         This is the main function of qpy-multiuser.
         It deceides whether the requested resource can be
-        given or not and, if so, give a node thet fulfills
+        given or not and, if so, give a node that fulfils
         this requirement.
         """
         global N_used_cores, N_used_min_cores
         space_available = False
+
+        logger.debug('jobID, attribute: '+ str(jobID) + str(node_attr) )
         
         N_free_cores = (N_cores - N_used_cores) - (N_min_cores - N_used_min_cores)
         free_cores = N_free_cores >= num_cores
@@ -257,12 +287,17 @@ class USER():
             if (num_cores == 1):
                 for node, info in nodes.iteritems():
                     free = info.max_cores - info.n_outsiders - info.n_used_cores
-                    if (not(info.pref_multicores) and free > best_free and (info.total_mem-info.req_mem) > mem and info.free_mem_real > mem):
+                    if (info.has_attributes(node_attr) and
+                        not(info.pref_multicores) and
+                        free > best_free and
+                        (info.total_mem-info.req_mem) > mem and
+                        info.free_mem_real > mem):
                         best_node = node
                         best_free = free
             if (best_node == None):
                 for node in nodes_list:
                     if (nodes[node].is_up and
+                        info.has_attributes(node_attr) and
                         nodes[node].max_cores  - nodes[node].n_outsiders - nodes[node].n_used_cores >= num_cores and
                         nodes[node].total_mem - nodes[node].req_mem > mem):
                         best_node = node
@@ -295,7 +330,6 @@ def load_users():
         allowed_users.append( line.strip())
     f.close()
     for user in allowed_users:
-        print user
         address, port, conn_key = read_conn_files(user_conn_file + user)
         if (port != None and conn_key != None):
             new_user = USER(user, address, port, conn_key)
@@ -327,6 +361,7 @@ def load_nodes():
         return -1
     nodes_in_file = []
     cores_in_file = []
+    attr_in_file = []
     nodes_for_multicores = []
     for line in f:
         line_spl = line.split() # [<node_name>, <max_jobs>, [M]]
@@ -338,16 +373,26 @@ def load_nodes():
             return -2
         if ('M' in line_spl[2:]):
             nodes_for_multicores.append( line_spl[0])
+        if len(line_spl) > 2:
+            attr_in_file.append(line_spl[2:])
+        else:
+            attr_in_file.append([])
     f.close()
     # Put messages
-    for n, c in zip( nodes_in_file, cores_in_file):
+    for i in range(len(nodes_in_file)):
+        n = nodes_in_file[i]
+        c = cores_in_file[i]
         if (n in nodes):
             N_cores += c - nodes[n].max_cores
             nodes[n].max_cores = c
+            nodes[n].attributes = attr_in_file[i]
         else:
             new_node = NODE( n, c)
+            new_node.attributes = attr_in_file[i]
             nodes[n] = new_node
             N_cores += new_node.max_cores
+        if 'M' in nodes[n].attributes:
+            nodes[n].attributes.remove('M')
     nodes_to_remove = []
     nodes_list = []
     for n in nodes:
@@ -546,6 +591,7 @@ def format_node(node,info):
         ('n_outsiders',info.n_outsiders),
         ('total_mem',info.total_mem),
         ('req_mem',info.req_mem),
+        ('attributes',info.attributes),
         ('free_mem_real',info.free_mem_real),
         ('pref_multicores',info.pref_multicores),
         ('is_up',info.is_up),
@@ -577,14 +623,14 @@ def handle_show_status(args):
 
     args : () or (user_name)
     """
-    sep1 = '-'*60 + '\n'
-    sep2 = '='*60 + '\n'
-    headerN =  '                       cores              memory (GB)\n'
-    headerN += 'node                used  total      used     req   total\n'
-    headerU =  'user                using cores        queue size\n' + sep1
+    sep1 = '-'*70 + '\n'
+    sep2 = '='*70 + '\n'
+    headerN =  '                                 cores              memory (GB)\n'
+    headerN += 'node                          used  total      used     req   total\n'
+    headerU =  'user                          using cores        queue size\n' + sep1
 
     msgU = ''
-    format_spec = '{0:22s} {1:<5d}' + ' '*13 + '{2:<5d}\n'
+    format_spec = '{0:32s} {1:<5d}' + ' '*13 + '{2:<5d}\n'
     for user in sorted(users):
         msgU += format_spec.format( user,
                                     users[user].n_used_cores,
@@ -592,16 +638,24 @@ def handle_show_status(args):
     msgU = headerU + msgU + sep2 if msgU else 'No users.\n'
 
     msgN = ''
-    format_spec = '{0:20s} {1:<5d} {2:<5d}' + ' '*2 + '{3:>7.1f} {4:>7.1f} {5:>7.1f}\n'
+    format_spec = '{0:30s} {1:<5d} {2:<5d}' + ' '*2 + '{3:>7.1f} {4:>7.1f} {5:>7.1f}\n'
     with nodes_check_lock:
         for node in nodes:
             down=' (down)' if not( nodes[node].is_up) else ''
-            msgN += format_spec.format( node + down,
+            len_node_row = len(down) + len(node) + sum(map(len,nodes[node].attributes)) + \
+                len(nodes[node].attributes) + 2
+            if len_node_row > 28 or not(nodes[node].attributes):
+                attr = ''
+            else:
+                attr = ' [' + ','.join(nodes[node].attributes) + ']'
+            msgN += format_spec.format( node + attr + down,
                                         nodes[node].n_used_cores + nodes[node].n_outsiders,
                                         nodes[node].max_cores,
                                         nodes[node].total_mem - nodes[node].free_mem_real,
                                         nodes[node].req_mem,
                                         nodes[node].total_mem)
+            if len_node_row > 28 and nodes[node].attributes:
+                msgN += '    [' + ','.join(nodes[node].attributes) + ']\n'
     msgN = headerN + sep1 + msgN + sep2 if msgN else 'No nodes.\n'
     status = 0
     msg_used_cores = 'There are {0} out of a total of {1} cores being used.\n'.format(
@@ -661,16 +715,22 @@ def handle_sync_user_info(args):
 def handle_add_job(args):
     """ handles request to add a job
 
-    args: (user_name, jobID, n_cores, mem, queue_size)
+    args: (user_name, jobID, n_cores, mem, queue_size, node_attr)
     """
-    user, jobID, n_cores, mem, queue_size = args
+    if len(args) == 5: # old style. Can be removed when all masters are updated
+        user, jobID, n_cores, mem, queue_size = args
+        node_attr = []
+    else:
+        user, jobID, n_cores, mem, queue_size, node_attr = args
     assert isinstance(user,str)
     assert isinstance(jobID,int)
     assert isinstance(n_cores,int)
     assert isinstance(mem,float) or isinstance(mem,int)
     assert isinstance(queue_size,int)
+    assert isinstance(node_attr,list)
     try:
-        status = users[user].request_node(jobID,n_cores,mem)
+        status = users[user].request_node(jobID,n_cores,mem,node_attr)
+        logger.debug('I am here: ' + str(status))
         if isinstance(status,str):
             users[user].n_queue = queue_size -1
             return 0,status
@@ -681,7 +741,7 @@ def handle_add_job(args):
     except KeyError:
         return -1, 'User does not exists.'
     except Exception as ex:
-        return -2,"WARNING: An exception of type {0} occured - add a job.\nArguments:\n{1|r}\nContact the qpy-team.".format(type(ex).__name__, ex.args)
+        return -2,"WARNING: An exception of type {0} occured - add a job.\nArguments:\n{1!r}\nContact the qpy-team.".format(type(ex).__name__, ex.args)
 
 def handle_remove_job(args):
     """handles a request to remove a job
