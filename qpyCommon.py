@@ -600,6 +600,9 @@ class Configurations():
         self.colour_scheme = POSSIBLE_COLOURS[:5]
         self.use_script_copy = False
         self.sub_paused = False
+        self.default_attr = []
+        self.and_attr = []
+        self.or_attr = []
         self.sleep_time_sub_ctrl = 1
         self.sleep_time_check_run = 10
         self.source_these_files = ['~/.bash_profile']
@@ -666,6 +669,45 @@ class Configurations():
                 status = 2
             else:
                 msg = "paused_jobs set to " + str(self.sub_paused) + '.'
+                status = 0
+
+        elif (k == 'defaultAttr'):
+            try:
+                self.default_attr = [v] if isinstance(v, str) else v
+            except:
+                msg = "Key for " + k + " must be a string."
+                status = 2
+            else:
+                if v:
+                    msg = k + " set to " + ' '.join(self.default_attr) + '.'
+                else:
+                    msg = k + " unset."
+                status = 0
+
+        elif (k == 'andAttr'):
+            try:
+                self.and_attr = [v] if isinstance(v, str) else v
+            except:
+                msg = "Key for " + k + " must be a string."
+                status = 2
+            else:
+                if v:
+                    msg = k + " set to " + ' '.join(self.and_attr) + '.'
+                else:
+                    msg = k + " unset."
+                status = 0
+
+        elif (k == 'orAttr'):
+            try:
+                self.or_attr = [v] if isinstance(v, str) else v
+            except:
+                msg = "Key for " + k + " must be a string."
+                status = 2
+            else:
+                if v:
+                    msg = k + " set to " + ' '.join(self.or_attr) + '.'
+                else:
+                    msg = k + " unset."
                 status = 0
 
         elif (k == 'copyScripts' or k == 'use_script_copy'): # use_script_copy: obsolete
@@ -811,6 +853,9 @@ class Configurations():
         f.write('saveMessages ' + str(self.messages.save)   + '\n')
         f.write('maxMessages '  + str(self.messages.max_len)+ '\n')
         f.write('loggerLevel '  + str(self.logger_level)    + '\n')
+        f.write('defaultAttr '  + ' '.join(self.default_attr) + '\n')
+        f.write('orAttr '       + ' '.join(self.or_attr)    + '\n')
+        f.write('andAttr '      + ' '.join(self.and_attr)   + '\n')
         f.write('checkFMT '     +repr(self.job_fmt_pattern) + '\n')
         f.write('ssh_pKey '     + str(self.ssh_p_key_file)  + '\n')
         f.write('copyScripts '  + str(self.use_script_copy) + '\n')
@@ -836,6 +881,12 @@ class Configurations():
         msg += 'Using coloured check: ' + str(self.use_colour) + '\n'
         msg += 'Sleeping time in submission control: ' + str(self.sleep_time_sub_ctrl) + '\n'
         msg += 'Sleeping time in check run: ' + str(self.sleep_time_check_run) + '\n'
+        if self.default_attr:
+            msg += 'Default node attributes: ' + ' '.join(self.default_attr) + '\n'
+        if self.and_attr:
+            msg += '"and" node attributes: ' + ' '.join(self.and_attr) + '\n'
+        if self.or_attr:
+            msg += '"or" node attributes: ' + ' '.join(self.or_attr) + '\n'
         if self.ssh_p_key_file is not None:
             msg += 'Using ssh private key from ' + self.ssh_p_key_file + '\n'
         if (len(self.source_these_files)):
