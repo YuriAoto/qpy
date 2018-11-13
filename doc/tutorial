@@ -1,150 +1,132 @@
+qpy - The Queue Management System in Python
+version 0.0 - 2018
 
+Conceived and created by Pradipta Kumar Samanta and Yuri Alexandre Aoto
+With the kind help and support of Andreas Koehn and Arne Bargholz
 
-qpy is used to submit jobs from a main server and execute them in different nodes, according the availability or the choices given by the user.
-It can handle jobs running in both single and multi processors and it has several options to make a friendly user interaction.
-If you are using qpy for the first time, please read carefully the section , Basics, just bellow.
-For a complete list of commands and their options, see the section , Commands.
+   Manual
 
+### For users
+
+qpy is used for submitting jobs from a main server and executing them on the nodes of a compute cluster, according the availability or the options given by the user.
+It can handle both single-processor and multiprocessor jobs and has several options for user-friendly  interaction.
+If you are using qpy for the first time, please read carefully the Section User:Basics, Basics, just below.
+For a complete list of commands and their options, see the Section User:Commands, Commands.
 
 ## Basics
 
 # Installation
 
-The main instalation will probably be done by your system administrator.
-You might have to do, however, the following thing:
+The main installation will probably be done by your system administrator.
+You might have to do, however, the following:
 
 Put the following lines in your ~/.bash_profile or ~/.bashrc:
-
-
 
 export PATH=<qpy_dir>:$PATH
 source <qpy_dir>/bash_completion.sh
 
+Your system administrator should tell you which directory should be used in <qpy_dir> and
+ might also send you a few files to be placed in your qpy directory, ~/.qpy/.
+This directory hosts the main configuration files, but in general you do not have to directly access them.
 
-Your system administrador should tell you what is the <qpy_dir> directory.
-(S)He will might also send you a few files to be placed in your qpy directory, ~/.qpy/.
-It's in this directory that 
-
-# Initialisation
+# Initialization
 
 The first qpy command one should run is:
 
-
 $ qpy restart
 
-
 This command will set the background environment for using qpy.
-It should also be executed when some new update is done (you will be informed) or if the master node crashes.
-
+It should also be executed when the version of qpy is updated (you will be informed by the administrator), or if the master node crashes.
 
 # Basic concepts and usage
 
-Every job submmited by qpy has an ID and a status.
-The ID, a fixed integer for a particular job, is unique and identifies your job in the pool of jobs.
-The status are:
+Every job submitted by qpy has an ID and a status.
+The ID, a fixed integer for a particular job, is unique and identifies your job in the pool of (your) jobs.
+The status can be:
 
 
- queue   - the job is waiting for allocation
- running - the was allocated and is running
- done    - the job have run and is finished
- killed  - the job had its execution killed by the user
- undone  - the job have not been executed (it was killed while in the queue)
+ queue   - the job is waiting for allocation;
+ running - the was allocated and is running;
+ done    - the job has run and is finished;
+ killed  - the job had its execution killed by the user;
+ undone  - the job has not been executed (it was killed while in the queue).
 
 
-When you just submit a job, it has the 'queue' status.
-When a node is allocated for it, it is executed and the status changes to 'running'.
-If the job terminates normally, the status changes to 'done'.
-If you kills the job (that is, stops its execution), the status changes to 'killed'.
-If you kills a job that is still on the queue, it will never be executed and the status changes to 'undone'.
+When you submit a job, it initially has the  status queue.
+When a node is allocated for it, it is executed and the status changes to running.
+If the job terminates normally, the status changes to done.
+If you kill the job (that is, stops its execution), the status changes to killed.
+If you kill a job that is still waiting for allocation, it will never be executed and the status changes to undone.
 
-
-You can submit a job using the sub command:
-
+You can submit a job using the command sub:
 
 $ qpy sub <job's execution command>
-
 
 This means that you put, on your queue of jobs, a new job that has to be executed with the command <job's execution command>.
 qpy will handle it for you from here on!
 
 By the way, all commands in qpy are like this:
 
-
 $ qpy <cmd> [options]
 
-
 where <cmd> is one of the qpy commands and [options] are the otions for that command.
-Of course, these options depend on the actual command <cmd>, some of them are optional, and so on.
-See below for a complete list of commands and the explanation of their several options.
+Of course, these options depend on the actual command <cmd>, some of them are optional, some not.
+See below for a complete list of commands and the explanation of their options.
 
 Now that your job is on the list, you probably want to be able to:
-- check the status of your job (or jobs);
-- check the situation of the nodes;
-- eventually kill a unsatisfactory job.
+
+ check the status of your job (or jobs);
+ check the situation of the nodes;
+ eventually kill an unsatisfactory job.
 
 This can be done by the following commands:
 
-
 $ qpy check
-
 
 This shows a list of all your jobs.
 If you are interested only on a portion of these jobs, say, the ones that are currently running, try:
 
-
 $ qpy check running
-
 
 Another useful qpy command is:
 
-
 $ qpy status
 
+It will show all the available nodes, users, how many jobs each one is running, and some extra information.
+If your jobs are waiting for too long on the queue, this command should provide an indication why.
 
-It will show all the available node, users, how many jobs each one is running and so on.
-If your jobs are for too long on the queue, this command should provide an indication why.
-
-Sometimes we are not so happy with the development of a job and we want to terminate its execution, without waiting to its normal termination.
+Sometimes you are not so happy with the development of a job and you want to terminate its execution, without waiting to its normal termination.
 You can do this with:
 
-
 $ qpy kill <job_ID>
-
 
 where <job_ID> is the ID number of the job.
 Attention! This is not reversible.
 qpy will not ask you if you are sure to kill the job, so use the command with care.
 
 There are several commands and options in qpy.
-Every command in qpy can be completed automatically by using the TAB key.
-It also gives the possible next arguments which, we hope, would be very helpful for all the users :)
-For instance, if you type:
-
+Every command in qpy can be completed automatically by using the key <TAB>.
+It also gives the possible next arguments which, we hope, will be very helpful.
+Moreover, if you type:
 
 $ qpy kill ? <TAB> <TAB>
 
-
-where <TAB> <TAB> indicates that you should type the TAB key two times, you will receive a brief explanation on the command sub.
-
-
+where <TAB> <TAB> indicates that you should type the <TAB> key two times, you will receive a brief explanation on the command kill.
 
 ## Commands
 
-
-The followings are all the commands of qpy.
-The user can run any of these commands as
-
+This section presents a list of all the commands and options of qpy.
+Remember that they should be used as:
 
 $ qpy <cmd> [options]
 
-
-where [options] depends on the actual command <cmd>.
-
+where [options] depends on the command <cmd>.
 
 # restart
 
-The user can start qpy background environment with this command.
-This command also works as an easy way to finish current session of qpy and start a new, which is most useful when the user wants to update the qpy to its latest version.
+To start the qpy background environment.
+This command also works as an easy way to finish the current session of qpy and to start a new one, which is most useful when you want to update the qpy to its latest version.
+If you are restarting qpy because the background environment has crashed, you might have to remove the file master_connection_port from the qpy directory before starting a new qpy session. 
 
 
  Options:
@@ -157,13 +139,11 @@ This command also works as an easy way to finish current session of qpy and star
 
 $ qpy restart
 
-
   
 
 # finish
 
-If you feel like done using qpy, please finish the existing qpy environment which is running in background using this command.
-If somehow the qpy-master crashes while using, please remove the '.port' file from the qpy directory before starting a new qpy session. 
+If you feel like done using qpy, please finish the existing qpy environment, which is running in background, by using this command.
 
 
  Options:
@@ -178,44 +158,45 @@ $ qpy finish
 
   
 
-
-
 # sub
 
-Submit any executable after the command 'qpy sub'.
-The output and the error file of running that particular script will be written in the files 'job_<job_ID>.out' and 'job_<job_ID>.err' respectively.
+Used to submit any executable or command.
+The standard output and standard error of that command will be written in the files job_<job_ID>.out and job_<job_ID>.err respectively.
 
-Submitting a serial job is the default one for this command.
-To submit a job that uses multi-processor, please add the information of number of processors (N) needed either by putting '-n N' between 'qpy sub' and the executable, or by adding '#QPY n_cores=N' in the script running.
-For the first case, do not put the option after the executable as it would then be considered as an option corresponding to the executable. 
+By default, qpy will allocate one core and 5 GB of RAM for such submission.
+To submit a job that uses more cores (say <N> cores) or a different amount of memory (say <M> GB), one can add this information in two ways.
+The first way is using the options -n <N> or -m <M> after qpy sub, but before the executable (or the options will be used as options to the command).
+The other way can be used when submitting a bash script as command.
+In this case, the following lines can be added in the script, that will be recognized by qpy:
 
-qpy also check if enough memory is available in a node before starting a job there.
-The defualt memory it checks for availibility is 5 GB. If a job needs to use more memory (M) please add this information either by putting '-m M' between 'qpy sub' and the executable, or by adding '#QPY mem=M' in the script running.
+
+  #QPY n_cores=<N>
+  #QPY mem=<M>
 
 
 
  Options:
   the executable and its arguments;
-  optionally, the the following flags BEFORE the executable:
-
-    -n <n cores>        the number of cores
-    -m <memory>         requested memory, in GB
-
-
+  optionally, the the following flags before the executable:
+  
+   -n <N> \quad   the number of cores
+   -m <M> \quad   requested memory, in GB
+  
+  
  Examples:
 
-  Executes the command 'hostname'. Allocates one cores and 5 GB of memory for it (default values):
+  Executes the command hostname. Allocates the default one cores and 5 GB of memory for it:
 
 
 $ qpy sub hostname
 
   
-  Executes the script './script.sh'. Allocates three cores and 10 GB of memory for it:
+  Executes the script ./script.sh (that must have the permission to be executed!). Allocates three cores and 10 GB of memory for it:
 
 
 $ qpy sub -n 3 -m 10 ./script.sh 
 
-  Executes the command 'ls -ltr':
+  Executes the command ls -ltr:
 
 
 $ qpy sub ls -ltr
@@ -223,45 +204,119 @@ $ qpy sub ls -ltr
 
 
   
+Using a submit script is highly recommended. qpy offers a number of environment variables that can be useful in this context: 
+
+ $QPY_JOB_ID holds the job number of your run. You can use it to create unique directories for scratch files or for output files
+ $QPY_NODE is the name of the allocated node (should be equal to $HOSTNAME)
+ $QPY_N_CORES is the number of cores reserved on that node (can be passed to the argument line of the parallel job)
+ $QPY_MEM is the reserved memory in Gb.
+
+
+  
 # check
 
-Check the status of all the submitted jobs.
-The command 'qpy check' gives the list of all jobs submitted.
-One can also check jobs of specific status which are: 'running', 'done', 'killed', 'undone' and 'queue' adding the keyword after 'qpy check'
+Checks the status of all the submitted jobs, printing a list of jobs.
+If no option is given, the command gives the list of all jobs submitted.
+One can also list just specific jobs, by their status, ID, or directory of submission.
+This information can be passed by the options, and if multiple options are given the jobs that satisfy any of the required property is listed.
+For example a status and a directory are given, this command will list all the jobs with that status plus the jobs that were submitted from the directory.
 
 
-
-
+  
  Options:
-  a status
-  a job ID list
+  statuses, job IDs, and/or directories.
+  The job IDs can be passed individually or as a range, such as 100-120.
   
  Examples:
 
+  Lists the jobs that are currently running:
+
+  
+$ qpy check running
+  
+
+  Lists the jobs that have been submitted from the current directory
+
+  
+$ qpy check .
+  
+
+  Lists the jobs with ID in the range 100-120, plus the jobs with ID in the range 130-135, plus the job 137:
+
+  
+$ qpy check 100-120 130-135,137
+  
 
 
 # kill
 
-Kill a particular jobs using the command 'qpy kill [jobid]'. One can also kill several jobs by providing a list of jobid's or a range of jobid's separated by '-'. Kill 'all'/'running' jobs or jobs in 'queue' by replacing the [jobid] with these keywords. 
-
+Kills a particular job or set of jobs.
+One can kill several jobs by providing several job IDs (with a range, for instance, like in check.
+A status can be used to kill all jobs with that status (running or queue).
+Use all to kill all the jobs (be careful!).
 
 
  Options:
-  a status ('queue' or 'running')
-
-  a job ID list
-
-  'all'  
+  one or more job IDs, a status (queue or running), or all.
 
  Examples:
 
+  Kills the jobs with ID 100, 101, 102, 103, 104, 105, and 108:
 
+  
+$ qpy kill 100-105 108
+  
+
+  Kills all the jobs with status queue (that is, not yet allocated):
+
+  
+$ qpy kill queue
+  
+
+  Kills all jobs:
+
+  
+$ qpy kill all
+  
+
+
+# clean
+
+Cleans the list of jobs that qpy has currently in memory.
+One can only clean jobs with status done, killed, or undone.
+Similarly to the kill command, the user can clean some specific jobs by the ID, all the jobs with some status, or all jobs.
+One can also clean by the directory of submission.
+It has no effect
+
+
+ Options:
+  one or more job IDs, a status (done, killed, or undone), all, or a directory.
+
+ Examples:
+
+  Cleans the jobs with ID 100 to 200:
+
+  
+$ qpy clean 100-200
+  
+
+  Cleans all the jobs with status undone (that ones that have been killed before running):
+
+  
+$ qpy clean undone
+  
+
+  Cleans all the jobs that can be cleaned:
+
+  
+$ qpy clean all
+  
 
 
 # status
 
-This command is mainly useful for the 'multi-user' environment.
-It writes elaborately the number of jobs running for each users and in each of the available nodes. 
+This command is mainly useful for checking the multi-user environment.
+It writes the number of jobs running for each users, and in each of the available nodes.
 
 
  Options:
@@ -269,105 +324,143 @@ It writes elaborately the number of jobs running for each users and in each of t
   
  Examples:
 
-
+  
+$ qpy status
+  
 
 
 # config
 
-This command gives informations about some of the variables in qpy.
-Feel free to check.
-It is quite self explanatory.
-One of the advanced feature of this command is to configure the format that 'qpy check' would follow.
-The default format that 'qpy check' uses to write all the jobs is 
-
-It might seem little complicated, but it follows mainly these rules:
+This command, if run without option, gives information about the current settings of qpy.
+Feel free to check, it is quite self explanatory.
+These settings can be changed by the same command, giving as option a keyword and a value (or soemtimes a sequence of values):
 
 
- %j : job ID
- %s : job status
- %c : command you used to submit the job
- %d : working directory of your job
- %n : node allocated for your job
- %N : number of cores for your job.
- %R : running time of the job. (time in queue if the job is in queue)
- %Q : actual time when the job is submitted
- %S : actual time when the job has started
- %E : actual time when the job has finished
+$ qpy config <keyword> <value> [<value2> ...]
 
 
-The user can also change this format to a minimalistic one, by 'qpy config checkFMT %j:%s' or anything using the notations defined above. To check the current format, use the command 'qpy config checkFMT' and to change it to the default one, use 'qpy config checkFMT default'.
-
-There are some new options available to format 'qpy check' and have some information about the timing of the jobs. These are:
+In the following is a list of possible keywords and what they mean.
 
 
-Bash scripts, generally, stops if changes are made in it while it is still running.
-So it is better to have qpy running a copied script which allows to change and reuse the original bash script.
-'qpy config' provides another advanced option to do this by copying the script to the local folder '~/.qpy/scripts' and use it later while running the actual calculation.
-This is very useful while working with a bash script.
-To use this, set it up with 'qpy config copyScripts true', where by default 'copyScripts' is set to 'false'. 
+ colour true|false
+  
+  The output of check is coloured (true) or not (false).
+  Coloured output might not work for some terminals.
 
-The same thing can also be done for a specific job if the submitted scipt has the line '#QPY cpScript true' or if the job is submitted using the command 'qpy sub -c [script_name]'.
-If the 'copyScripts' is set True, then the reverse can be done by adding the line '#QPY cpScript false' in the script or by submitting the script using the command 'qpy sub -o [script_name]'.
+ coloursScheme <c queue> <c running> <c done> <c killed> <c undone>
 
+  Sets the colours to be used in a coloured output of check.
+  Give always five colours, following the order above, that can be:
+  grey, red, green, yellow, blue, magenta, cyan, and white.
 
+ checkFMT '<pattern>'
 
-
- Options:
+  When the command check is used, the jobs are printed in a specific pattern.
+  One can change this with this keyword, where <pattern> is a string (the single quotes above are important!') that may contain one of the ``per cent'' modifiers below, that will be replaced by the appropriate content of the job.
 
   
- Examples:
+   %j : job ID
+   %s : job status
+   %c : command you used to submit the job
+   %d : working directory of your job
+   %n : node allocated for your job
+   %N : number of cores for your job.
+   %R : running time of the job. (time in queue if the job is in queue)
+   %Q : actual time when the job is submitted
+   %S : actual time when the job has started
+   %E : actual time when the job has finished
+  
+
+  It might seem a little complicated, but an example should clarify this.
+  The default value is:\\
+  %j (%s):%c (on %n; wd: %d)\textbackslash n\\
+  Let us suppose that one has only one job, running a command bash my_script.sh, with ID 100, submitted from /home/user/, and it is currently running on the node comp1.
+
+  
+$ qpy check
+100 (running):bash my_script.sh (on comp1; wd: /home/users/)
+$ qpy config checkFMT 
+Check pattern modified to 
+$ qpy check
+100: running
+$ qpy config checkFMT 
+Check pattern modified to 
+$ qpy check
+100 (running)
+        Submitted from /home/users/
+        Started at 2018-10-04 18:01:45.948201
+-----
+$ qpy config checkFMT default
+Check pattern restored to the default value: 
+$ qpy check
+100 (running):bash my_script.sh (on comp1; wd: /home/users/)
+  
+
+  The \textbackslash n is important, and it means ``new line''.
+  Without it, all jobs are printed in the same line.
+  One can also use \textbackslash t to insert a tabulation, as the example shows.
+
+ copyScripts <true|false>
+
+  Bash scripts, generally, stop if changes are made to the script file while they still are running.
+  Hence, it is sometimes advantageous to have qpy running a copy of the script, which allows to change and reuse the original bash script.
+  If this keyword is set to true, qpy will copy the script to the local folder ~/.qpy/scripts and use this copy when running the actual calculation.
+  To enable this option, use qpy config copyScripts true. By default copyScripts is set to false. 
+  
+  The same thing can also be done for a specific job if the submitted script has the line #QPY cpScript true or if the job is submitted using the command qpy sub -c [script_name].
+  If the copyScripts is set True, then the reverse can be done by adding the line #QPY cpScript false in the script or by submitting the script using the command qpy sub -o [script_name].
+  
+
+
+
+
+ Options: a keyword and a value (or values) for this keyword.
+
+ Examples: See above for examples for each keyword.
 
 
 
 # ctrlQueue
 
-ctrlQueue is a command to control and move the jobs in the queue.
-Consider the situation where you  have a long list of jobs in the queue but you have some job(s) of top priority that needs to be done as soon as possible.
-The command ctrlQueue can be used in this situtation to move the priority job(s) up in the queue-list.
+This command controls and move jobs in the queue.
+First the options pause and continue can be used to pause the submission of jobs from the queue to running, or to continue.
+Also, it can be used to move jobs within the queue (jump), and reorganize the order of submission.
+
+
+
+ Options: pause, jump, continue
+
+ Examples:
+
+Consider the situation where you have a long list of jobs in the queue but you have some job(s) of top priority that needs to be done as soon as possible.
+The command ctrlQueue can be used in this situation to move the priority job(s) up in the queue.
 These are what you have to follow:
-
-'qpy ctrlQueue pause' : This command needs to be used prior to moving the jobs. This command ensures that no jobs from the queue can be started further. 
-
-'qpy ctrlQueue jump [job-id-1] [job-id-2] [job-id-3] ... [job-id-n] [job-id-pos]' : This is the main command for moving the jobs. Here all the jobs (1 to n) are moved in the queue to be placed after [job-id-pos] in the queue-list. 
-
-'qpy ctlrQueue continue' : This command remove the pause and let qpy to continue putting jobs from queue to the nodes. 
+The queue must first be paused, then ``jump'' the job <job ID> to <target>:
 
 
-
- Options:
-
- Examples:
-
+  qpy ctrlQueue pause
+  qpy ctrlQueue jump <job ID> <target>
+  qpy ctlrQueue continue
 
 
-# clean
-
-It cleans the list of jobs that one can see using 'qpy check'.
-The user can clean some specific jobs by adding the job id or the specific status of the job.
-The jobs that can be cleaned are 'done', 'killed' and 'undone'. 
-
-
-
-
- Options:
-  a status ('done', 'killed' or 'undone')
-  a job ID list
-  'all'  
-
- Examples:
+The <target> can be a job ID, begin, or end.
 
 
 
 # tutorial
 
-Shows a tutorial.
+Shows a tutorial, that is basically a text version of the ``For users'' section of this manual.
 
 
- Options:
+ Options: Optionally, a keyword can be given to be searched in the tutorial
 
  Examples:
 
-
+  Opens the tutorial and goes to the first occurrence of ctrlQueue:
+  
+  
+    qpy tutorial ctrlQueue
+  
 
 
 

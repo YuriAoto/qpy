@@ -1,0 +1,175 @@
+\documentclass[a4paper,11pt]{article}
+
+\usepackage[top=1.0cm,left=1.0cm,right=1.0cm,bottom=1.0cm]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage[pdftex]{graphicx}
+\usepackage{pdflscape}
+\usepackage{multirow}
+\usepackage{color}
+\usepackage{colortbl}
+\usepackage[most]{tcolorbox}
+
+\linespread{1.25}
+
+\tcbset{
+  frame code={}
+  center title,
+  left=0pt,
+  right=0pt,
+  top=0pt,
+  bottom=0pt,
+  colback=gray!90,
+  colframe=white,
+  width=\dimexpr\textwidth\relax,
+  enlarge left by=0mm,
+  boxsep=5pt,
+  arc=0pt,outer arc=0pt,
+}
+
+\definecolor{RC1}{gray}{0.92}
+\definecolor{RC2}{rgb}{1.0,0.5,0.5}
+\definecolor{RC3}{gray}{1.0}
+
+\input{common}
+
+\begin{document}
+\pagenumbering{gobble}
+\begin{landscape}
+
+  \colorbox{RC2}{\textbf{\Huge Cheat Sheet}} \: {\Huge \qpy{}} \: \qpyFull{} - \qpyVersion{}, \qpyYear{}\vspace{0.0cm}
+
+  \begin{center}
+    \colorbox{RC2}{Basic usage:} {\texttt{qpy <command> [options]}} \colorbox{RC1}{Use \texttt{TAB} for completion and \texttt{?} \texttt{TAB TAB} to display a help}
+  \end{center}\vspace{0.0cm}
+  
+  % ==========
+  \begin{minipage}{1.0\textheight}
+    \begin{tabular}{lllll}
+      \hline
+      \rowcolor{RC2}
+      Command            & Options & \multicolumn{3}{l}{Explanation} \\
+      \hline
+      \texttt{restart}   &
+                                   & \multicolumn{3}{l}{(re)starts the background environment for \qpy{}} \\
+      \rowcolor{RC1}
+      \texttt{sub}       & \texttt{[-n <\# cores>]} \texttt{[-m <memory, in GB>]} \texttt{<command>}
+                                   & \multicolumn{3}{l}{submits the command \texttt{<command>}, optionally giving the number of cores and memory}\\
+      \texttt{status}    &
+                                   & \multicolumn{3}{l}{shows the status of nodes and users}\\
+      \cellcolor{RC1}\texttt{check} & \cellcolor{RC1}\texttt{[<status>] [<dir>] [<job IDs>]}
+                                   & \cellcolor{RC1}lists ... & \multirow{3}{0.3cm}{$\left\}\begin{array}{l} \\ \\ \\ \end{array}\right.$}
+                                   & \cellcolor{RC1}... all the jobs with the given status(es), or that was submitted from\\
+      \texttt{clean}     & \texttt{[<status>] [<dir>] [<job IDs>]}
+                                   & cleans ... &
+                                   & \cellcolor{RC1}given directory(ies), or has ID given in \texttt{<job IDs>}. If no option\\
+      \cellcolor{RC1}\texttt{kill} & \cellcolor{RC1}\texttt{[<status>] [<dir>] [<job IDs>]}
+                                   & \cellcolor{RC1}kills ... &
+                                   & \cellcolor{RC1}is given, \texttt{clean} and \texttt{kill} have no effect, whereas \texttt{check} lists all jobs\\
+      \texttt{config}    & \texttt{[checkFMT <pattern>]}
+                                   & \multicolumn{3}{l}{shows the pattern used for check, or sets it to \texttt{<pattern>}} \\
+                         & \texttt{[colour <false|true>]}
+                                   & \multicolumn{3}{l}{turns the output of the \texttt{check} command coloured (\texttt{true}) or disable the colours (\texttt{false})} \\
+                         & \texttt{[colourScheme <colour 1> ... <colour 5>]}
+                                   & \multicolumn{3}{l}{shows the colours used in the output of the \texttt{check} command, or sets them} \\
+      \rowcolor{RC1}
+      \texttt{ctrlQueue} & \texttt{pause}
+                                   & \multicolumn{3}{l}{pauses the submission of jobs} \\
+      \rowcolor{RC1}
+                         & \texttt{continue}
+                                   & \multicolumn{3}{l}{continues the submission of jobs} \\
+      \rowcolor{RC1}
+                         & \texttt{jump <job IDs> <target>}
+                                   & \multicolumn{3}{l}{moves jobs with IDs in \texttt{<job IDs>} to \texttt{<target>}, that can be a ID, \texttt{begin}, or \texttt{end}} \\
+      \texttt{tutorial}  & \texttt{[<keyword>]}
+                                   & \multicolumn{3}{l}{shows the tutorial, at \texttt{<keyword>}} \\
+      \rowcolor{RC1}
+      \texttt{finish}    &
+                                   & \multicolumn{3}{l}{finishes the background environment for \qpy{}} \\
+      \hline
+    \end{tabular}
+  \end{minipage}\vspace{0.2cm}
+
+  % ==========
+  \begin{minipage}{0.55\textwidth}
+    \begin{tabular}{ll}
+      \hline
+      \rowcolor{RC2}
+      \multicolumn{2}{l}{Possible job statuses}\\
+      \hline
+      \verb+queue+ & Job in the queue, not running yet\\
+      \rowcolor{RC1}
+      \verb+running+ & Job being executed\\
+      \verb+done+ & Job has finished\\
+      \rowcolor{RC1}
+      \verb+undone+ & Job was removed from the queue before running\\
+      \verb+kill+ & Job was killed when running\\
+      \hline
+    \end{tabular}\vspace{0.2cm}
+    \begin{center}
+      \begin{tabular}{ll}
+        \hline
+        \rowcolor{RC2}
+        \multicolumn{2}{l}{Environment variables}\\
+        \hline
+        \verb+QPY_JOB_ID+ & job ID\\
+        \rowcolor{RC1}
+        \verb+QPY_NODE+ & node where job is running\\
+        \verb+QPY_N_CORES+ & number of requested cores\\
+        \rowcolor{RC1}
+        \verb+QPY_MEM+ & requested memory\\
+        \hline
+      \end{tabular}
+    \end{center}
+  \end{minipage}\quad
+  % ==========
+  \begin{minipage}{0.4\textwidth}
+    \begin{tabular}{ll}
+      \hline
+      \rowcolor{RC2}
+      \multicolumn{2}{l}{Possible modifiers to be used in \texttt{<pattern>} for \texttt{config checkFMT}}\\
+      \hline
+      \verb+%j+ & job ID\\
+      \rowcolor{RC1}
+      \verb+%s+ & job status\\
+      \verb+%c+ & command used to submit the job\\
+      \rowcolor{RC1}
+      \verb+%d+ & working directory of the job\\
+      \verb+%n+ & node allocated for the job\\
+      \rowcolor{RC1}
+      \verb+%N+ & number of cores of the job\\
+      \verb+%Q+ & time when the job was submitted\\
+      \rowcolor{RC1}
+      \verb+%S+ & time when the job started to run\\
+      \verb+%E+ & time when the job has finished\\
+      \rowcolor{RC1}
+      \verb+%R+ & the time in queue, or the running time, or the total running time\\
+      \rowcolor{RC1}
+                & (depending on the status of the job) \\
+      \hline
+    \end{tabular}
+  \end{minipage}
+  % ==========
+  \colorbox{RC3}{
+      \begin{minipage}{0.41\textwidth}
+        \begin{tabular}{ll}
+          \hline
+          \rowcolor{RC2}
+          Syntax for sets of job IDs\\
+          \hline
+          \texttt{<initial ID>-<final ID>,<ID1> <ID2>}\\
+          Example: \texttt{10-14,4,30 20}, means\\
+          10, 11, 12, 13, 14, 4, 30, and 20\\
+          \hline
+        \end{tabular}
+      \end{minipage}
+  }
+  
+\end{landscape}
+\end{document}
+  
+%%% Local Variables:
+%%% ispell-local-dictionary: "british"
+%%% mode: latex
+%%% TeX-master: t
+%%% End:

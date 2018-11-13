@@ -1,0 +1,325 @@
+qpy - The Queue Management System in Python
+version 0.0 - 2018
+
+Conceived and created by Pradipta Kumar Samanta and Yuri Alexandre Aoto
+With the kind help and support of Andreas Koehn and Arne Bargholz
+
+   Manual
+
+### For administrators
+
+To work as administrator of qpy, it is useful to know a few facts about how qpy works.
+qpy has three levels:
+
+ the qpy
+ the qpy-master
+ the qpy-multiuser
+
+The first, qpy, takes care of the interaction of the user with qpy, and its usage is described in the Section Users of this manual.
+The second is the background environment of qpy of each user, and controls the user's jobs.
+The third is the global (or multi-user, as we prefer to say) background environment of qpy, that decides when and where a job can run, by allocating cores and memory to each qpy-master.
+
+All this said, the duties of the administrator of qpy are:
+
+ Maintain the program qpy-multiuser running;
+ Add/remove new users and machines;
+ Assist the users with any problems;
+ Update qpy to newer versions.
+
+This section explains how this is done.
+First of all, it is a good idea to have a user dedicated to the administration of qpy, what keeps everything more organized.
+We of course strongly discourage using the root for this task, for security reason.
+The administrator of qpy does not need any special permission.
+
+## Installation
+
+We assume that you have a copy of qpy, otherwise you wouldn't be reading this manual.
+To set up a new qpy environment, the following steps must be taken:
+
+
+ Make sure that every user that will use qpy has permission to read the directory where qpy is installed.
+This directory will be (and has been, in Section User:Basics) called <qpy_dir>.
+
+ Create the configuration's directory in the administrator's home directory:
+
+
+$ mkdir ~/.qpy-multiuser/
+
+
+ Create the following files in this directory:
+
+
+$ vi ~/.qpy-multiuser/distribution_rules
+$ vi ~/.qpy-multiuser/allowed_users
+$ vi ~/.qpy-multiuser/nodes
+$ vi ~/.qpy-multiuser/multiuser_connection_address
+
+
+The content of these files are described in section Administrator:Files.
+Please, read such section carefully and create these files according to your needs before proceeding.
+
+ Finally, start the multiuser environment of qpy:
+
+
+$ python <qpy_dir>/qpy-access-multiuser.py start
+
+
+
+
+All the interaction of the administrator with qpy is made with the following command, plus some options:
+
+
+$ python <qpy_dir>/qpy-access-multiuser.py 
+
+
+It is a good idea to define an alias for this by, for example, adding the following in the qpy administrator ~/.bashrc:
+
+
+  alias qpy-admin='<qpy_dir>/qpy-access-multiuser.py'
+
+
+
+## Add new user
+
+Let us suppose that a user with username <user> will start using qpy.
+As qpy usually runs across several machines, first make sure that <user> has the ssh keys properly configured, that is, that the user is be able to connect from the master node (where qpy is running) to the slave nodes without password.
+Because the home directory of the master node and the slave nodes must have the same home directory for a correct qpy environment, setting the ssh keys just once should be enough.
+To allow for the new user in qpy, add the username in the file ~/.qpy-multiuser/allowed_users, one user in each line:
+
+
+$ cat ~/.qpy-multiuser/allowed_users
+<user 1>
+<user 2>
+...
+<user>
+
+
+After, you have to send the following files to the new user, to be put in his/her qpy directory.
+Something like this:
+
+
+$ cp ~/.qpy-multiuser/multiuser_connection_address /home/<user>/.qpy/
+$ cp ~/.qpy-multiuser/multiuser_connection_port /home/<user>/.qpy/
+$ cp ~/.qpy-multiuser/multiuser_connection_conn_key /home/<user>/.qpy/
+
+
+In addition, if you have a dedicated machine to run qpy, copy also the following file file to the user's qpy directory:
+
+
+$ cat ~/.qpy-multiuser/master_connection_address
+<hostname>
+$ cp ~/.qpy-multiuser/master_connection_address /home/<user>/.qpy/
+
+
+If this file is not present in the user's qpy directory, qpy runs locally.
+
+## Add and remove a node
+
+To add or remove a node, edit the file ~/.qpy-multiuser/nodes (see Section Administrator:Files), and run the following commands:
+
+
+$ python <qpy_dir>/qpy-access-multiuser.py nodes
+$ python <qpy_dir>/qpy-access-multiuser.py distribute
+
+
+## Update version
+
+When a new version of qpy is released, depending where the new changes have been done, you might have to restart the multiuser background environment:
+
+
+$ python <qpy_dir>/qpy-access-multiuser.py finish
+$ python <qpy_dir>/qpy-access-multiuser.py start
+
+
+And/or ask all the users to restart their own masters, with:
+
+
+$ qpy restart
+
+
+Whatever is the case, this will be informed in the release's notes.
+
+
+## Commands
+
+This is a full list of the commands that are available to the administrator:
+
+
+
+ start
+  
+  Starts a new qpy-multiuser instance.
+  Run this if you are starting qpy for the first time, if a update is needed or if the machine where qpy runs has crashed.
+  
+  
+$ python <qpy_dir>/qpy-access-multiuser.py start
+  
+
+ finish
+  
+  Finishes the multiuser background environment.
+  
+$ python <qpy_dir>/qpy-access-multiuser.py finish
+
+
+
+ nodes
+
+  Loads the content of the file ~/.qpy-multiuser/nodes.
+
+  
+$ python <qpy_dir>/qpy-access-multiuser.py nodes
+  
+
+
+ distribute
+
+  Distributes the cores among the users.
+
+  
+$ python <qpy_dir>/qpy-access-multiuser.py distribute
+  
+
+  
+ variables
+
+  Lists several internal variables of qpy-multiuser.
+  Used mainly for debugging.
+
+  
+$ python <qpy_dir>/qpy-access-multiuser.py variables
+  
+
+
+ status
+
+  Show the current status of the users, nodes and cores.
+  It is the same as the command status accessible to the users.
+
+  
+$ python <qpy_dir>/qpy-access-multiuser.py status
+  
+
+
+
+ saveMessages
+
+  Saves messages from the internals of qpy-multiuser, that will be shown in the ``variables'' command.
+  Mainly for debugging.
+
+  
+$ python <qpy_dir>/qpy-access-multiuser.py saveMessages
+  
+
+
+
+
+There are some ``cheating'' commands that the administrator can run, such as artificially adding or removing running jobs of users.
+These commands are not supposed to be used in a normal run, but only if something went wrong and must be manually fixed.
+\textbf{Use only if you know exactly what you are doing!!}
+
+
+
+
+ __user
+
+  Adds a new user to qpy-multiuser. In a normal run, it is automatically done when the user restart his/her qpy.
+
+  
+$ python <qpy_dir>/qpy-access-multiuser.py __user <user_name> \
+  <address> <port> <conn_key>
+  
+
+
+ __req_core
+
+  Asks for a slot (cores plus memory) to run a job. In a normal run, it is done by the user's master whenever there is a job in his/her queue.
+  
+
+$ python <qpy_dir>/qpy-access-multiuser.py __req_core <user_name> \
+  <jobID> <n_cores> <mem> <queue_size>
+
+
+ __remove_job
+
+  Tells the multiuser background environment that a job has finished. Ina a normal run, it is done by the user's master whenever the job has finished.
+  
+
+$ python <qpy_dir>/qpy-access-multiuser.py __remove_job <user_name> \
+  <job_ID> <queue_size>
+
+
+
+
+## Files
+
+This is a list of the files in the qpy-multiuser directory.
+Some of them the administrator should edit to control the behavior of qpy, some others not.
+
+
+
+ distribution_rules
+
+  This file defines how the cores are distributed to the users.
+  The basic syntax is one of the following:
+
+  
+even minimum <n_cores>
+  
+
+This means an even distribution among the users, with at least <n_cores> granted for each.
+
+ allowed_users
+
+  A list with all the users that can use the qpy environment:
+
+  
+<user_1>
+<user_2>
+<user_3>
+  
+
+ nodes
+
+  A list with all the nodes available in the qpy environment.
+  Each line has the information of one node, as shown below:
+
+  
+<node_1> <n_cores> [M]
+<node_2> <n_cores> [M]
+<node_3> <n_cores> [M]
+  
+
+  First is the hostname of the node, followed by the number of cores this node has (or is available to qpy) and, optionally, a ``M'', to indicate that that node has preference for multicore jobs.
+  
+ multiuser_connection_address
+
+  This file simply contains the address where the qpy-multiuser instance will run.
+  If you do not set this, qpy automatically uses the local machine (localhost).
+  
+<hostname for qpy-multiuser>
+  
+  
+  Optionally, for the sake of organization mainly, the programs qpy-multiuser and the qpy-master of each user can run on a machine different than the node where the users work and submit their jobs from.
+  For instance, you might have a machine (even a virtual machine) dedicated to qpy.
+  To do this, <hostname for qpy-multiuser> must be the hostname of this machine
+  In this case, the files master_connection_address that the users have in their qpy directory should have the correct hostname.
+  
+
+
+The following files are generated and used by qpy, but the administrator should not alter or delete them.
+Moreover, these files should not be shared, because they have the information required to make all the message transfers.
+qpy takes care of the permission of the directories ~/.qpy-multiuser/ and ~/.qpy/ of each user (whose content should also not be shared).
+
+
+ ~/.qpy-multiuser/multiuser_connection_port
+ ~/.qpy-multiuser/multiuser_connection_key
+ ~/.qpy-multiuser/connection_<user>_key
+ ~/.qpy-multiuser/connection_<user>_key
+ ~/.qpy-multiuser/connection_<user>_key
+
+
+
+
+
+
