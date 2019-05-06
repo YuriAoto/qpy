@@ -1,7 +1,10 @@
-# qpy - control the nodes distribution for several users
-#
-# 26 December 2015 - Pradipta and Yuri
-# 06 January 2016 - Pradipta and Yuri
+"""
+qpy - control the nodes distribution for several users
+
+History:
+  26 December 2015 - Pradipta and Yuri
+  06 January 2016 - Pradipta and Yuri
+"""
 from time import sleep
 import os
 import sys
@@ -51,9 +54,25 @@ logger = configure_root_logger(multiuser_log_file, logging.WARNING)
 class NODE():
     """A node from the qpy-multiuser point of view.
 
-    Contains:
+    Attributes:
 
-
+    name (str)               Name for the node
+    max_cores (int)          Total number of cores this node has available
+    messages (Messages)      Messages
+    is_up (bool)             If True, the node is up, accessible and running
+                             If False, if means that ssh could not reach it
+    n_used_cores (int)       Number of cores that are being used in the moment
+    pref_multicores (bool)   If True, it means that this core is preferred format
+                             multicores jobs
+    req_mem (float)          Total memory requested by the jobs that are running
+    total_mem (float)        Total memory available in this node (obtained by
+                             system's command free)
+    free_mem_real (float)    Free memory on this node ((obtained by system's
+                             command free)
+    n_outsiders (int)        Number of jobs that are running in this node that
+                             are not under qpy control (obtained by system's
+                             commant top)
+    attributes (list)        A list, with the attributes of this node
     """
     def __init__( self, name, max_cores):
         self.name = name
@@ -83,8 +102,11 @@ class NODE():
         n_outsiders     the number of cores used by non-qpy processes
         total_mem       total memory of the node
         free_mem_real   free memory of node
-        """
 
+        This function DOES NOT change the attributes of
+        the node (except for adding messages), what should
+        be done by the caller if desired.
+        """
         info = namedtuple('nodeInfo', ['is_up','n_outsiders','total_mem','free_mem_real'])
         info.is_up = True
 
@@ -129,13 +151,18 @@ class NODE():
         return info
 
     def has_attributes(self, node_attr):
-        """Returns True if the node has the
-        attributes described by the list node_attr.
-        It should be a list of strings, such that after joining each entry
-        with space and replacing the attributes by True or False,
-        a valid python logical expression is obtained.
-        Returns True if is not a valid expression.
+        """Check if the node satisfy the attributes requirement
 
+        Arguments:
+        node_attr (list)   A logical expression about attributes
+
+        Return True if the node has the attributes described by
+        the list node_attr. It should be a list of strings, such
+        that after joining each entry with space and replacing the
+        attributes by True or False, a valid python logical expression
+        is obtained.
+
+        Return True if is not a valid expression.
         """
         keywords = ['not', 'and', 'or', '(', ')']
         if len(node_attr) == 0:
@@ -156,22 +183,27 @@ class NODE():
 
 
 class USER():
+    """A user from the qpy-multiuser point of view.
 
-    """A user from the qpy-multiuser point of view
+    This class contains the main functions to handle the interaction
+    of the user within qpy-multiuser. In particular, it grants the usage
+    of cores to the qpy-master of the user.
 
-    Contains:
-    name       The user
-    port       port to the qpy-master connection 
-    conn_key   key to the qpy-master connection
+    Atributes:
+    name          The user
+    address       Address to the qpy-master connection
+    port          Port to the qpy-master connection
+    conn_key      Key to the qpy-master connection
 
-    min_cores    only for the user
-    extra_cores  preferably for the user
-    max_cores    maximum that can be used: N_cores - min_cores (of other users)
-    n_used_cores current number of used cores
-    cur_jobs     current jobs
-    messages     Debugging messages
+    min_cores     Number of cores guaranteed to be available to the user
+    extra_cores   Number of cores to be used preferably by the user
+    max_cores     Maximum number of cores that can be used by this user
+                  in any time = (N_cores - min_cores of all other users)
+    n_used_cores  Current number of used cores
+    n_queue       Number of jobs in the queue of the qpy-master of this user
+    cur_jobs      Current jobs
 
-
+    messages      Debugging messages
     """
 
     def __init__( self, name, address, port, conn_key):
@@ -179,26 +211,34 @@ class USER():
         
         Arguments:
         name       The user
-        port       port to the qpy-master connection 
-        conn_key   key to the qpy-master connection
+        address    Address to the qpy-master connection
+        port       Port to the qpy-master connection
+        conn_key   Key to the qpy-master connection
         """
-        self.messages = Messages()
-        self.messages.save = True
-
         self.name = name
         self.address = address
         self.port = port
         self.conn_key = conn_key
-
+        
         self.min_cores = 0
         self.extra_cores = 0
         self.max_cores = 0
         self.n_used_cores = 0
         self.n_queue = 0
         self.cur_jobs = []
+        
+        self.messages = Messages()
+        self.messages.save = True
+
 
     def remove_job( self, jobID):
-        """Remove the job"""
+        """Remove a job from the user and from the nodes.
+        
+        Arguments:
+        jobID     The ID number of the job
+        
+        Return 0 if success or 1 if the job was not found
+        """
         global N_used_cores, N_used_min_cores
         for job in self.cur_jobs:
             if (job.ID == jobID):
@@ -213,73 +253,100 @@ class USER():
         return 1
 
     def add_job( self, job):
-        """Add job to a specific node."""
+        """Add a new job to a specific node.
+        
+        Arguments:
+        job     The job, as an instance of MULTIUSER_JOB
+        
+        Return 0
+        """
         global N_used_cores, N_used_min_cores
         
         self.cur_jobs.append( job)
         self.n_used_cores += job.n_cores
         nodes[job.node].n_used_cores += job.n_cores
         nodes[job.node].req_mem += job.mem
-
+        
         N_used_cores += job.n_cores
-
+        
         if (self.n_used_cores < self.min_cores):
             N_used_min_cores += job.n_cores
         elif (self.n_used_cores < self.min_cores + job.n_cores):
             N_used_min_cores += job.n_cores + self.min_cores - self.n_used_cores
-
+        
         return 0
 
 
     def request_node( self, jobID, num_cores, mem, node_attr):
         """Tries to give a space to the user
-
+        
         Arguments:
-        jobID      the job ID
-        num_cores  requested number of cores
-        mem        requested memory
-        node_attr  attributes that the node must fulfil
-
+        jobID       The job ID
+        num_cores   Requested number of cores
+        mem         Requested memory
+        node_attr   Attributes that the node must fulfil
+        
         This is the main function of qpy-multiuser.
-        It deceides whether the requested resource can be
-        given or not and, if so, give a node that fulfils
+        It decides whether the requested resource can be
+        given or not, and, if so, give a node that fulfils
         this requirement.
+        
+        How it works:
+        
+        General idea:
+        i) If the user is using less than its min_cores and
+        the number of cores he is requesting is still within
+        min_cores, he should receive the cores
+        
+        ii) If the user is using more than min_cores, and there
+        are still free cores (without considering the min_cores
+        of all other users, that should be free if not in use),
+        he should receive the cores if 1) He is using less than
+        the extra cores he has or 2) no other user has jobs in
+        their queues
+        
+        This means that, if there is available resource,
+        he should receive cores, unless this will use the
+        min_cores of other users. If the resource is limited,
+        and several users have jobs in their queues, the mumber
+        of used cores by each user should stay around
+        min_cores + extra cores
         """
         global N_used_cores, N_used_min_cores
         space_available = False
-
+        
         logger.debug('jobID, attribute: '+ str(jobID) + str(node_attr) )
         
         N_free_cores = (N_cores - N_used_cores) - (N_min_cores - N_used_min_cores)
         free_cores = N_free_cores >= num_cores
-
+        
         if (self.n_used_cores + num_cores <= self.min_cores):
             space_available = True
-
+            
         else:
             use_others_resource = self.n_used_cores + num_cores > self.min_cores + self.extra_cores
-
+            
             if (use_others_resource):
-
+                
                 N_users_with_queue = 1
                 N_extra = 0
                 for user,info in users.iteritems():
                     if (user == self.name):
                         continue
-                
+                    
                     if (info.n_queue > 0 and info.n_used_cores >= info.min_cores + info.extra_cores):
                         N_users_with_queue += 1
-
+                    
                     elif (info.n_queue == 0):
                         N_extra += min(info.extra_cores + info.min_cores - info.n_used_cores, info.extra_cores)
-
+                        
                 N_extra_per_user = N_extra/N_users_with_queue
                 if (self.n_used_cores + num_cores <= self.min_cores + self.extra_cores + N_extra_per_user and free_cores):
                     space_available = True
-                    
+                
             else:
                 space_available = free_cores 
-
+                
         if (space_available):
             best_node = None
             best_free = 0
@@ -303,25 +370,27 @@ class USER():
                         best_node = node
                         break
             nodes_check_lock.release()
-
+            
             if (best_node == None):
                 return 1
-
+            
             new_job = MULTIUSER_JOB( self.name, jobID, mem, num_cores, best_node)
             self.add_job( new_job)
-
+            
             return best_node
-
+        
         return 2
 
 
 def load_users():
     """Load the users.
 
-    For each user given in the file allowed_users,
-    attempt to obtain the port and the key for the
-    connection with their qpy-master (from MULTIUSER_HANDLER)
-    and request the current running jobs
+    For each user given in the file of the global variable allowed_users,
+    attempt to obtain the port and the key for the connection with their
+    qpy-master (from MULTIUSER_HANDLER) and request the current running jobs.
+    It also redistributes the cores.
+    
+    The file should contain just the username of the users, one in each line.
     """
     global users
     allowed_users = []
@@ -342,16 +411,27 @@ def load_users():
                 for job in cur_jobs:
                     new_user.add_job( job)
                 users[user] = new_user
-
     distribute_cores()
 
 
 def load_nodes():
-    """Load the nodes
+    """Load the nodes.
     
-    The nodes are given in the file nodes_file
-    TODO: Explain the file format
+    The nodes are given in the file on the global variable
+    nodes_file.
     
+    The file should be formatted as:
+    
+    <node1> <n cores node1> [M] [<node1, attr1> [<node1, attr2> ...]]
+    <node1> <n cores node1> [M] [<node2, attr1> [<node2, attr2> ...]]
+    
+    Each line of the file starts with the node name to be loaded.
+    The node name is followed by the number of cores that this node
+    has available and, optionally, a sequence of attributes of this
+    node. In particular, the attribute "M" means that this node is
+    preferred for multicores jobs. The attributes are strings that
+    can be used to select or avoid particular nodes by the user,
+    see USER.request_node.
     """
     global N_cores
     global nodes_list
@@ -364,7 +444,7 @@ def load_nodes():
     attr_in_file = []
     nodes_for_multicores = []
     for line in f:
-        line_spl = line.split() # [<node_name>, <max_jobs>, [M]]
+        line_spl = line.split()
         try:
             nodes_in_file.append( line_spl[0])
             cores_in_file.append( int( line_spl[1]))
@@ -405,7 +485,6 @@ def load_nodes():
                 nodes_list.append( n)
         else:
             nodes_to_remove.append( n)
-
     for n in nodes_to_remove:
         N_cores -= nodes[n].max_cores
         nodes.pop( n)
@@ -413,11 +492,47 @@ def load_nodes():
 
 
 def distribute_cores():
-    """Distributes the cores.
-
-    The distribution is made based on the file cores_distribution_file
-
-    TODO: explain the file format
+    """Distribute the cores.
+    
+    The distribution is made based on the file in the
+    global variable cores_distribution_file.
+    
+    The file should de formated as:
+    
+    <dist type = even, explicit> [minimum <n min cores>]
+    [<user_1>=[<user_1 min>+]<user_1 extra>[%]]
+    [<user_2>=[<user_2 min>+]<user_2 extra>[%]]
+    ...
+    
+    That is: the first line starts with "even" or "explicit"
+    and is followed by, optionally, bu "minimum" and a number.
+    If "even" is given, the cores are distributed equally among
+    all users. If "explicit is given, the number of cores
+    of each user must be given explicitly in the following lines.
+    If "minimum" is also passed, the number that follows is the
+    minimum number of cores the users will have (that is only
+    their and is guaranteed).
+    
+    The lines that describe the number of cores of each
+    user should start with the user name and an equal, "="
+    sign. After the "=" comes the number of extra cores that
+    that user has. If it comes followed by an "%" sign, it means
+    the percentage of total cores (except the all minimum cores),
+    otherwise it means directly the number of extra cores.
+    Before the number of extra cores, the number of minimum cores
+    for that user can be passed (separated by an "+" sign),
+    that has priority over the value given in the first line.
+    
+    Any remaining cores are shared as equally as possible as extra
+    to all users.
+    
+    See file examples/distribution_rules for some examples.
+    
+    Return:
+    0    success
+    -1   if file not found
+    -2   for any syntax error in the file
+    -3   if exceed the number of cores
     """
     try:
         f = open( cores_distribution_file, 'r')
@@ -469,7 +584,7 @@ def distribute_cores():
                     users_min[user] = min_cores
                     value.pop(0)
                 except:
-                    return -1
+                    return -2
             users_extra[user] = value[0]
         if (left_cores < 0):
             return -3
@@ -895,17 +1010,15 @@ def handle_client():
 
 
 class CHECK_NODES(threading.Thread):
+    """Check the nodes regularly.
 
-    """Checks the nodes regularly
-
-    Contains:
+    Attributes:
     finish            an Event that should be set to terminate this Thread
 
-    This Thread enter in the nodes regularly and checks if thuy are up,
-    their memory and outsiders jobs
+    This Thread enters in the nodes regularly and checks if they are up,
+    their memory, and outsiders jobs
 
-    This check is done at each nodes_check_time seconds
-
+    This check is done at each (global) nodes_check_time seconds
     """
 
     def __init__(self):
@@ -947,7 +1060,6 @@ try:
     handle_client()
 except:
     logging.exception("Exception at handle_client")
-
 
 logger.info('Finishing main thread of qpy-multiuser')
 check_nodes.finish.set()

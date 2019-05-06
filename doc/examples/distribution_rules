@@ -1,0 +1,51 @@
+# Just share all cores evenly among all users,
+# without setting minimum cores
+even
+
+
+# Share cores equally among all uses, and give
+# 2 cores of minimum to each
+even minimum 2
+
+
+# Share cores explicitly: gives 4 cores
+# to user1 and 50% of all cores to user2
+# Eventual remaining cores are equally divided to user1
+# user2 and eventually other users that are not listed
+explicit
+user1=4
+user2=50%
+
+
+# Share cores explicitly: gives 2 cores of minimum
+# to all users. user1 receives 30% of the extra cores
+# cores and user2 has a minimum of 4 cores and receives
+# 50% of the extra cores
+# Eventual remaining cores are equally divided to user1
+# user2 and eventually other users that are not listed.
+# Users not listed receive anyway the 2 minimum cores
+explicit minimum 2
+user1=30%
+user2=4+50%
+
+
+# Share cores explicitly: gives 2 cores of minimum
+# to all users. user1 receives 10 of the extra cores
+# and no minimu cores. user2 has a minimum of 4 cores
+# and receives 10 of the extra cores.
+# Eventual remaining cores are equally divided to user1
+# user2 and eventually other users that are not listed.
+# Users not listed receive anyway the 2 minimum cores
+explicit minimum 2
+user1=0+10
+user2=4+10
+
+
+# Share cores explicitly: gives 2 cores of minimum
+# to user1 and 3 cores of minimum to user2.
+# Eventual remaining cores are equally divided to user1
+# user2 and eventually other users that are not listed.
+# Users not listed receive anyway the 2 minimum cores
+explicit
+user1=2+0
+user2=3+0

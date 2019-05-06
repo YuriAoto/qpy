@@ -132,6 +132,7 @@ PORT_MAX_MASTER = 60000
 
 
 def configure_root_logger(base_file,level):
+    """Set up a logger."""
     rootLogger = logging.getLogger()
     rootLogger.setLevel(level)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -153,6 +154,7 @@ def configure_root_logger(base_file,level):
     return rootLogger
 
 def log_exception(msg):
+    """Return a string with 'msg' and the exception traceback."""
     exc_type, exc_value, exc_traceback = sys.exc_info()
     log_message = msg + ':\n'
     log_message += "  Value: " + str(exc_value) + "\n"
@@ -164,14 +166,15 @@ def log_exception(msg):
 
 
 def get_all_children(x, parent_of):
-    """Gets all children and further generations
-
+    """Get all children and further generations
+    
     Arguments:
-    x          the parent whose children we are looking for
-    parent_of  a dict that says the parents of each element
-
-    Returns a list with all chidren and further generations of
-    x, according to the families tree defined by parent_of
+    x (str)            The element whose children we are looking for
+    parent_of (dict)   Gives the parents of each element
+    
+    Return:
+    A list with all chidren and further generations of
+    x, according to the family tree defined by parent_of
     """
     cur_child = []
     for p in parent_of:
@@ -185,11 +188,18 @@ def get_all_children(x, parent_of):
 
 
 def string_to_int_list(x):
-    """Returns a list of integers, described by the string x, as following:
-
+    """Parse a string to a list of int
+    
+    Arguments:
+    x (str)    A string to be parsed to integers
+    
+    Behaviour:
     '1,2,3'    -> [1,2,3]
     '1-3'      -> [1,2,3]
     '1-3,6-10' -> [1,2,3,6,7,8,9,10]
+    
+    Return:
+    a list of integers.
     """
     res = []
     for entry in x.split(',') :
@@ -201,8 +211,11 @@ def string_to_int_list(x):
 
 
 def kill_master_instances(user, address, qpy_master_command):
-    """Kill all qpy-master instances from this user
-    and from the same source directory."""
+    """Kill all qpy-master instances from this user.
+    
+    Behaviour:
+    It does it only from the same source directory.
+    """
     ps_stdout = node_exec(address, ["ps", "-fu", user], get_outerr = True, mode='popen')
     ps_stdout = ps_stdout[0].split( '\n')
     for l in ps_stdout:
@@ -213,7 +226,11 @@ def kill_master_instances(user, address, qpy_master_command):
 
 
 def start_master_driver(user, address, qpy_master_command):
-    """Starts the qpy-master and exits."""
+    """Start qpy-master and exit.
+    
+    TODO:
+    Only main programs should exit.
+    """
     sys.stdout.write("Starting qpy-master driver... It takes a few seconds, be patient.\n")
     sleep(5.)
     kill_master_instances(user, address, qpy_master_command)
@@ -222,18 +239,25 @@ def start_master_driver(user, address, qpy_master_command):
 
 
 def establish_Listener_connection(address, port_min, port_max, port=None, conn_key=None):
-    """Creates a Listener connection and returns a tuple with the information
+    """Create a Listener connection
 
-    Arguments: no arguments
-
-    Returns: the tuple (List_master, port, key)
-             where List_master is the Listener object
-             port is the port for the connection. If None, randomly generates one
-             key is the key to the connection. If None, randomly generates one
-
+    Arguments:
+    address (str)     The address of the connection
+    port_min (int)    The minimum value that a randomly generated
+                      port can have
+    port_max (int)    The maximum value that a randomly generated
+                      port can have
+    port (int)        (optional, default = None) The port of the
+                      connection. If None, randomly generates one
+    conn_key (uint)   (optional, default = None) The key of the
+                      connection. If None, randomly generates one
+    
+    Return:
+    The tuple (List_master, port, key)
+    where List_master is the Listener object
+    port is the port for the connection.
+    key is the key to the connection.
     """
-
-
     if conn_key == None:
         random.seed()
         conn_key = os.urandom(30)
@@ -251,7 +275,7 @@ def establish_Listener_connection(address, port_min, port_max, port=None, conn_k
         except:
             List_master = None
     return (List_master, port, conn_key)
-    
+
 
 def write_conn_files(f_name, address, port, conn_key):
     """Write the connection information to files."""
@@ -266,7 +290,7 @@ def write_conn_files(f_name, address, port, conn_key):
     f.close()
 
 def read_address_file(f_name):
-    """Reads the connection address from file."""
+    """Read the connection address from file."""
     try:
         f = open(f_name+'_address', 'r')
         address = f.read().strip()
@@ -292,8 +316,8 @@ def read_conn_files(f_name):
         conn_key = None
     return address, port, conn_key
 
-
 def true_or_false(v):
+    """Return True or False, depending on the string v."""
     if (v.lower() == 'true'):
         return True
     elif (v.lower() == 'false'):
@@ -302,13 +326,27 @@ def true_or_false(v):
         raise Exception('Neither true nor false.')
 
 def get_plural(word_s, stuff):
-    """ Cosmetic function: get the plural
-
-    @param word_s tuple or list with (singular_case, plural_case)
-    @param stuff list of strings or a positive int
-    @return tuple (correct_case, Predicate or listing)
-    example: get_plural(("job","jobs"),0) =>("jobs", "No")
-             get_plural(("job","jobs"),["queued", "running", "killed"]) =>("jobs", "queued, running and killed")
+    """Get the plural
+    
+    Arguments:
+    word_s (tuple, list)      Contains (singular_case, plural_case)
+    stuff (list, strings,     The stuff to be checked to be multiple
+           positive int)      or single
+    
+    Behaviour:
+    Analyse 'stuff' and return the correct thing, in plural
+    or singular. Most a cosmetic function to have gramatically
+    correct output.
+    
+    Return:
+    A tuple (correct_case, Predicate or listing)
+    
+    Raise:
+    An Exception if we cannot deal with stuff
+    
+    Examples:
+    get_plural(("job","jobs"),0) => ("jobs", "No")
+    get_plural(("job","jobs"),["queued", "running", "killed"]) => ("jobs", "queued, running and killed")
     """
     if (isinstance(stuff,list)):
         if (len(stuff)==0):
@@ -333,43 +371,40 @@ def get_plural(word_s, stuff):
         raise Exception("get_plural:stuff neither int nor list?" + str(type(stuff)) + "\n Contact the qpy-team.")
 
 
-
-
 def message_transfer(msg, address, port, key, timeout=5.0):
-    """ Sends and receives a message.
-
-    This function send a message to a Listener,
-    wait for a message back from the listener and returns it.
-    If the Listener takes too long to accept the connection, 
-    an exception is raised
-
-    Arguments:
-    msg      The message to be transfer
-    address  The address of the Listener
-    port     The port of the connection
-    key      The key for the connection
-    wait     optional. The waiting time in seconds until it gives up the
-             attempt to connect. Default: 5.0
-
-    Returns:
-    The message back
-
-    Exceptions:
-    raise an exception if the connection is not established
-
-
-    """
+    """Send and receive a message.
     
+    Arguments:
+    msg (str)          The message to be transfer
+    address (str)      The address of the Listener
+    port (int)         The port of the connection
+    key (uint)         The key for the connection
+    wait (int, float)  (optional, default = 5.0).
+                       The waiting time in seconds until it
+                       gives up the attempt to connect
+    
+    Behaviour:
+    This function send a message to a Listener,
+    wait for a message back from the Listener and returns it.
+    If the Listener takes too long to accept the connection, 
+    an exception is raised.
+    
+    Returns:
+    The message back from the connection.
+    
+    Raise:
+    An Exception if the connection is not established.
+    """
     def my_init_timeout():
         return time.time() + timeout
     connection._init_timeout = my_init_timeout
-
+    
     try:
         conn = connection.Client((address, port), authkey=key)
     except:
         exc_type, exc_value, exc_traceback = sys.exc_info()
         raise Exception("Connection not successful: " + str(exc_value))
-
+    
     conn.send(msg)
     back_msg = conn.recv()
     conn.close()
@@ -379,23 +414,30 @@ def node_exec(node, command, get_outerr = True, mode="paramiko", pKey_file = Non
     """ Execute a command by ssh
     
     Arguments:
-    node          where to execute
-    command       the command to be executed
-    get_outerr    optional. If True, returns a tuple with the
-                  stdout and stderr of the command.
-                  Default: True
-    mode          "Paramiko", "popen"
-
+    node (str)         Where to execute
+    command (str)      The command to be executed
+    get_outerr (bool)  (optional, default = True).
+                       If True, returns a tuple with the
+                       stdout and stderr of the command.
+    mode (str)         (optional, default = "paramiko")
+                       The mode for the connection.
+                       Possible modes:
+                       "paramiko"
+                       "popen"
+    pKey_file          (optional, default = None)
+    localhost_popen_shell (bool)
+                       (optional, default = False)
+                       Value for the argument shell of
+                       subprocess.Popen used when node is
+                       localhost.
     
-    Returns: the tuple (stdout, stderr), if the optional argument get_outerr
-             is set to True
+    Return:
+    The tuple (stdout, stderr), if the optional argument get_outerr
+    is set to True
     
-
-    Exceptions:
-    raise exceptions if there is a problem in the SSH connection
-
+    Raise:
+    SSH Exceptions if there is a problem in the SSH connection
     """
-
     if node == 'localhost':
 
         if isinstance(command, str) and not localhost_popen_shell: # Just to make it work with localhost as node...
@@ -457,40 +499,34 @@ def node_exec(node, command, get_outerr = True, mode="paramiko", pKey_file = Non
         else:
             ssh = subprocess.Popen(['ssh', node] + command, shell = False)
             return
-
         
     else:
         raise Exception("Unknown mode for node_exec")
 
 
 class MULTIUSER_JOB():
-
-    """ Simple class to represent a running job
-
-    Variables:
-    user
-    ID
-    n_cores
-    mem
-    node
-
-    Functions:
-    __init__
-    __eq__
-    __str__
-
+    """Class to represent a running job
+    
+    Attributes:
+    user (str)      The user that runs this job
+    ID (int)        The job ID
+    n_cores (int)   Number of cores
+    mem (float)     Required memory
+    node (str)      The node where this job runs
+    
+    Behaviour:
+    This is a much simple class than JOB, and it represents
+    the job as seen by qpy-multiuser.
     """
-
     def __init__( self, user, jobID, mem, n_cores, node):
-        """Instantiate the JOB object with some information.
-
+        """Inilialise the class
+        
         Arguments:
-        user
-        jobID
-        mem
-        n_cores
-        node
-
+        user (str)     The user that runs this job
+        ID (int)       The job ID
+        n_cores        Number of cores
+        mem            Required memory
+        node           The node where this job runs
         """
         self.user = user
         self.ID = jobID
@@ -498,40 +534,37 @@ class MULTIUSER_JOB():
         self.mem = mem
         self.node = node
 
-    def __eq__(self, other): 
+    def __eq__(self, other):
+        """Check if self equals other."""
         return self.__dict__ == other.__dict__
 
-    def __str__(self): 
+    def __str__(self):
+        """String representation."""
         return str(self.ID)  + ": node = " + self.node + ", n_cores = " + str(self.n_cores) + ", mem = " + str(self.mem)
 
 
 class Messages():
-
-    """The messages for debbuging generated during the run time.
-
+    """The messages for debbuging, generated at run time.
+    
+    Attributes:
+    save (bool)       (default = False) If True, messages are saved
+    messages (list)   A list with the messages, as [M, n_times], where
+                      M is a string (the message itself) and n_times is
+                      the number of time the messages was sent.
+    max_len (int)     (default = 100) Maximum number of
+                      messages (not counting repetitions)
+    
+    Behaviour:
     This class handles and stores the messages obtained
     from exceptions and others.
-
-    Variables:
-    save     set to True if messages are saved
-    max_len  maximum number of messages (not counting repetitions)
-
-    Functions:
-    __init__
-    __len__
-    __str__
-    clean
-    add
-    
+    Repeated messages sent one after another are not doubly
+    stored, just a counter is raised.
+    If number of messages gets larger than max_len, older messages
+    are removed.
     """
-
-
+    
     def __init__(self):
-        """Instantiate the class
-
-        save is set to False and max_len to 100
-        
-        """
+        """Initialise the class."""
         self.save = False
         self.messages = []
         self.max_len = 100
@@ -559,12 +592,7 @@ class Messages():
         self.messages = []
 
     def add(self, M):
-        """Add a new message
-
-        If the number of messages is larger than max_len,
-        also pops the first message
-
-        """
+        """Add a new message M"""
 
         if (self.save):
             if (len(self.messages) == 0 or self.messages[-1][0] != M):
@@ -577,21 +605,48 @@ class Messages():
 
 
 class Configurations():
-
-    """The current configuration
+    """The current configuration of qpy.
     
-    Contains the messages (see class Messages)
+    Attributes:
+    config_file (str)        The file with configurations
+    messages (Messages)      Messages to the user
+    job_fmt_pattern (str)    A pattern for the check
+    use_colour (bool)        (default = True) If True, check is coloured
+                             (for terminal outputs)
+    colour_scheme (list)     Colours to the check command
+    use_script_copy (bool)   (default = True) If True, save scripts to execute original versions
+    sub_paused (True)        If True, job submission is paused
+    default_attr (list)      A list with the default node attributes
+    and_attr (list)          A list with attributes to be added with "and"
+    or_attr (list)           A list with attributes to be added with "or"
+    sleep_time_sub_ctrl (int)      (default = 1) Time that sub_ctrl is
+                                   paused between each check
+    sleep_time_check_run (int)     (default = 10) Time that check_run is
+                                   paused between each check
+    source_these_files (list)      (default = ['~/.bash_profile'])
+                                   files to be sourced in every job run
+    ssh_p_key_file                 (defaut = None)
+    logger_level (string, int)     (default = 'warning')
+    logger                         A logger to print messages to file
+                                   (global) master_log_file
+    
+    Behaviour:
+    Contains the messages
     and the several variables that can be customized
     by the user.
-
-    """
     
+    See also:
+    Messages
+    """
     def __init__(self, config_file):
-        """Instantiate a new set of configurations
+        """Initialise a new set of configurations
         
-        Reads configurations from the file config_file or initiate them
+        Arguments:
+        config_file (str)    The file with configurations
+        
+        Behaviour:
+        Read configurations from the file config_file or initiate them
         with some appropriate default values and then write on the file
-
         """
         self.config_file = config_file
         self.messages = Messages()
@@ -637,19 +692,23 @@ class Configurations():
 
     def set_key(self, k, v):
         """Set a new configuration value
-
+        
         Arguments:
         k   key
         v   value
-
+        
+        Behaviour:
         Set the value given by v to the configuration
         key k.
-
-        Returns the tuple (status, msg)
-        where status is: 0 - successfull
-                         1 - key problem
-                         2 - value problem
-              msg is a informative message (str)
+        
+        Return:
+        The tuple (status, msg) where status is:
+        0 - successfull
+        1 - key problem
+        2 - value problem
+        msg (str) is a informative message.
+        
+        TODO: change return status to Exception?
         """
         if (k == 'checkFMT' or k == 'job_fmt_pattern'): # job_fmt_pattern: obsolete
             if (v == 'default'):
@@ -909,26 +968,29 @@ class Configurations():
         return msg
 
 
-
 class Job_Id():
     """The job ID.
-
+    
+    Attributes:
+    file (str)       The file where the job ID is stored
+    current (int)    The ID for the next job
+    
+    Behaviour:
     This class initiate a job Id for the jobs and increment
     them. It automatically writes the next ID to be used on a file
-    in case of crash or restart
-
+    in case of crash or restart.
     """
 
     def __init__(self, job_id_file):
-        """Starts a job ID.
-
-        It starts reading it from the file job_id_file or
-        from 1, if an exception os raised when reading the
-        file
-
+        """Initialise the class.
+        
         Arguments:
-        job_id_file  The file name
-
+        job_id_file (str)   The file name
+        
+        Behaviour:
+        It reads self.current from the file job_id_file or
+        from 1, if an exception is raised when reading the
+        file.
         """
         self.file = job_id_file
         self.current = 1
@@ -939,7 +1001,7 @@ class Job_Id():
             self.to_file()
 
     def from_file(self):
-        """Reads the current ID from the file."""
+        """Read the current ID from the file."""
         with open(self.file, 'r') as f:
             self.current = int(f.read())
 

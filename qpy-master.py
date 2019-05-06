@@ -1,6 +1,8 @@
-# qpy-master - set the main driver for qpy
-#
-# 29 May 2015 - Pradipta and Yuri
+"""qpy-master - set the main driver for qpy
+
+History:
+    29 May 2015 - Pradipta and Yuri
+"""
 from multiprocessing.connection import Listener
 from multiprocessing.connection import Client
 import threading
@@ -21,6 +23,7 @@ from qpyCommon import *
 #import logging.handlers
 import traceback
 
+#TODO: improve exception handling
 class MyError(Exception):
     def __init__(self,msg):
         self.message=msg
@@ -55,9 +58,14 @@ if (multiuser_port == None or multiuser_key == None):
 
 
 class JobParser(OptionParser):
-    """An Option Parser that does not exit the program but just raises a ParseError
-
-    NOTE: optparse is depreciated and the overwritten functions are somewhat mentioned in the documentation.
+    """An Option Parser that does not exit the program, but just raises a ParseError
+    
+    NOTE:
+    optparse is deprecated and the overwritten
+    functions are somewhat mentioned in the documentation.
+    
+    TODO:
+    replace it by argparse
     """
     def exit(self,prog='',message=''):
         raise ParseError(message)
@@ -71,28 +79,53 @@ class JobParser(OptionParser):
         raise HelpException(self.format_help())
 
 class JOB(object):
-
-    """The job, submitted by the user that will run on a node
-
-    Contains:
-    ID
-    info
-    n_cores
-    mem
-    node_attr
-
+    """A job submitted by the user.
+    
+    Attributes:
+    ID (int)                A number to identify the job
+    info (list)             A list of strings with the command (in [0]) and
+                            the calling directory (in [1])
+    n_cores (int)           Number of cores used by the job
+    mem (float)             Memory requested for this job
+    node_attr (list)        The node attributes for this job
+    node (str)              The node name where this job is running
+                            It is None for jobs in the queue or undone
+    status (int)            The status of the job. These can be:
+                            JOB_ST_QUEUE
+                            JOB_ST_UNDONE
+                            JOB_ST_RUNNING
+                            JOB_ST_DONE
+                            JOB_ST_KILLED
+    use_script_copy (bool)  If True, copy the script of the job, such that
+                            the user can alter the script and the original
+                            script will be used by qpy
+    cp_script_to_replace    If not None, is a list with two strings, with
+                            the script names to be replaced in the command
+                            (used in conjunction with use_script_copy)
+    rerun (bool)            If True, it means that this job started to run in
+                            a previous instance of qpy-master
+    queue_time (datetime)   When the job was put in queue (that is, submited
+                            by the user)
+    start_time (datetime)   When the job started to run
+    end_time (datetime)     When the job finished (as detected by this program.
+                            It should not be used to check execution time
+                            accurately)
+    runDuration (datetime)  Duration of the job execution
+    
+    Behaviour:
     This class has all the information about individual jobs.
-
     """
 
     __slots__=("ID","info","n_cores","mem","node_attr","node","status","use_script_copy","cp_script_to_replace","re_run","queue_time","start_time","end_time","runDuration","parser")
-    def __init__(self, jobID, job_info, config):
-        """Initiate the class
 
+    def __init__(self, jobID, job_info, config):
+        """Initiate the class.
+        
         Arguments:
-        jobID
-        job_info
-        config
+        jobID (int)                 The job identifier
+        job_info (list)             A list of strings with the command (in [0]) and
+                                    the calling directory (in [1])
+        config (Configurations)     The qpy configurations
         """
         self.ID = jobID
         self.info = job_info
@@ -111,12 +144,13 @@ class JOB(object):
         self.runDuration = None
 
     def run_duration(self):
-        """The running time or the queue time
-
-        If the job is running, returns the current running time.
-        If the job is in the queue, returns for how long it is in queue
-        If the job has been finished, returns self.runDuration or sets it
-        if is still None
+        """Return the running time or the queue time.
+        
+        Behaviour:
+        If the job is running, return the current running time;
+        If the job is in the queue, return for how long it is in queue;
+        If the job has been finished, return self.runDuration and
+        sets it if is still None.
         """
         if (self.status == JOB_ST_QUEUE):
             try:
@@ -137,7 +171,7 @@ class JOB(object):
         return self.runDuration
 
     def __str__(self):
-        """Returns a formatted string with important information."""
+        """Return a formatted string with main information about the job."""
         job_str = str(self.ID) + ' ' + str(self.status) + ' ' + str(self.n_cores) + ' ' + str(self.mem) + ' ' + str(self.use_script_copy) + ' '
         if (self.cp_script_to_replace != None):
             job_str += self.cp_script_to_replace[0] + ' ' + self.cp_script_to_replace[1]
@@ -155,7 +189,35 @@ class JOB(object):
         return job_str
 
     def fmt(self, pattern):
-        """Format the job in a string according to the pattern"""
+        """Format the job in a string according to the pattern.
+        
+        Arguments:
+        pattern (str)     The pattern to be used
+        
+        Behaviour:
+        Return the string pattern, after replacing some key strings
+        as follows:
+        %j    job ID
+        %s    status
+        %c    command
+        %d    directory
+        %a    requested node attributes
+        %N    number of cores
+        %m    requested memory
+        %n    node
+        %A    node or requested node attributes
+        %Q    time the job was put in queue
+        %S    time the job started to run
+        %E    time job finished
+        %R    running time
+        %K    notes
+        
+        Return:
+        A string with the job formatted as described above
+        
+        TODO:
+        Call run_duration only if needed. Currently does all the time.
+        """
         job_str = pattern
         try:
             str_node = str(self.node)
@@ -176,19 +238,21 @@ class JOB(object):
                               ('%c', self.info[0]),
                               ('%d', self.info[1]),
                               ('%a', ' '.join(self.node_attr)),
+                              ('%N', str(self.n_cores)),
+                              ('%m', str(self.mem)),
                               ('%n', str_node),
-                              ('%A', str_node if self.node is not None else ('[' + ' '.join(self.node_attr) + ']')),
+                              ('%A', str_node if (self.node is not None)
+                               else ('[' + ' '.join(self.node_attr) + ']')),
                               ('%Q', str(self.queue_time)),
                               ('%S', str(self.start_time)),
                               ('%E', str(self.end_time)),
-                              ('%R', str(self.run_duration())),
-                              ('%N', str(self.n_cores))
+                              ('%R', str(self.run_duration()))
                               ):
             job_str = job_str.replace(pattern, info)
         return job_str
 
     def set_parser(self):
-        """creates a parser for the flags that can be set for a job"""
+        """Create a parser for the flags that can be set for a job."""
         parser=JobParser()
         parser.add_option("-n","--cores", dest="cores", help="set the number of cores", default="1")
         parser.add_option("-m","--mem","--memory",dest="memory",help="set the memory in GB", default="5")
@@ -227,12 +291,18 @@ class JOB(object):
         self.start_time = datetime.datetime.today()
         self.status = JOB_ST_RUNNING
 
-
     def is_running(self, config):
-        """Returns True if the job is running
+        """Check if the job is running.
         
-        Raises exceptions from the SSH connection if the 
-        connection to the node is not successful
+        Arguments:
+        config (Configurations)    qpy configurations
+        
+        Return:
+        True if job is running, False otherwise.
+        
+        Raise:
+        Exceptions from the SSH connection if the
+        connection to the node is not successful.
         """
         command = 'ps -fu ' + user
         (std_out, std_err) = node_exec(self.node, command, pKey_file = config.ssh_p_key_file)
@@ -243,7 +313,7 @@ class JOB(object):
 
 
     def _scanline(self,line,option_list):
-        """ Parses the lines for qpy directives and options"""
+        """Parse the lines for qpy directives and options."""
         if (re.match( '#QPY', line)):
             option_found=False
             for attr,regexp in option_list:
@@ -267,9 +337,23 @@ class JOB(object):
 
 
     def _parse_file_for_options(self,file_name):
-        """ parses a submission script file for options set in the script
+        """Parse a submission script file for options set in the script.
         
-        @param file_name
+        Arguments::
+        file_name (str)     the file name
+        
+        Behaviour:
+        The options can be set in the script by:
+        
+        #QPY <key>=<value>
+        #QPY <key> = <value>
+        #QPY <key> <value>
+        
+        where the possible key/values are:
+        n_cores     number of cores
+        mem         memory
+        node_attr   nodes attributes
+        cpScript    true or false, for copy script
         """
         option_list=[("n_cores"  , re.compile('n_cores\s*=?\s*(\d*)' ) ),
                      ("mem"      , re.compile('mem\s*=?\s*(\d*)'     ) ),
@@ -284,6 +368,21 @@ class JOB(object):
             pass # Is an executable or file_name = None
 
     def _parse_command_for_options(self, command):
+        """Parse the command for options.
+        
+        Arguments:
+        command (str)   the command to be parsed
+        
+        Behaviour:        
+        Set the options found in the command and return the
+        command free of these options.
+        
+        Return:
+        The command, without the parsed options.
+        
+        Raise:
+        ParseError, if the parse was not successful
+        """
         try:
             options,command = self.parser.parse_args( command.split())
             self.n_cores = int(options.cores)
@@ -295,7 +394,7 @@ class JOB(object):
             if (options.cpScript == None and options.orScript == None):
                 pass
             elif (options.cpScript != None and options.orScript != None):
-                raise ParseError("Please, do not supply both cpScript or orScript")
+                raise ParseError("Please, do not supply both cpScript and orScript")
             elif (options.cpScript != None):
                 self.use_script_copy = True
             else:
@@ -307,9 +406,13 @@ class JOB(object):
             raise ParseError("Please supply only full numbers for memory or number of cores, true or false for cpScript")
         return ' '.join(command)
 
-    
+
     def _expand_script_name(self, file_name):
-        """Expands a filename to its absolute name, UNIX only"""
+        """Expand a filename to its absolute name, UNIX only.
+        
+        TODO:
+        Make it compatible to other systems.
+        """
         if ( file_name[0] == '/'):
             #assuming its the absolute Path
             script_name = file_name
@@ -327,10 +430,8 @@ class JOB(object):
         else:
             raise ParseError('Nonexitstent or ambigous script name')
 
-
     def parse_options(self):
-        """ Parses the input and the submission script for options"""
-
+        """Parse the input and the submission script for options."""
         self.info[0] = self._parse_command_for_options(self.info[0])
         first_arg = self.info[0].split()[0]
         script_name = self._expand_script_name(first_arg)
@@ -338,9 +439,12 @@ class JOB(object):
 
 
     def asked(self, pattern):
-        """
-        Return a boolean, indicating whether this job obbeys the dictionary pattern or not
-        empty pattern means that everthing is required
+        """Return True if the job obbeys the pattern
+        
+        Arguments::
+        pattern (dict)    a dictionary indicating the pattern
+        
+        Empty pattern means that everthing obbeys it.
         """
         req = not ("status" in pattern
                    or "job_id" in pattern
@@ -356,10 +460,9 @@ class JOB(object):
 
 
 class Job_Collection():
-
-    """Stores information about the jobs
+    """Store information about the jobs.
     
-    Contains:
+    Attributes:
     all       a list with all jobs
     queue     a list with jobs in queue
     running   a list with the running jobs
@@ -371,13 +474,12 @@ class Job_Collection():
     """
 
     def __init__(self, config):
-        """Initiate the class
-
+        """Initiate the class.
+        
         Arguments:
-        config   the Configurations
+        config (Configurations)    qpy configurations
         """
         self.config = config
-
         self.all = []
         self.queue = []
         self.running = []
@@ -385,51 +487,64 @@ class Job_Collection():
         self.killed = []
         self.undone = []
         self.Q = deque()
-
         self.lock = threading.RLock()
 
     def Q_pop(self):
+        """Pop job of Q, and return it."""
         with self.lock:
             job = self.Q.pop()
         return job
 
     def Q_appendleft(self, job):
+        """Append 'job' to the left of Q."""
         with self.lock:
             self.Q.appendleft(job)
 
     def append(self, job, to_list):
+        """Append 'job' to the Q."""
         with self.lock:
             to_list.append(job)
 
     def remove(self, job, from_list):
+        """Remove 'job' from the list 'from_list'."""
         with self.lock:
             from_list.remove(job)
 
     def mv(self, job, from_list, to_list):
-        """Move the job from a list to another"""
+        """Move the 'job' from 'from_list' to 'to_list'."""
         with self.lock:
             from_list.remove(job)
             to_list.append(job)
 
     def check(self, pattern, config):
-        """Returns string with information on required jobs, defined by pattern"""
+        """Return string with information on required jobs.
+        
+        Arguments:
+        pattern (dict)            The pattern that job must obbey.
+        config (Configurations)   qpy configurations
+        
+        Return:
+        A string with the jobs in this collection that obbey
+        the pattern
+        
+        See also:
+        JOB.asked
+        """
         asked_jobs = []
         with self.lock:
             for job in self.all:
                 if (job.asked(pattern)):
                     asked_jobs.append( job)
-
         req_jobs = ''
         for job in asked_jobs:
             j_str = job.fmt(config.job_fmt_pattern)
             if (config.use_colour):
                 j_str = termcolour.colored(j_str, config.colour_scheme[job.status])
             req_jobs += j_str
-
         return req_jobs
 
     def write_all_jobs(self):
-        """Write jobs in file."""
+        """Write jobs in file (global) all_jobs_file."""
         with self.lock:
             f = open(all_jobs_file, 'w')
             for job in self.all:
@@ -437,7 +552,7 @@ class Job_Collection():
             f.close()
 
     def multiuser_cur_jobs(self):
-        """Returns a list of the running jobs as MULTIUSER_JOB."""
+        """Return a list of the running jobs as MULTIUSER_JOB."""
         cur_jobs = []
         with self.lock:
             for job in self.running:
@@ -445,7 +560,7 @@ class Job_Collection():
         return cur_jobs
 
     def initialize_old_jobs(self, sub_ctrl):
-        """Initialize jobs from file."""
+        """Initialize jobs from file (global) all_jobs_file."""
         with self.lock:
             if (os.path.isfile(all_jobs_file)):
                 with open(all_jobs_file, 'r') as f:
@@ -480,7 +595,6 @@ class Job_Collection():
                             lspl = line.split()
                             new_wd = lspl[0]
                             new_node_attr = [] if len(lspl) == 1 else lspl[1:]
-
                             new_job = JOB( int(new_id), [new_command, new_wd], self.config)
                             new_job.n_cores = int( new_n_cores)
                             new_job.mem = float( new_mem)
@@ -519,17 +633,19 @@ class Job_Collection():
 
 
     def jump_Q(self, job_list, pos):
-        """Reorganize the queue
-
+        """Reorganize the queue.
+        
         Arguments:
-        job_list  the jobs to be moved
-        pos       their final position
-
-        Puts the jobs in job_list to be submited just before pos
+        job_list    the jobs to be moved
+        pos         their final position
+        
+        Behaviour:
+        Put the jobs in job_list to be submited just before pos
         if pos =  0: put them in the beginning of queue
                  -1: put them in the end of queue
-
-        Returns a string with a informative message.
+        
+        Return:
+        A string with an informative message.
         """
         with self.lock:
             if (pos in job_list):
@@ -590,7 +706,7 @@ class Job_Collection():
 
 
 def analise_multiuser_status(info, check_n, check_u):
-    """Transform the multiuser status message in a more readable way."""
+    """Transform the multiuser status message to a more readable version."""
     lines = info.split('\n')
     do_users = False
     do_nodes = False
@@ -654,46 +770,40 @@ def analise_multiuser_status(info, check_n, check_u):
     return msg
 
 
-
-
-
 class CHECK_RUN(threading.Thread):
-
-    """Checks if the jobs are still running
-
-    Contains:
-    jobs              a Job_Collection
-    multiuser_alive   an Event that is set if the multiuser is alive
-    config            the Configurations
-    finish            an Event that should be set to terminate this Thread
-
-
+    """Check if the jobs are still running.
+    
+    Attributes:
+    jobs (Job_Collection)      All jobs being handled by qpy-master
+    multiuser_alive (Event)    It is set if the multiuser is alive
+    config (Configurations)    qpy configurations
+    finish (Event)             Set this Event to terminate this Thread
+    
+    Behaviour:
     This thread makes regular checks on the running jobs
     to see if they have been finished.
     If so, the job is changed from running to done
     and a message is sent to qpy-multiuser.
-
-    This is done at each config.sleep_time_check_run seconds
-
+    
+    This is done at each config.sleep_time_check_run seconds.
     """
 
     def __init__(self, jobs, multiuser_alive, config):
         """Initiate the class.
 
         Arguments:
-        jobs
-        multiuser_alive
-        config
+        jobs (Job_Collection)       All jobs being handled by qpy-master
+        multiuser_alive (Event)     It is set if the multiuser is alive
+        config (Configurations)     qpy configurations
         """
         self.jobs = jobs
         self.multiuser_alive = multiuser_alive
         self.config = config
-
         threading.Thread.__init__(self)
         self.finish = threading.Event()
 
     def run(self):
-        """Checks if the jobs are running regularlly."""
+        """Check if the jobs are running, see class documentation."""
         while not self.finish.is_set():
             i = 0
             jobs_modification = False
@@ -738,30 +848,32 @@ class CHECK_RUN(threading.Thread):
             sleep (config.sleep_time_check_run)
 
 
-
 class JOBS_KILLER( threading.Thread):
-
-    """Kill the jobs when required
-
-    Contains:
-    jobs              a Job_Collection
-    multiuser_alive   an Event that is set if the multiuser is alive
-    config            the Configurations
-    to_kill           a Queue, that receives the jobs to kill
-
+    """Kill the jobs when required.
+    
+    Attributes:
+    jobs (Job_Collection)      All jobs being handled by qpy-master
+    multiuser_alive (Event)    It is set if the multiuser is alive
+    config (Configurations)    qpy configurations
+    to_kill (Queue)            It receives the jobs to kill
+    
+    Behaviour:
     This thread waits for jobs to be killed, passed
     by the Queue to_kill. These have to be a JOB instance or the
     string "kill". In this later case, the thread is terminated.
 
+    TODO:
+    When we qpy kill all, not all of them are killed, and
+    we have to kill several times
     """
 
     def __init__( self, jobs, multiuser_alive, config):
         """Initiate the class.
 
         Arguments:
-        jobs
-        multiuser_alive
-        config
+        jobs (Job_Collection)      All jobs being handled by qpy-master
+        multiuser_alive (Event)    It is set if the multiuser is alive
+        config (Configurations)    qpy configurations
         """
         self.jobs = jobs
         self.multiuser_alive = multiuser_alive
@@ -771,7 +883,7 @@ class JOBS_KILLER( threading.Thread):
         self.to_kill = Queue()
 
     def run(self):
-        """Kills jobs sent to to_kill."""
+        """Kill jobs, see class documentation."""
         while True:
             job = self.to_kill.get()
 
@@ -810,17 +922,17 @@ class JOBS_KILLER( threading.Thread):
 
 
 class SUB_CTRL(threading.Thread):
-
-    """Controls the job submission
-
-    Contains:
-    jobs                   a Job_Collection
-    multiuser_handler      the multiuser_handler
-    config                 the Configurations
-    finish                 an Event that should be set to terminate this Thread
-    skip_jobs_submission   skips the submission by this amount of cicles
-    submit_jobs            jobs are submitted only if True
-
+    """Control the job submission.
+    
+    Attributes:
+    jobs (Job_Collection)            All jobs being handled by qpy-master
+    muHandler (MULTIUSER_HANDLER)    The multiuser_handler
+    config (Configurations)          qpy configurations
+    finish (Event)                   Set this Event to terminate this Thread
+    skip_jobs_submission (int)       Skip the submission by this amount of cicles
+    submit_jobs (bool)               Jobs are submitted only if True
+    
+    Behaviour:
     This thread looks the jobs.queue and try to submit tje jobs, 
     asking for a node to qpy-multiuser and making the submission if
     a node is given.
@@ -829,37 +941,37 @@ class SUB_CTRL(threading.Thread):
 
     """
 
-    def __init__(self, jobs, multiuser_handler, config):
+    def __init__(self, jobs, muHandler, config):
         """Initiate the class.
-
+        
         Arguments:
-        jobs
-        multiuser_handler
-        config
+        jobs (Job_Collection)            All jobs being handled by qpy-master
+        muHandler (MULTIUSER_HANDLER)    The multiuser_handler
+        config (Configurations)          qpy configurations
         """
         self.jobs = jobs
-        self.multiuser_handler = multiuser_handler
+        self.muHandler = muHandler
         self.config = config
-
+        
         threading.Thread.__init__(self)
         self.finish = threading.Event()
-
+        
         self.skip_job_sub = 0
         self.submit_jobs = True
-            
+
     def run(self):
-        """Submits the jobs."""
+        """Submit the jobs, see class documentation."""
         n_time_multiuser = 0
         self.jobs.initialize_old_jobs(self)
         jobs_modification = False
-        if not(self.multiuser_handler.multiuser_alive.is_set()):
+        if not(self.mh.multiuser_alive.is_set()):
             self.skip_job_sub = 30
             
         while not self.finish.is_set():
 
-            if (not(self.multiuser_handler.multiuser_alive.is_set()) and self.skip_job_sub == 0):
-                self.multiuser_handler.add_to_multiuser()
-                if not(self.multiuser_handler.multiuser_alive.is_set()):
+            if (not(self.muHandler.multiuser_alive.is_set()) and self.skip_job_sub == 0):
+                self.muHandler.add_to_multiuser()
+                if not(self.muHandler.multiuser_alive.is_set()):
                     self.skip_job_sub = 30
 
             if (self.submit_jobs and self.skip_job_sub == 0):
@@ -876,12 +988,12 @@ class SUB_CTRL(threading.Thread):
                                                      (user, next_jobID, next_Ncores, next_mem, len(self.jobs.queue), next_node_attr)),
                                                     multiuser_address, multiuser_port, multiuser_key)
                     except:
-                        self.multiuser_handler.multiuser_alive.clear()
+                        self.muHandler.multiuser_alive.clear()
                         self.config.messages.add('SUB_CTRL: Exception in message transfer: ' + str(sys.exc_info()[0]) + '; ' + str(sys.exc_info()[1]))
                         self.config.logger.error('Exception in SUB_CTRL message transfer', exc_info=True)
                         self.skip_job_sub = 30
                     else:
-                        self.multiuser_handler.multiuser_alive.set()
+                        self.muHandler.multiuser_alive.set()
                         self.config.messages.add('SUB_CTRL: Message from multiuser: ' + str(msg_back))
                         if (msg_back[0] == 0):
                             avail_node = msg_back[1]
@@ -918,18 +1030,19 @@ class SUB_CTRL(threading.Thread):
 
 
 class MULTIUSER_HANDLER( threading.Thread):
-
-    """Handles the messages sent from qpy-multiuser
-
-    Contains:
-    jobs              a Job_Collection
-    multiuser_alive   an Event that is set if the multiuser is alive
-    config            the Configurations
-    Listener_master   a Listener, to receive messages from qpy-multiuser
-    port              the port of the above connection (we share it with multiuser)
-    conn_key          the key of the above connection (we share it with multiuser)
+    """Handle the messages sent from qpy-multiuser.
     
-
+    Attributes:
+    jobs (Job_Collection)        All jobs being handled by qpy-master
+    multiuser_alive (Event)      It is set if the multiuser is alive
+    config (Configurations)      qpy configurations
+    Listener_master (Listener)   To receive messages from qpy-multiuser
+    port                         The port of the above connection
+                                   (we share it with multiuser)
+    conn_key                     The key of the above connection
+                                   (we share it with multiuser)
+    
+    Behaviour:
     This Thread waits messages from the qpy-multiuser.
     When one comes, it analyses it, does whatever it is needed
     and send a message back.
@@ -946,20 +1059,18 @@ class MULTIUSER_HANDLER( threading.Thread):
 
     def __init__(self, jobs, multiuser_alive, config):
         """Initiates the class
-
-        Arguments:
-        jobs
-        multiuser_alive
-        config
-
-        It opens a new connection and the corresponding Listener.
+        
+        Behaviour:
+        Opens a new connection and the corresponding Listener.
         It also tells qpy-multiuser about the present user,
         sharing the port and the key of the above connection.
-
+        
+        Arguments:
+        jobs (Job_Collection)        All jobs being handled by qpy-master
+        multiuser_alive (Event)      It is set if the multiuser is alive
+        config (Configurations)      qpy configurations
         """
-
         threading.Thread.__init__(self)
-
         self.jobs = jobs
         self.multiuser_alive = multiuser_alive
         self.config = config
@@ -970,7 +1081,7 @@ class MULTIUSER_HANDLER( threading.Thread):
         self.add_to_multiuser()
 
     def run( self):
-        """Waits the messages from qpy-multiuser."""
+        """Wait messages from qpy-multiuser, see class documentation."""
         while True:
             client_master = self.Listener_master.accept()
             (msg_type, arguments) = client_master.recv()
@@ -982,7 +1093,6 @@ class MULTIUSER_HANDLER( threading.Thread):
                 multiuser_cur_jobs = self.jobs.multiuser_cur_jobs()
                 client_master.send(multiuser_cur_jobs)
                 self.multiuser_alive.set()
-
 
             # Finishi this thread
             # arguments = ()
@@ -996,7 +1106,7 @@ class MULTIUSER_HANDLER( threading.Thread):
 
 
     def add_to_multiuser(self):
-
+        """Contact qpy-multiuser to tell connection details and jobs."""
         multiuser_cur_jobs = self.jobs.multiuser_cur_jobs()
         try:
             msg_back = message_transfer((MULTIUSER_USER,
@@ -1015,16 +1125,15 @@ class MULTIUSER_HANDLER( threading.Thread):
             self.config.messages.add('MULTIUSER_HANDLER: Message from multiuser: ' + str(msg_back))
 
 
-
-
 def handle_qpy(jobs, sub_ctrl, jobs_killer, config):
-    """Handles the user messages sent from qpy
+    """Handle the user messages sent from qpy.
 
     Arguments:
-    sub_ctrl      a SUB_CTRL
-    jobs_killer   a JOBS_KILLER
-    config        the Configurations
+    sub_ctrl (SUB_CTRL)         The submission control
+    jobs_killer (JOBS_KILLER)   The jobs killer
+    config (Configurations)     qpy configurations
 
+    Behaviour:
     It opens a new connection, share the port and key with qpy
     by te corresponding files and waits for messages from qpy.
     When a message is received, it analyzes it, does whatever
@@ -1038,7 +1147,6 @@ def handle_qpy(jobs, sub_ctrl, jobs_killer, config):
        JOBTYPE_FINISH  - kill the master                        (finish)
        JOBTYPE_CONFIG  - show config                            (config)
        JOBTYPE_CLEAN   - clean finished jobs                    (clean)
-
     
     """
     address = read_address_file(master_conn_file)
@@ -1316,7 +1424,6 @@ try:
 except:
     config.logger.error('Exception at handle_qpy', exc_info=True)
 
-    
 # Finishing qpy-master
 config.logger.info("Finishing qpy-master")
 sub_ctrl.finish.set()
