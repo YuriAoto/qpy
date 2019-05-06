@@ -1,7 +1,6 @@
 """Common tasks and variables for qpy
 
 """
-
 from multiprocessing import connection
 import termcolor.termcolor as termcolour
 import threading
@@ -29,20 +28,36 @@ TEST_RUN = os.path.isfile( QPY_SOURCE_DIR + 'test_dir')
 
 
 # Important files and paths
+#
+# Do we have to separate multiuser and user's variables?
+qpy_or_qpymaster =  sys.argv[0].split('/')[-1] == 'qpy' or sys.argv[0].split('/')[-1] == 'qpy-master.py'
 home_dir = os.environ['HOME']
-user = os.environ['USER']
-if (TEST_RUN):
-    qpy_dir = os.path.expanduser( '~/.qpy-test/')
+system_user = os.environ['USER']
+if TEST_RUN:
+    
+    if qpy_or_qpymaster:
+        try:
+            user = os.environ['QPY_TEST_USER']
+        except KeyError:
+            sys.exit('Please, set the environmental variable QPY_TEST_USER.')
+        qpy_dir = os.path.expanduser( '~/.qpy-test_'+user+'/')
+    qpy_multiuser_dir = os.path.expanduser( '~/.qpy-multiuser-test/')
 else:
+    user = os.environ['USER']
     qpy_dir = os.path.expanduser( '~/.qpy/')
-scripts_dir = qpy_dir + '/scripts/'
-notes_dir = qpy_dir + '/notes/'
-jobID_file = qpy_dir + '/next_jobID'
-all_jobs_file = qpy_dir + '/all_jobs'
-config_file = qpy_dir + '/config'
-multiuser_conn_file = qpy_dir + 'multiuser_connection'
-master_conn_file = qpy_dir + 'master_connection'
-master_log_file = qpy_dir + 'master.log'
+    qpy_multiuser_dir = os.path.expanduser( '~/.qpy-multiuser/')
+
+if qpy_or_qpymaster:
+    scripts_dir = qpy_dir + '/scripts/'
+    notes_dir = qpy_dir + '/notes/'
+    jobID_file = qpy_dir + '/next_jobID'
+    all_jobs_file = qpy_dir + '/all_jobs'
+    config_file = qpy_dir + '/config'
+    multiuser_conn_file = qpy_dir + 'multiuser_connection'
+    master_conn_file = qpy_dir + 'master_connection'
+    master_log_file = qpy_dir + 'master.log'
+    tutorial_file = QPY_SOURCE_DIR + '/doc/tutorial'
+    qpy_master_command = 'python ' + QPY_SOURCE_DIR + 'qpy-master.py'
 
 
 
@@ -662,8 +677,8 @@ class Configurations():
         self.sleep_time_check_run = 10
         self.source_these_files = ['~/.bash_profile']
         self.ssh_p_key_file = None
-        self.logger_level = 'warning'
-        self.logger = configure_root_logger(master_log_file, logging.WARNING)
+        self.logger_level = 'debug' #'warning'
+        self.logger = configure_root_logger(master_log_file, logging.DEBUG)
 
         if (os.path.isfile(self.config_file)):
             f = open(self.config_file, 'r')

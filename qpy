@@ -11,18 +11,6 @@ import re
 import threading
 from qpyCommon import *
 
-home_dir = os.environ['HOME']
-user = os.environ['USER']
-if (TEST_RUN):
-    qpy_dir = os.path.expanduser( '~/.qpy-test/')
-else:
-    qpy_dir = os.path.expanduser( '~/.qpy/')
-
-master_conn_file = qpy_dir + 'master_connection'
-tutorial_file = QPY_SOURCE_DIR + '/doc/tutorial'
-
-qpy_master_command = 'python ' + QPY_SOURCE_DIR + 'qpy-master.py'
-
 # '--options' are to be called only by qpy-master, not by the users
 if (len( sys.argv) > 1):
     if (sys.argv[1] == '--jobkill'):
@@ -205,7 +193,7 @@ address, port, conn_key = read_conn_files(master_conn_file)
 
 if (port == None or conn_key == None):
     if (start_qpy_master):
-        start_master_driver(user, address, qpy_master_command)
+        start_master_driver(system_user, address, qpy_master_command)
     else:
         sys.exit('Problem to get the connection information. Are you sure that qpy-master is running?')
 
@@ -219,7 +207,7 @@ except:
     if (start_qpy_master):
         os.remove(master_conn_file+'_port')
         os.remove(master_conn_file+'_conn_key')
-        start_master_driver(user, address, qpy_master_command)
+        start_master_driver(system_user, address, qpy_master_command)
     sys.exit('Time for connection exceeded. Are you sure that qpy-master is running?')
 
 ansi_escape = re.compile(r'\x1b[^m]*m')
@@ -228,4 +216,4 @@ if (not(sys.stdout.isatty())):
 sys.stdout.write(master_msg)
 
 if (start_qpy_master):
-    start_master_driver(user, address, qpy_master_command)
+    start_master_driver(system_user, address, qpy_master_command)

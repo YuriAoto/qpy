@@ -304,7 +304,7 @@ class JOB(object):
         Exceptions from the SSH connection if the
         connection to the node is not successful.
         """
-        command = 'ps -fu ' + user
+        command = 'ps -fu ' + system_user
         (std_out, std_err) = node_exec(self.node, command, pKey_file = config.ssh_p_key_file)
         re_res = re.search('export QPY_JOB_ID=' + str( self.ID) + ';', std_out)
         if (re_res):
@@ -964,7 +964,7 @@ class SUB_CTRL(threading.Thread):
         n_time_multiuser = 0
         self.jobs.initialize_old_jobs(self)
         jobs_modification = False
-        if not(self.mh.multiuser_alive.is_set()):
+        if not(self.muHandler.multiuser_alive.is_set()):
             self.skip_job_sub = 30
             
         while not self.finish.is_set():

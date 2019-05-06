@@ -9,16 +9,14 @@ import re
 import threading
 from qpyCommon import *
 
-
-if (TEST_RUN):
-    qpy_multiuser_dir = os.path.expanduser( '~/.qpy-multiuser-test/')
-else:
-    qpy_multiuser_dir = os.path.expanduser( '~/.qpy-multiuser/')
-
+## Put somewhere else?
 multiuser_conn_file = qpy_multiuser_dir + 'multiuser_connection'
 multiuser_address, multiuser_port, multiuser_key = read_conn_files(multiuser_conn_file)
-qpy_multiuser_command = [ 'python', QPY_SOURCE_DIR + 'qpy-multiuser.py', '>', '/dev/null', '2>', '/dev/null']
-tutorial_file = QPY_SOURCE_DIR + '/doc/adm_tutorial'
+qpy_multiuser_command = ['python',
+                         QPY_SOURCE_DIR + 'qpy-multiuser.py',
+                         '>', '/dev/null',
+                         '2>', '/dev/null']
+adm_tutorial_file = QPY_SOURCE_DIR + '/doc/adm_tutorial'
 
 try:
     option = MULTIUSER_KEYWORDS[sys.argv[1]][0]
@@ -98,14 +96,14 @@ elif (option == MULTIUSER_TUTORIAL):
     elif (pattern):
         pattern = '--pattern "' + pattern + '"'
 
-    command = 'less '  + pattern + ' ' + tutorial_file
+    command = 'less '  + pattern + ' ' + adm_tutorial_file
     try:
         subprocess.call( command, shell = True)
     except:
         sys.exit( 'Error when loading the tutorial.')
     exit()
 
-    
+
 try:
     msg_back = message_transfer((option, arguments),
                                 multiuser_address, multiuser_port, multiuser_key,
