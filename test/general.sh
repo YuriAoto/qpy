@@ -11,7 +11,7 @@ QPY_U1_DIR="${HOME}/.qpy-test_$QPY_U1"
 QPY_U2_DIR="${HOME}/.qpy-test_$QPY_U2"
 QPY_U3_DIR="${HOME}/.qpy-test_$QPY_U3"
 
-testHeader test_1 General test, only with localhost
+testHeader general General test, only localhost and three users, with the basic commands
 
 checkIsTestRunning
 makeTestDir
@@ -28,15 +28,13 @@ sleep 15
 print
 testqpy_multiuser status
 print
-#finish_test
-#exit
 
 print Creating three users...
 for d in ${QPY_U1_DIR} ${QPY_U2_DIR} ${QPY_U3_DIR}
 do
     if [[ -d ${d} ]]
     then
-	print Found directory ${d}. Removing it
+	print Found directory ${d}. Removing it...
 	rm -rf ${d}
     fi
 
@@ -47,11 +45,14 @@ do
 done
 
 testqpy ${QPY_U1} restart
+sleep 2
 testqpy ${QPY_U2} restart
+sleep 2
 testqpy ${QPY_U3} restart
+sleep 2
 
 print Users have been created. Waiting a cicle...
-sleep 10
+sleep 5
 
 testqpy_multiuser status
 testqpy_multiuser variables
@@ -60,7 +61,16 @@ print Testing basic qpy commands for user $QPY_U1
 print
 testqpy $QPY_U1 config saveMessages true
 testqpy $QPY_U1 status
-testqpy $QPY_U1 sub -m 0.5 sleep 20
+
+testqpy $QPY_U1 sub -m 0.01 date
+testqpy $QPY_U1 check
+print Waiting a bit...
+sleep 3
+testqpy $QPY_U1 check
+runUser $QPY_U1 cat job_1.out
+runUser $QPY_U1 cat job_1.err
+
+testqpy $QPY_U1 sub -m 0.01 sleep 20
 testqpy $QPY_U1 check
 
 for i in 1 2 3
@@ -75,7 +85,7 @@ print
 
 for i in 1 2 3 4 5
 do
-    testqpy $QPY_U1 sub -m 0.5 sleep 20
+    testqpy $QPY_U1 sub -m 0.01 sleep 20
 done
 
 for i in 1 2 3 4
@@ -91,8 +101,8 @@ testqpy $QPY_U1 check
 
 for i in 1 2 3 4 5
 do
-    testqpy $QPY_U1 sub -m 0.5 sleep 20
-    testqpy $QPY_U2 sub -m 0.5 sleep 20
+    testqpy $QPY_U1 sub -m 0.01 sleep 20
+    testqpy $QPY_U2 sub -m 0.01 sleep 20
 done
 
 for i in 1 2 3 4 5 6

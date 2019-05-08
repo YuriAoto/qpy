@@ -68,6 +68,13 @@ function checkIsTestRunning(){
 
 
 # Wrapper to qpy functions
+function runUser(){
+    user=$1; shift
+    printU $user $@
+    $@
+}
+
+
 function testqpy_multiuser(){
     printMU qpy-multiuser $@
     $exe_QPY_MU $@
@@ -78,7 +85,15 @@ function testqpy(){
     qpy_option=$1; shift
     export QPY_TEST_USER=${user};
     printU $user qpy $qpy_option $@
-    $exe_QPY $qpy_option $@
+    #$exe_QPY $qpy_option $@
+
+    ## Why this does not work with qpy restart?
+    ## It seems that the output from qpy-master is still connected
+    ## to the pipe
+    #stdbuf -oL -eL $exe_QPY $qpy_option $@ 2> /dev/stdout | tee tmp_abc
+    #echo '---'
+    #cat tmp_abc
+
 }
 
 function finish_test(){
