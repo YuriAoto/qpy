@@ -10,25 +10,25 @@ class TestGetPlural(TestCase):
     def test_zero(self):
         inp1,inp2=("job", "jobs"), 0
         out=("jobs", "No")
-        self.assertEqual(get_plural(inp1,inp2),out)
+        self.assertEqual(qpyutil.get_plural(inp1,inp2),out)
     def test_one(self):
         inp1,inp2=("job", "jobs"), 1
         out=("job", "1")
-        self.assertEqual(get_plural(inp1,inp2),out)
+        self.assertEqual(qpyutil.get_plural(inp1,inp2),out)
     def test_many(self):
         inp1,inp2=("job", "jobs"), 16
         out=("jobs", "16")
-        self.assertEqual(get_plural(inp1,inp2),out)
+        self.assertEqual(qpyutil.get_plural(inp1,inp2),out)
     def test_no(self):
         inp1,inp2=("job", "jobs"), []
         out=("jobs", "No")
-        self.assertEqual(get_plural(inp1,inp2),out)
+        self.assertEqual(qpyutil.get_plural(inp1,inp2),out)
     def test_single(self):
         inp1,inp2=("job", "jobs"), ["running"]
         out=("job", "running")
-        self.assertEqual(get_plural(inp1,inp2),out)
+        self.assertEqual(qpyutil.get_plural(inp1,inp2),out)
     def test_multiple(self):
         inp1,inp2=("job", "jobs"), ["queued", "running", "killed"]
         out=("jobs", "queued, running and killed")
-        self.assertEqual(get_plural(inp1,inp2),out)
+        self.assertEqual(qpyutil.get_plural(inp1,inp2),out)
 

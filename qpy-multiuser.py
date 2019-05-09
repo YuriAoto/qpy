@@ -14,27 +14,15 @@ from collections import namedtuple
 import math
 from optparse import OptionParser
 import threading
-from qpyCommon import *
-import logging
-import logging.handlers
 import traceback
 
-if (TEST_RUN):
-    qpy_multiuser_dir = os.path.expanduser( '~/.qpy-multiuser-test/')
-else:
-    qpy_multiuser_dir = os.path.expanduser( '~/.qpy-multiuser/')
+import qpy_system as qpysys
+import qpy_constants as qpyconst
+import qpy_communication as qpycomm
+import qpy_logging as qpylog
+from qpy_job import MultiuserJob
 
-if (not( os.path.isdir( qpy_multiuser_dir))):
-    os.makedirs( qpy_multiuser_dir)
-os.chmod( qpy_multiuser_dir, 0700)
-
-nodes_file = qpy_multiuser_dir + 'nodes'
-allowed_users_file = qpy_multiuser_dir + 'allowed_users'
-cores_distribution_file = qpy_multiuser_dir + 'distribution_rules'
-user_conn_file = qpy_multiuser_dir + 'connection_'
-multiuser_conn_file = qpy_multiuser_dir + 'multiuser_connection'
-multiuser_log_file = qpy_multiuser_dir + 'multiuser.log'
-
+## TODO: no global variables
 nodes_list = []
 nodes = {}
 users = {}
@@ -48,8 +36,13 @@ nodes_check_lock = threading.RLock()
 nodes_check_alive = True
 nodes_check_time = 300
 
+if (not(os.path.isdir(qpysys.qpy_multiuser_dir))):
+    os.makedirs(qpysys.qpy_multiuserdir)
+os.chmod(qpysys.qpy_multiuser_dir, 0700)
 
-logger = configure_root_logger(multiuser_log_file, logging.WARNING)
+
+logger = qpylog.configure_logger(qpysys.multiuser_log_file,
+                                 qpylog.logging.WARNING)
 
 class NODE():
     """A node from the qpy-multiuser point of view.
@@ -78,7 +71,7 @@ class NODE():
         self.name = name
         self.max_cores = max_cores
 
-        self.messages = Messages()
+        self.messages = qpylog.Messages()
         self.messages.save = True
 
         self.is_up = False
@@ -112,7 +105,8 @@ class NODE():
 
         command = "top -b -n1"# | sed -n '8,50p'"
         try:
-            (std_out, std_err) = node_exec(self.name, command)
+            (std_out, std_err) = qpycomm.node_exec(self.name,
+                                                   command)
             # dumb: should be improved
             std_out = '\n'.join(std_out.split('\n')[8:max(len(std_out),50)])
         except:
@@ -133,7 +127,8 @@ class NODE():
 
         command = "free -g"
         try:
-            (std_out, std_err) = node_exec(self.name, command)
+            (std_out, std_err) = qpycomm.node_exec(self.name,
+                                                   command)
         except:
             logger.exception("finding the the free memory failed for node: %s",self.name)
             self.messages.add('memory: Exception: ' + repr(sys.exc_info()[0]))
@@ -227,7 +222,7 @@ class USER():
         self.n_queue = 0
         self.cur_jobs = []
         
-        self.messages = Messages()
+        self.messages = qpylog.Messages()
         self.messages.save = True
 
 
@@ -256,7 +251,7 @@ class USER():
         """Add a new job to a specific node.
         
         Arguments:
-        job     The job, as an instance of MULTIUSER_JOB
+        job     The job, as an instance of MultiuserJob
         
         Return 0
         """
@@ -374,7 +369,7 @@ class USER():
             if (best_node == None):
                 return 1
             
-            new_job = MULTIUSER_JOB( self.name, jobID, mem, num_cores, best_node)
+            new_job = MultiuserJob( self.name, jobID, mem, num_cores, best_node)
             self.add_job( new_job)
             
             return best_node
@@ -394,17 +389,21 @@ def load_users():
     """
     global users
     allowed_users = []
-    f = open( allowed_users_file, 'r')
+    f = open(qpysys.allowed_users_file, 'r')
     for line in f:
         allowed_users.append( line.strip())
     f.close()
     for user in allowed_users:
-        address, port, conn_key = read_conn_files(user_conn_file + user)
+        (address,
+         port,
+         conn_key) = qpycomm.read_conn_files(qpysys.user_conn_file + user)
         if (port != None and conn_key != None):
             new_user = USER(user, address, port, conn_key)
             try:
-                cur_jobs = message_transfer((FROM_MULTI_CUR_JOBS, ()),
-                                            new_user.address, new_user.port, new_user.conn_key)
+                cur_jobs = qpycomm.message_transfer((FROM_MULTI_CUR_JOBS, ()),
+                                                    new_user.address,
+                                                    new_user.port,
+                                                    new_user.conn_key)
             except:
                 pass
             else:
@@ -436,7 +435,7 @@ def load_nodes():
     global N_cores
     global nodes_list
     try:
-        f = open( nodes_file, 'r')
+        f = open(qpysys.nodes_file, 'r')
     except:
         return -1
     nodes_in_file = []
@@ -535,7 +534,7 @@ def distribute_cores():
     -3   if exceed the number of cores
     """
     try:
-        f = open( cores_distribution_file, 'r')
+        f = open(qpysys.cores_distribution_file, 'r')
     except:
         return -1
     line = f.readline()
@@ -643,8 +642,8 @@ def handle_reload_nodes(args):
     status = load_nodes()
     return status,{
         0  : 'Nodes loaded.',
-        -1 : 'Nodes loading failed. Problem when openning {0}.'.format( nodes_file),
-        -2 : 'Nodes loading failed. Check {0}.'.format( nodes_file),
+        -1 : 'Nodes loading failed. Problem when openning {0}.'.format(qpysys.nodes_file),
+        -2 : 'Nodes loading failed. Check {0}.'.format(qpysys.nodes_file),
     }.get(status, 'Nodes loading failed.')
 
 def handle_redistribute_cores(args):
@@ -656,8 +655,8 @@ def handle_redistribute_cores(args):
     status = distribute_cores()
     return status,{
         0 : 'Cores distributed.',
-        -1: 'Cores distribution failed. Problem when openning {0}.'.format(cores_distribution_file),
-        -2: 'Cores distribution failed. Check {0}.'.format(cores_distribution_file),
+        -1: 'Cores distribution failed. Problem when openning {0}.'.format(qpysys.cores_distribution_file),
+        -2: 'Cores distribution failed. Check {0}.'.format(qpysys.cores_distribution_file),
         -3: 'Cores distribution failed. Not enough cores.',
     }.get(status, 'Cores distribution failed.')
 
@@ -806,7 +805,7 @@ def handle_sync_user_info(args):
             return ( 0,'User exists' ) if same_list else (1, 'User exists but with a different job list.')
         else:
             try:
-                with open(allowed_users_file,'r') as f:
+                with open(qpysys.allowed_users_file,'r') as f:
                     allowed_users =  list(line.strip() for line in f)
             except:
                 allowed_users = []
@@ -821,10 +820,10 @@ def handle_sync_user_info(args):
                 return 2,'Not allowed user'
     finally:
         for user in users:
-            write_conn_files(user_conn_file+user,
-                             users[user].address,
-                             users[user].port,
-                             users[user].conn_key)
+            qpycomm.write_conn_files(qpysys.user_conn_file + user,
+                                     users[user].address,
+                                     users[user].port,
+                                     users[user].conn_key)
 
 
 def handle_add_job(args):
@@ -903,15 +902,23 @@ def handle_client():
     global N_cores, N_used_cores
     global N_min_cores, N_used_min_cores
 
-    multiuser_address, multiuser_port, multiuser_key = read_conn_files(multiuser_conn_file)
+    (multiuser_address,
+     multiuser_port,
+     multiuser_key) = qpycomm.read_conn_files(qpysys.multiuser_conn_file)
 
     try:
-        conn, multiuser_port, multiuser_key = establish_Listener_connection(multiuser_address,
-                                                                            PORT_MIN_MULTI, PORT_MAX_MULTI,
-                                                                            port=multiuser_port,
-                                                                            conn_key=multiuser_key)
+        (conn,
+         multiuser_port,
+         multiuser_key) = qpycomm.establish_Listener_connection(multiuser_address,
+                                                                qpyconst.PORT_MIN_MULTI,
+                                                                qpyconst.PORT_MAX_MULTI,
+                                                                port = multiuser_port,
+                                                                conn_key = multiuser_key)
 
-        write_conn_files(multiuser_conn_file, multiuser_address, multiuser_port, multiuser_key)
+        qpycomm.write_conn_files(qpysys.multiuser_conn_file,
+                                 multiuser_address,
+                                 multiuser_port,
+                                 multiuser_key)
 
     except:
         logger.exception("Error when establishing connection. Is there already a qpy-multiuser instance?")
@@ -931,35 +938,35 @@ def handle_client():
         try:
             # Reload the nodes
             # arguments = ()
-            if (action_type == MULTIUSER_NODES):
+            if (action_type == qpyconst.MULTIUSER_NODES):
                 status,msg = handle_reload_nodes(arguments)
 
 
             # Redistribute cores
             # arguments = ()
-            elif (action_type == MULTIUSER_DISTRIBUTE):
+            elif (action_type == qpyconst.MULTIUSER_DISTRIBUTE):
                 status,msg = handle_redistribute_cores(arguments)
 
 
             # Show important variables
             # arguments = ()
-            elif (action_type == MULTIUSER_SHOW_VARIABLES):
+            elif (action_type == qpyconst.MULTIUSER_SHOW_VARIABLES):
                 status,msg = handle_show_variables(arguments)
 
             # Show status
             # arguments = () or (user_name)
-            elif (action_type == MULTIUSER_STATUS):
+            elif (action_type == qpyconst.MULTIUSER_STATUS):
                 status,msg = handle_show_status(arguments)
 
 
             # Start saving messages
             # arguments = (save_messages)
-            elif (action_type == MULTIUSER_SAVE_MESSAGES):
+            elif (action_type == qpyconst.MULTIUSER_SAVE_MESSAGES):
                 status,msg = handle_save_messages(arguments)
 
             # Finish qpy-multiuser
             # arguments = ()
-            elif (action_type == MULTIUSER_FINISH):
+            elif (action_type == qpyconst.MULTIUSER_FINISH):
                 client.send( (0, 'Finishing qpy-multiuser.'))
                 client.close()
                 break
@@ -967,18 +974,18 @@ def handle_client():
 
             # Add a user or sync user info
             # arguments = (user_name, port, conn_key, cur_jobs)
-            elif (action_type == MULTIUSER_USER):
+            elif (action_type == qpyconst.MULTIUSER_USER):
                 status, msg = handle_sync_user_info(arguments)
 
 
             # Add a job
             # arguments = (user_name, jobID, n_cores, mem, queue_size)
-            elif (action_type == MULTIUSER_REQ_CORE):
+            elif (action_type == qpyconst.MULTIUSER_REQ_CORE):
                 status, msg = handle_add_job(arguments)
 
             # Remove a job
             # arguments = (user_name, jobID, queue_size)
-            elif (action_type == MULTIUSER_REMOVE_JOB):
+            elif (action_type == qpyconst.MULTIUSER_REMOVE_JOB):
                 status, msg = handle_remove_job(arguments)
             # Unknown option
             else:
@@ -1059,7 +1066,7 @@ check_nodes.start()
 try:
     handle_client()
 except:
-    logging.exception("Exception at handle_client")
+    qpylog.logging.exception("Exception at handle_client")
 
 logger.info('Finishing main thread of qpy-multiuser')
 check_nodes.finish.set()

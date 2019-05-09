@@ -115,5 +115,10 @@ do
     testqpy_multiuser status
 done
 
+showMUlog
+showUlog  $QPY_U1
+showUlog  $QPY_U2
+showUlog  $QPY_U3
+
 finish_test $QPY_U1 $QPY_U2 $QPY_U3
 

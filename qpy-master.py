@@ -18,10 +18,14 @@ import datetime
 from shutil import copyfile
 import termcolor.termcolor as termcolour
 from optparse import OptionParser,OptionError
-from qpyCommon import *
-#import logging
-#import logging.handlers
 import traceback
+
+import  qpy_system as qpysys
+import qpy_constants as qpyconst
+import qpy_useful_cosmetics as qpyutil
+import qpy_communication as qpycomm
+from qpy_configurations import Configurations
+from qpy_job import JobId, MultiuserJob
 
 #TODO: improve exception handling
 class MyError(Exception):
@@ -36,23 +40,25 @@ class HelpException(MyError):
 
 
 
-if (not(os.path.isdir(qpy_dir))):
-    os.makedirs(qpy_dir)
-os.chmod(qpy_dir, 0700)
+if (not(os.path.isdir(qpysys.qpy_dir))):
+    os.makedirs(qpysys.qpy_dir)
+os.chmod(qpysys.qpy_dir, 0700)
 
-if (not(os.path.isdir(scripts_dir))):
-    os.makedirs(scripts_dir)
+if (not(os.path.isdir(qpysys.scripts_dir))):
+    os.makedirs(qpysys.scripts_dir)
 
-if (not(os.path.isdir(notes_dir))):
-    os.makedirs(notes_dir)
+if (not(os.path.isdir(qpysys.notes_dir))):
+    os.makedirs(qpysys.notes_dir)
 
-if (os.path.isfile(master_conn_file+'_port')):
+if (os.path.isfile(qpysys.master_conn_file+'_port')):
     sys.exit('A connection file was found. Is there a qpy-master instance running?')
 
-if (os.path.isfile(master_conn_file+'_conn_key')):
+if (os.path.isfile(qpysys.master_conn_file+'_conn_key')):
     sys.exit('A connection file was found. Is there a qpy-master instance running?')
 
-multiuser_address, multiuser_port, multiuser_key = read_conn_files(multiuser_conn_file)
+(multiuser_address,
+ multiuser_port,
+ multiuser_key) = qpycomm.read_conn_files(qpysys.multiuser_conn_file)
 if (multiuser_port == None or multiuser_key == None):
     sys.exit("Information for multiuser connection could not be obtained. Contact your administrator.")
 
@@ -91,11 +97,11 @@ class JOB(object):
     node (str)              The node name where this job is running
                             It is None for jobs in the queue or undone
     status (int)            The status of the job. These can be:
-                            JOB_ST_QUEUE
-                            JOB_ST_UNDONE
-                            JOB_ST_RUNNING
-                            JOB_ST_DONE
-                            JOB_ST_KILLED
+                            qpyconst.JOB_ST_QUEUE
+                            qpyconst.JOB_ST_UNDONE
+                            qpyconst.JOB_ST_RUNNING
+                            qpyconst.JOB_ST_DONE
+                            qpyconst.JOB_ST_KILLED
     use_script_copy (bool)  If True, copy the script of the job, such that
                             the user can alter the script and the original
                             script will be used by qpy
@@ -133,7 +139,7 @@ class JOB(object):
         self.mem = 5.0
         self.node_attr = []
         self.node = None
-        self.status = JOB_ST_QUEUE
+        self.status = qpyconst.JOB_ST_QUEUE
         self.use_script_copy = config.use_script_copy
         self.cp_script_to_replace = None
         self.re_run = False
@@ -152,12 +158,12 @@ class JOB(object):
         If the job has been finished, return self.runDuration and
         sets it if is still None.
         """
-        if (self.status == JOB_ST_QUEUE):
+        if (self.status == qpyconst.JOB_ST_QUEUE):
             try:
                 return datetime.datetime.today() - self.queue_time
             except:
                 return None
-        if (self.status == JOB_ST_RUNNING):
+        if (self.status == qpyconst.JOB_ST_RUNNING):
             try:
                 return datetime.datetime.today() - self.start_time
             except:
@@ -225,8 +231,8 @@ class JOB(object):
             str_node = 'None'
 
         if ('%K' in job_str):
-            if (os.path.isfile(notes_dir + 'notes.' + str(self.ID))):
-                f = open(      notes_dir + 'notes.' + str(self.ID), 'r')
+            if (os.path.isfile(qpysys.notes_dir + 'notes.' + str(self.ID))):
+                f = open(      qpysys.notes_dir + 'notes.' + str(self.ID), 'r')
                 notes = f.read()
                 f.close()
                 job_str = job_str.replace('%K', '\n' + notes)
@@ -234,7 +240,7 @@ class JOB(object):
                 job_str = job_str.replace('%K', '')
 
         for pattern, info in (('%j', str(self.ID)),
-                              ('%s', JOB_STATUS[self.status]),
+                              ('%s', qpyconst.JOB_STATUS[self.status]),
                               ('%c', self.info[0]),
                               ('%d', self.info[1]),
                               ('%a', ' '.join(self.node_attr)),
@@ -283,13 +289,17 @@ class JOB(object):
 
         config.logger.debug('Command: ' + command)
         try:
-            node_exec(self.node, command, get_outerr = False, pKey_file = config.ssh_p_key_file, localhost_popen_shell=(self.node == 'localhost'))
+            qpycomm.node_exec(self.node,
+                              command,
+                              get_outerr=False,
+                              pKey_file=config.ssh_p_key_file,
+                              localhost_popen_shell=(self.node == 'localhost'))
         except:
             config.logger.error("Exception in run", exc_info=True)
             raise Exception( "Exception in run: " + str(sys.exc_info()[1]))
 
         self.start_time = datetime.datetime.today()
-        self.status = JOB_ST_RUNNING
+        self.status = qpyconst.JOB_ST_RUNNING
 
     def is_running(self, config):
         """Check if the job is running.
@@ -304,8 +314,10 @@ class JOB(object):
         Exceptions from the SSH connection if the
         connection to the node is not successful.
         """
-        command = 'ps -fu ' + system_user
-        (std_out, std_err) = node_exec(self.node, command, pKey_file = config.ssh_p_key_file)
+        command = 'ps -fu ' + qpysys.sys_user
+        (std_out, std_err) = qpycomm.node_exec(self.node,
+                                               command,
+                                               pKey_file=config.ssh_p_key_file)
         re_res = re.search('export QPY_JOB_ID=' + str( self.ID) + ';', std_out)
         if (re_res):
             return True
@@ -451,7 +463,7 @@ class JOB(object):
                    or "dir" in pattern)
         for k in pattern:
             if (k == 'status'):
-                req = req or JOB_STATUS[self.status] in pattern[k]
+                req = req or qpyconst.JOB_STATUS[self.status] in pattern[k]
             elif ( k == "job_id"):
                 req = req or self.ID in pattern[k]
             elif k == 'dir':
@@ -546,24 +558,24 @@ class Job_Collection():
     def write_all_jobs(self):
         """Write jobs in file (global) all_jobs_file."""
         with self.lock:
-            f = open(all_jobs_file, 'w')
+            f = open(qpysys.all_jobs_file, 'w')
             for job in self.all:
                 f.write(str(job))
             f.close()
 
     def multiuser_cur_jobs(self):
-        """Return a list of the running jobs as MULTIUSER_JOB."""
+        """Return a list of the running jobs as MultiuserJob."""
         cur_jobs = []
         with self.lock:
             for job in self.running:
-                cur_jobs.append(MULTIUSER_JOB(user, job.ID, job.mem, job.n_cores, job.node))
+                cur_jobs.append(MultiuserJob(qpysys.user, job.ID, job.mem, job.n_cores, job.node))
         return cur_jobs
 
     def initialize_old_jobs(self, sub_ctrl):
         """Initialize jobs from file (global) all_jobs_file."""
         with self.lock:
-            if (os.path.isfile(all_jobs_file)):
-                with open(all_jobs_file, 'r') as f:
+            if (os.path.isfile(qpysys.all_jobs_file)):
+                with open(qpysys.all_jobs_file, 'r') as f:
                     i = 0
                     for line in f:
                         i += 1
@@ -618,17 +630,17 @@ class Job_Collection():
                             new_job.status = int( new_status)
                             new_job.node_attr = new_node_attr
                             self.all.append( new_job)
-                            if (new_job.status == JOB_ST_QUEUE):
+                            if (new_job.status == qpyconst.JOB_ST_QUEUE):
                                 self.queue.append( new_job)
                                 self.Q.appendleft( new_job)
-                            elif (new_job.status == JOB_ST_RUNNING):
+                            elif (new_job.status == qpyconst.JOB_ST_RUNNING):
                                 self.running.append( new_job)
                                 new_job.re_run = True
-                            elif (new_job.status == JOB_ST_DONE):
+                            elif (new_job.status == qpyconst.JOB_ST_DONE):
                                 self.done.append( new_job)
-                            elif (new_job.status == JOB_ST_KILLED):
+                            elif (new_job.status == qpyconst.JOB_ST_KILLED):
                                 self.killed.append( new_job)
-                            elif (new_job.status == JOB_ST_UNDONE):
+                            elif (new_job.status == qpyconst.JOB_ST_UNDONE):
                                 self.undone.append( new_job)
 
 
@@ -816,8 +828,8 @@ class CHECK_RUN(threading.Thread):
                     self.config.logger.error('Exception in CHECK_RUN.is_running', exc_info=True)
                     self.config.messages.add('CHECK_RUN: Exception in is_running: ' + repr(sys.exc_info()[0]))
                     is_running = True
-                if (not is_running and job.status == JOB_ST_RUNNING):
-                    job.status = JOB_ST_DONE
+                if (not is_running and job.status == qpyconst.JOB_ST_RUNNING):
+                    job.status = qpyconst.JOB_ST_DONE
                     job.end_time = datetime.datetime.today()
                     job.run_duration()
                     jobs_modification = True
@@ -828,9 +840,13 @@ class CHECK_RUN(threading.Thread):
                             os.remove(job.cp_script_to_replace[1])
 
                     try:
-                        msg_back = message_transfer((MULTIUSER_REMOVE_JOB,
-                                                     (user, job.ID, len(self.jobs.queue))),
-                                                    multiuser_address, multiuser_port, multiuser_key)
+                        msg_back = qpycomm.message_transfer((qpyconst.MULTIUSER_REMOVE_JOB,
+                                                             (qpysys.user,
+                                                              job.ID,
+                                                              len(self.jobs.queue))),
+                                                            multiuser_address,
+                                                            multiuser_port,
+                                                            multiuser_key)
                     except:
                         self.multiuser_alive.clear()
                         self.config.logger.error('Exception in CHECK_RUN message transfer', exc_info=True)
@@ -891,15 +907,17 @@ class JOBS_KILLER( threading.Thread):
                 if (job == 'kill'):
                     break
 
-            command = QPY_SOURCE_DIR+'/qpy --jobkill ' + str(job.ID)
+            command = qpysys.source_dir + '/qpy --jobkill ' + str(job.ID)
             try:
-                if (job.status != JOB_ST_RUNNING):
+                if (job.status != qpyconst.JOB_ST_RUNNING):
                     raise
-                (std_out, std_err) = node_exec(job.node, command, pKey_file = self.config.ssh_p_key_file)
+                (std_out, std_err) = qpycomm.node_exec(job.node,
+                                                       command,
+                                                       pKey_file=self.config.ssh_p_key_file)
             except:
                 pass
             else:
-                job.status = JOB_ST_KILLED
+                job.status = qpyconst.JOB_ST_KILLED
                 job.end_time = datetime.datetime.today()
                 job.run_duration()
                 self.jobs.mv(job, self.jobs.running, self.jobs.killed)
@@ -908,9 +926,13 @@ class JOBS_KILLER( threading.Thread):
                 self.config.messages.add( 'Killing: ' + str(job.ID) + ' on node ' + job.node + '. stdout = ' + repr(std_out)  + '. stderr = ' + repr(std_err))
 
                 try:
-                    msg_back = message_transfer((MULTIUSER_REMOVE_JOB,
-                                                 (user, job.ID, len(self.jobs.queue))),
-                                                multiuser_address, multiuser_port, multiuser_key)
+                    msg_back = qpycomm.message_transfer((qpyconst.MULTIUSER_REMOVE_JOB,
+                                                         (qpysys.user,
+                                                          job.ID,
+                                                          len(self.jobs.queue))),
+                                                        multiuser_address,
+                                                        multiuser_port,
+                                                        multiuser_key)
                 except:
                     self.multiuser_alive.clear()
                     self.config.logger.error('Exception in JOBS_KILLER message transfer', exc_info=True)
@@ -984,9 +1006,16 @@ class SUB_CTRL(threading.Thread):
                     avail_node = None
 
                     try:
-                        msg_back = message_transfer((MULTIUSER_REQ_CORE,
-                                                     (user, next_jobID, next_Ncores, next_mem, len(self.jobs.queue), next_node_attr)),
-                                                    multiuser_address, multiuser_port, multiuser_key)
+                        msg_back = qpycomm.message_transfer((qpyconst.MULTIUSER_REQ_CORE,
+                                                             (qpysys.user,
+                                                              next_jobID,
+                                                              next_Ncores,
+                                                              next_mem,
+                                                              len(self.jobs.queue),
+                                                              next_node_attr)),
+                                                            multiuser_address,
+                                                            multiuser_port,
+                                                            multiuser_key)
                     except:
                         self.muHandler.multiuser_alive.clear()
                         self.config.messages.add('SUB_CTRL: Exception in message transfer: ' + str(sys.exc_info()[0]) + '; ' + str(sys.exc_info()[1]))
@@ -1050,8 +1079,8 @@ class MULTIUSER_HANDLER( threading.Thread):
     The message must be a tuple (job_type, arguments)
     where job_type is:
 
-    FROM_MULTI_CUR_JOBS
-    FROM_MULTI_FINISH
+    qpyconst.FROM_MULTI_CUR_JOBS
+    qpyconst.FROM_MULTI_FINISH
 
     the arguments are option dependent.
     
@@ -1074,10 +1103,13 @@ class MULTIUSER_HANDLER( threading.Thread):
         self.jobs = jobs
         self.multiuser_alive = multiuser_alive
         self.config = config
-        self.address = read_address_file(master_conn_file)
+        self.address = qpycomm.read_address_file(qpysys.master_conn_file)
 
-        (self.Listener_master, self.port, self.conn_key) = establish_Listener_connection(self.address,
-                                                                                         PORT_MIN_MASTER, PORT_MAX_MASTER)
+        (self.Listener_master,
+         self.port,
+         self.conn_key) = qpycomm.establish_Listener_connection(self.address,
+                                                                qpyconst.PORT_MIN_MASTER,
+                                                                qpyconst.PORT_MAX_MASTER)
         self.add_to_multiuser()
 
     def run( self):
@@ -1089,14 +1121,14 @@ class MULTIUSER_HANDLER( threading.Thread):
                 
             # Get current list of jobs
             # arguments = ()
-            if (msg_type == FROM_MULTI_CUR_JOBS):
+            if (msg_type == qpyconst.FROM_MULTI_CUR_JOBS):
                 multiuser_cur_jobs = self.jobs.multiuser_cur_jobs()
                 client_master.send(multiuser_cur_jobs)
                 self.multiuser_alive.set()
 
             # Finishi this thread
             # arguments = ()
-            elif (msg_type == FROM_MULTI_FINISH):
+            elif (msg_type == qpyconst.FROM_MULTI_FINISH):
                 client_master.send( 'Finishing MULTIUSER_HANDLER.')
                 self.Listener_master.close()
                 break
@@ -1109,9 +1141,15 @@ class MULTIUSER_HANDLER( threading.Thread):
         """Contact qpy-multiuser to tell connection details and jobs."""
         multiuser_cur_jobs = self.jobs.multiuser_cur_jobs()
         try:
-            msg_back = message_transfer((MULTIUSER_USER,
-                                         (user, self.address, self.port, self.conn_key, multiuser_cur_jobs)),
-                                        multiuser_address, multiuser_port, multiuser_key)
+            msg_back = qpycomm.message_transfer((qpyconst.MULTIUSER_USER,
+                                                 (qpysys.user,
+                                                  self.address,
+                                                  self.port,
+                                                  self.conn_key,
+                                                  multiuser_cur_jobs)),
+                                                multiuser_address,
+                                                multiuser_port,
+                                                multiuser_key)
         except:
             self.multiuser_alive.clear()
             self.config.messages.add('MULTIUSER_HANDLER: Exception in message transfer: ' + repr(sys.exc_info()[0]) + ' ' + repr(sys.exc_info()[1]))
@@ -1141,20 +1179,23 @@ def handle_qpy(jobs, sub_ctrl, jobs_killer, config):
 
     The message from qpy must be a tuple (job_type, arguments)
     where job_type is
-       JOBTYPE_SUB     - submit a job                           (sub)
-       JOBTYPE_CHECK   - check the jobs                         (check)
-       JOBTYPE_KILL    - kill a job                             (kill)
-       JOBTYPE_FINISH  - kill the master                        (finish)
-       JOBTYPE_CONFIG  - show config                            (config)
-       JOBTYPE_CLEAN   - clean finished jobs                    (clean)
+       qpyconst.JOBTYPE_SUB     - submit a job                           (sub)
+       qpyconst.JOBTYPE_CHECK   - check the jobs                         (check)
+       qpyconst.JOBTYPE_KILL    - kill a job                             (kill)
+       qpyconst.JOBTYPE_FINISH  - kill the master                        (finish)
+       qpyconst.JOBTYPE_CONFIG  - show config                            (config)
+       qpyconst.JOBTYPE_CLEAN   - clean finished jobs                    (clean)
     
     """
-    address = read_address_file(master_conn_file)
-    (Listener_master, port, conn_key) = establish_Listener_connection(address,
-                                                                      PORT_MIN_MASTER, PORT_MAX_MASTER)
-    write_conn_files(master_conn_file, address, port, conn_key)
-
-    job_id = Job_Id(jobID_file)
+    address = qpycomm.read_address_file(qpysys.master_conn_file)
+    (Listener_master,
+     port,
+     conn_key) = qpycomm.establish_Listener_connection(address,
+                                                       qpyconst.PORT_MIN_MASTER,
+                                                       qpyconst.PORT_MAX_MASTER)
+    qpycomm.write_conn_files(qpysys.master_conn_file,
+                             address, port, conn_key)
+    job_id = JobId(qpysys.jobID_file)
 
     while True:
         client_master = Listener_master.accept()
@@ -1163,7 +1204,7 @@ def handle_qpy(jobs, sub_ctrl, jobs_killer, config):
             
         # Send a job
         # arguments = the job info (see JOB.info)
-        if (job_type == JOBTYPE_SUB):
+        if (job_type == qpyconst.JOBTYPE_SUB):
             new_job = JOB(int(job_id), arguments, config)
             try:
                 new_job.parse_options()
@@ -1183,7 +1224,7 @@ def handle_qpy(jobs, sub_ctrl, jobs_killer, config):
                     first_arg = new_job.info[0].split()[0]
                     script_name = new_job._expand_script_name(first_arg)
                     if (script_name != None):
-                        copied_script_name = scripts_dir + 'job_script.' + str( new_job.ID)
+                        copied_script_name = qpysys.scripts_dir + 'job_script.' + str( new_job.ID)
                         copyfile( script_name, copied_script_name)
                         new_job.cp_script_to_replace = ( first_arg, copied_script_name)
             except HelpException,ex :
@@ -1200,7 +1241,7 @@ def handle_qpy(jobs, sub_ctrl, jobs_killer, config):
         
         # Check jobs
         # arguments: a dictionary, indicating patterns (see JOB.asked)
-        elif (job_type == JOBTYPE_CHECK):
+        elif (job_type == qpyconst.JOBTYPE_CHECK):
             if (config.sub_paused):
                 msg_pause = 'Job submission is paused.\n'
             else:
@@ -1210,7 +1251,7 @@ def handle_qpy(jobs, sub_ctrl, jobs_killer, config):
 
         # Kill a job
         # arguments = a list of jobIDs and status (all, queue, running)
-        elif (job_type == JOBTYPE_KILL):
+        elif (job_type == qpyconst.JOBTYPE_KILL):
 
             kill_q = (( 'all' in arguments) or ('queue' in arguments))
             kill_r = (( 'all' in arguments) or ('running' in arguments))
@@ -1225,7 +1266,7 @@ def handle_qpy(jobs, sub_ctrl, jobs_killer, config):
                 if (job.ID in arguments or kill_q):
                     to_remove.append(job)
             for job in to_remove:
-                job.status = JOB_ST_UNDONE
+                job.status = qpyconst.JOB_ST_UNDONE
                 jobs.remove(job, jobs.Q)
                 jobs.remove(job, jobs.queue)
                 jobs.append(job, jobs.undone)
@@ -1247,10 +1288,10 @@ def handle_qpy(jobs, sub_ctrl, jobs_killer, config):
 
             msg = ''
             if (n_kill_q):
-                plural = get_plural( ('job', 'jobs'), n_kill_q)
+                plural = qpyutil.get_plural( ('job', 'jobs'), n_kill_q)
                 msg += plural[1] + ' ' + plural[0] + ' removed from the queue.\n'
             if (n_kill_r):
-                plural = get_plural( ('job', 'jobs'), n_kill_r)
+                plural = qpyutil.get_plural( ('job', 'jobs'), n_kill_r)
                 msg += plural[1] + ' ' + plural[0] + ' will be killed.\n'
 
             if (not( msg)):
@@ -1263,7 +1304,7 @@ def handle_qpy(jobs, sub_ctrl, jobs_killer, config):
 
         # Finish the execution of all threads
         # argumets: no arguments
-        if (job_type == JOBTYPE_FINISH):
+        if (job_type == qpyconst.JOBTYPE_FINISH):
             client_master.send( 'Stopping qpy-master driver.\n')
             Listener_master.close()
             break
@@ -1271,10 +1312,12 @@ def handle_qpy(jobs, sub_ctrl, jobs_killer, config):
 
         # Show status
         # No arguments (yet)
-        elif (job_type == JOBTYPE_STATUS):
+        elif (job_type == qpyconst.JOBTYPE_STATUS):
             try:
-                msg_back = message_transfer((MULTIUSER_STATUS, ()),
-                                            multiuser_address, multiuser_port, multiuser_key)
+                msg_back = qpycomm.message_transfer((qpyconst.MULTIUSER_STATUS, ()),
+                                                    multiuser_address,
+                                                    multiuser_port,
+                                                    multiuser_key)
             except:
                 msg = 'qpy-multiuser seems not to be running. Contact the qpy-team.\n'
                 multiuser_alive.clear()
@@ -1287,7 +1330,7 @@ def handle_qpy(jobs, sub_ctrl, jobs_killer, config):
 
         # Control queue
         # arguments: a list: [<type>, <arguments>].
-        elif (job_type == JOBTYPE_CTRLQUEUE):
+        elif (job_type == qpyconst.JOBTYPE_CTRLQUEUE):
             ctrl_type = arguments[0]
             if (ctrl_type == 'pause' or ctrl_type == 'continue'):
                 if (ctrl_type == 'pause'):
@@ -1311,7 +1354,7 @@ def handle_qpy(jobs, sub_ctrl, jobs_killer, config):
 
         # Show current configuration
         # arguments: optionally, a pair to change the configuration: (<key>, <value>)
-        elif (job_type == JOBTYPE_CONFIG):
+        elif (job_type == qpyconst.JOBTYPE_CONFIG):
             if (arguments):
                 (status, msg) = config.set_key(arguments[0], arguments[1])
                 msg = msg + '\n'
@@ -1323,7 +1366,7 @@ def handle_qpy(jobs, sub_ctrl, jobs_killer, config):
 
         # Clean finished jobs
         # arguments = a list of jobIDs and status (all, done, killed, undone)
-        elif (job_type == JOBTYPE_CLEAN):
+        elif (job_type == qpyconst.JOBTYPE_CLEAN):
             n_jobs = 0
             for i in arguments:
                 arg_is_id = isinstance( i, int)
@@ -1337,24 +1380,24 @@ def handle_qpy(jobs, sub_ctrl, jobs_killer, config):
                             remove = arg_is_id and i == job.ID
                             remove = remove or (arg_is_dir and i == job.info[1])
                             remove = remove or not( arg_is_id) and i == 'all'
-                            remove = remove or not( arg_is_id) and i == JOB_STATUS[job.status]
+                            remove = remove or not( arg_is_id) and i == qpyconst.JOB_STATUS[job.status]
                             if (remove):
-                                if (job.status == JOB_ST_DONE):
+                                if (job.status == qpyconst.JOB_ST_DONE):
                                     jobs.remove(job, jobs.done)
-                                elif (job.status == JOB_ST_KILLED):
+                                elif (job.status == qpyconst.JOB_ST_KILLED):
                                     jobs.remove(job, jobs.killed)
-                                elif (job.status == JOB_ST_UNDONE):
+                                elif (job.status == qpyconst.JOB_ST_UNDONE):
                                     jobs.remove(job, jobs.undone)
                                 jobs.remove(job, jobs.all)
                                 n_jobs += 1
-                                if (os.path.isfile( notes_dir + 'notes.' + str(job.ID))):
-                                    os.remove(      notes_dir + 'notes.' + str(job.ID))
+                                if (os.path.isfile( qpysys.notes_dir + 'notes.' + str(job.ID))):
+                                    os.remove(      qpysys.notes_dir + 'notes.' + str(job.ID))
                         if (not( remove)):
                             ij += 1
 
             if (n_jobs):
                 jobs.write_all_jobs()
-                plural = get_plural(('job', 'jobs'), n_jobs)
+                plural = qpyutil.get_plural(('job', 'jobs'), n_jobs)
                 msg = plural[1] + ' finished ' + plural[0] + ' removed.\n'
             else:
                 msg = 'Nothing to do: required jobs not found.\n'
@@ -1363,9 +1406,9 @@ def handle_qpy(jobs, sub_ctrl, jobs_killer, config):
 
         # Add and read notes
         # arguments = (jobID[, note])
-        elif (job_type == JOBTYPE_NOTE):
+        elif (job_type == qpyconst.JOBTYPE_NOTE):
             if (len( arguments) == 0):
-                all_notes = os.listdir( notes_dir)
+                all_notes = os.listdir( qpysys.notes_dir)
                 msg = ''
                 for n in all_notes:
                     if (n[0:6] == 'notes.'):
@@ -1375,7 +1418,7 @@ def handle_qpy(jobs, sub_ctrl, jobs_killer, config):
                 else:
                     msg = 'You have no notes.\n'
             else:
-                notes_file = notes_dir + 'notes.' + str(arguments[0])
+                notes_file = qpysys.notes_dir + 'notes.' + str(arguments[0])
                 if (os.path.isfile( notes_file)):
                     f = open( notes_file, 'r')
                     notes = f.read()
@@ -1401,7 +1444,7 @@ def handle_qpy(jobs, sub_ctrl, jobs_killer, config):
 
 
 #------------------------------
-config = Configurations(config_file)
+config = Configurations(qpysys.config_file)
 jobs = Job_Collection(config)
 
 multiuser_alive = threading.Event()
@@ -1429,7 +1472,9 @@ config.logger.info("Finishing qpy-master")
 sub_ctrl.finish.set()
 check_run.finish.set()
 jobs_killer.to_kill.put('kill')
-message_transfer((FROM_MULTI_FINISH, ()),
-                 multiuser_handler.address, multiuser_handler.port,multiuser_handler.conn_key)
-os.remove(master_conn_file+'_port')
-os.remove(master_conn_file+'_conn_key')
+qpycomm.message_transfer((qpyconst.FROM_MULTI_FINISH, ()),
+                         multiuser_handler.address,
+                         multiuser_handler.port,
+                         multiuser_handler.conn_key)
+os.remove(qpysys.master_conn_file + '_port')
+os.remove(qpysys.master_conn_file + '_conn_key')

@@ -7,33 +7,37 @@ import sys
 import subprocess
 import re
 import threading
-from qpyCommon import *
+
+import qpy_system as qpysys
+import qpy_constants as qpyconst
+import qpy_communication as qpycomm
+
 
 ## Put somewhere else?
-multiuser_conn_file = qpy_multiuser_dir + 'multiuser_connection'
-multiuser_address, multiuser_port, multiuser_key = read_conn_files(multiuser_conn_file)
+(multiuser_address,
+ multiuser_port,
+ multiuser_key) = qpycomm.read_conn_files(qpysys.multiuser_conn_file)
 qpy_multiuser_command = ['python',
-                         QPY_SOURCE_DIR + 'qpy-multiuser.py',
+                         qpysys.source_dir + 'qpy-multiuser.py',
                          '>', '/dev/null',
                          '2>', '/dev/null']
-adm_tutorial_file = QPY_SOURCE_DIR + '/doc/adm_tutorial'
 
 try:
-    option = MULTIUSER_KEYWORDS[sys.argv[1]][0]
+    option = qpyconst.MULTIUSER_KEYWORDS[sys.argv[1]][0]
 except:
     str_len = 0
-    for opt in MULTIUSER_KEYWORDS:
-        if (MULTIUSER_KEYWORDS[opt][0] < 0):
+    for opt in qpyconst.MULTIUSER_KEYWORDS:
+        if (qpyconst.MULTIUSER_KEYWORDS[opt][0] < 0):
             continue
         if (str_len < len( opt)):
             str_len = len( opt)
     format_spc = '{0:' + str( str_len+1) + 's}'
     usage_msg =  'Usage: ' + sys.argv[0] +  ' <option> [<arguments>].\n'
     usage_msg += 'Options:'
-    for opt in MULTIUSER_KEYWORDS:
-        if (MULTIUSER_KEYWORDS[opt][0] < 0):
+    for opt in qpyconst.MULTIUSER_KEYWORDS:
+        if (qpyconst.MULTIUSER_KEYWORDS[opt][0] < 0):
             continue
-        usage_msg += '\n  ' + format_spc.format( opt+':') + ' ' + MULTIUSER_KEYWORDS[opt][1]
+        usage_msg += '\n  ' + format_spc.format( opt+':') + ' ' + qpyconst.MULTIUSER_KEYWORDS[opt][1]
     sys.exit( usage_msg)
 
 
@@ -41,7 +45,7 @@ except:
 arguments = ()
 
 # Add user
-if (option == MULTIUSER_USER):
+if (option == qpyconst.MULTIUSER_USER):
     try:
         arguments = (sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5])
     except:
@@ -49,7 +53,7 @@ if (option == MULTIUSER_USER):
         sys.exit( usage_msg)
 
 # Request a core
-if (option == MULTIUSER_REQ_CORE):
+if (option == qpyconst.MULTIUSER_REQ_CORE):
     try:
         arguments = (sys.argv[2], int(sys.argv[3]), int(sys.argv[4]), float(sys.argv[5]), int(sys.argv[6]), [] if len(sys.argv) == 7 else sys.argv[7:])
     except:
@@ -57,7 +61,7 @@ if (option == MULTIUSER_REQ_CORE):
         sys.exit( usage_msg)
 
 # remove a job
-if (option == MULTIUSER_REMOVE_JOB):
+if (option == qpyconst.MULTIUSER_REMOVE_JOB):
     try:
         arguments = [sys.argv[2], int( sys.argv[3]), int(sys.argv[4])]
     except:
@@ -66,7 +70,7 @@ if (option == MULTIUSER_REMOVE_JOB):
 
 
 # save messages
-if (option == MULTIUSER_SAVE_MESSAGES):
+if (option == qpyconst.MULTIUSER_SAVE_MESSAGES):
     try:
         arguments = [True if (sys.argv[2] == 'true') else False]
     except:
@@ -75,15 +79,17 @@ if (option == MULTIUSER_SAVE_MESSAGES):
 
 
 # Start
-if (option == MULTIUSER_START):
+if (option == qpyconst.MULTIUSER_START):
     sys.stdout.write( "Starting qpy-multiuser driver.\n")
-    node_exec(multiuser_address, qpy_multiuser_command, get_outerr = False, mode='popen')
-
+    qpycomm.node_exec(multiuser_address,
+                      qpy_multiuser_command,
+                      get_outerr=False,
+                      mode='popen')
     exit()
 
 
 # The qpy administrator tutorial
-elif (option == MULTIUSER_TUTORIAL):
+elif (option == qpyconst.MULTIUSER_TUTORIAL):
     
     pattern = ''
     for i in sys.argv[2:3]:
@@ -91,12 +97,12 @@ elif (option == MULTIUSER_TUTORIAL):
     for i in sys.argv[3:]:
         pattern += ' ' + i
 
-    if (pattern in KEYWORDS):
+    if (pattern in qpyconst.KEYWORDS):
         pattern = '--pattern "# ' + pattern + '"'
     elif (pattern):
         pattern = '--pattern "' + pattern + '"'
 
-    command = 'less '  + pattern + ' ' + adm_tutorial_file
+    command = 'less '  + pattern + ' ' + qpysys.tutorial_file
     try:
         subprocess.call( command, shell = True)
     except:
@@ -105,9 +111,11 @@ elif (option == MULTIUSER_TUTORIAL):
 
 
 try:
-    msg_back = message_transfer((option, arguments),
-                                multiuser_address, multiuser_port, multiuser_key,
-                                timeout = 3.0)
+    msg_back = qpycomm.message_transfer((option, arguments),
+                                        multiuser_address,
+                                        multiuser_port,
+                                        multiuser_key,
+                                        timeout = 3.0)
 except Exception as ex:
     print ex
     sys.exit('Time for connection exceeded. Are you sure that qpy-multiuser is running?')

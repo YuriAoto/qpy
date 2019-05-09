@@ -67,6 +67,12 @@ function checkIsTestRunning(){
 }
 
 
+function showMUlog(){
+    printMU cat ~/.qpy-multiuser-test/multiuser.log '#' The log file
+    cat ~/.qpy-multiuser-test/multiuser.log
+}
+
+
 # Wrapper to qpy functions
 function runUser(){
     user=$1; shift
@@ -74,6 +80,11 @@ function runUser(){
     $@
 }
 
+function showUlog(){
+    user=$1; shift
+    printU $user cat ~/.qpy-test_${user}/master.log '#' The log file
+    cat ~/.qpy-test_${user}/master.log
+}
 
 function testqpy_multiuser(){
     printMU qpy-multiuser $@
@@ -85,7 +96,7 @@ function testqpy(){
     qpy_option=$1; shift
     export QPY_TEST_USER=${user};
     printU $user qpy $qpy_option $@
-    #$exe_QPY $qpy_option $@
+    $exe_QPY $qpy_option $@
 
     ## Why this does not work with qpy restart?
     ## It seems that the output from qpy-master is still connected
