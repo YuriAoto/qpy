@@ -85,7 +85,7 @@ function testqpy(){
     qpy_option=$1; shift
     export QPY_TEST_USER=${user};
     printU $user qpy $qpy_option $@
-    #$exe_QPY $qpy_option $@
+    $exe_QPY $qpy_option $@
 
     ## Why this does not work with qpy restart?
     ## It seems that the output from qpy-master is still connected
