@@ -48,7 +48,7 @@ sleep 2
 
 print Users have been created. Waiting a cicle...
 sleep 5
-showUlog
+showUlog $QPY_U1
 
 testqpy_multiuser status
 testqpy_multiuser variables

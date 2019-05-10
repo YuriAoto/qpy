@@ -8,6 +8,8 @@ import traceback
 import logging
 import logging.handlers
 
+import qpy_system as qpysys
+
 def configure_logger(base_file,
                      level):
     """Set up a logger
@@ -122,3 +124,13 @@ class Messages():
             if (len(self) > self.max_len):
                 self.messages.pop(0)
 
+
+if qpysys.qpy_instance == 'qpy-multiuser.py':
+    logger = configure_logger(qpysys.multiuser_log_file,
+                              logging.WARNING)
+
+## put qpy-master logger here??
+##elif qpysys.qpy_instance == 'qpy-master.py':
+##    logger = configure_logger(qpysys.master_log_file,
+##                              logging.WARNING)
+    

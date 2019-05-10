@@ -1,6 +1,8 @@
-# qpy - user interface to the qpy-multiuser
-#
-# 31 Dec 2015 - Pradipta and Yuri
+""" qpy - user interface to the qpy-multiuser
+
+History:
+    31 Dec 2015 - Creation, Pradipta and Yuri
+"""
 from time import sleep
 import os
 import sys
@@ -37,39 +39,38 @@ except:
     for opt in qpyconst.MULTIUSER_KEYWORDS:
         if (qpyconst.MULTIUSER_KEYWORDS[opt][0] < 0):
             continue
-        usage_msg += '\n  ' + format_spc.format( opt+':') + ' ' + qpyconst.MULTIUSER_KEYWORDS[opt][1]
+        usage_msg += ('\n  ' + format_spc.format( opt+':')
+                      + ' ' + qpyconst.MULTIUSER_KEYWORDS[opt][1])
     sys.exit( usage_msg)
 
-
-# Get arguments, according to the option
 arguments = ()
-
-# Add user
 if (option == qpyconst.MULTIUSER_USER):
     try:
         arguments = (sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5])
     except:
-        usage_msg =  'Usage: ' + sys.argv[0] +  ' __user <user_name> <address> <port> <conn_key>.'
-        sys.exit( usage_msg)
+        usage_msg = ('Usage: ' + sys.argv[0]
+                     + ' __user <user_name> <address> <port> <conn_key>.')
+        sys.exit(usage_msg)
 
-# Request a core
 if (option == qpyconst.MULTIUSER_REQ_CORE):
     try:
-        arguments = (sys.argv[2], int(sys.argv[3]), int(sys.argv[4]), float(sys.argv[5]), int(sys.argv[6]), [] if len(sys.argv) == 7 else sys.argv[7:])
+        arguments = (sys.argv[2],
+                     int(sys.argv[3]),
+                     int(sys.argv[4]),
+                     float(sys.argv[5]),
+                     int(sys.argv[6]),
+                     [] if len(sys.argv) == 7 else sys.argv[7:])
     except:
-        usage_msg = 'Usage: ' + sys.argv[0] +  ' __req_core <user_name> <jobID> <n_cores> <mem> <queue_size> [<node_attr>].'
-        sys.exit( usage_msg)
+        usage_msg = 'Usage: ' + sys.argv[0] + ' __req_core <user_name> <jobID> <n_cores> <mem> <queue_size> [<node_attr>].'
+        sys.exit(usage_msg)
 
-# remove a job
 if (option == qpyconst.MULTIUSER_REMOVE_JOB):
     try:
         arguments = [sys.argv[2], int( sys.argv[3]), int(sys.argv[4])]
     except:
-        usage_msg = 'Usage: ' + sys.argv[0] +  ' __remove_job <user_name> <job_ID> <queue_size>.'
-        sys.exit( usage_msg)
+        usage_msg = 'Usage: ' + sys.argv[0] + ' __remove_job <user_name> <job_ID> <queue_size>.'
+        sys.exit(usage_msg)
 
-
-# save messages
 if (option == qpyconst.MULTIUSER_SAVE_MESSAGES):
     try:
         arguments = [True if (sys.argv[2] == 'true') else False]
@@ -77,8 +78,6 @@ if (option == qpyconst.MULTIUSER_SAVE_MESSAGES):
         usage_msg = 'Usage: ' + sys.argv[0] +  ' [true,false].'
         sys.exit( usage_msg)
 
-
-# Start
 if (option == qpyconst.MULTIUSER_START):
     sys.stdout.write( "Starting qpy-multiuser driver.\n")
     qpycomm.node_exec(multiuser_address,
@@ -87,10 +86,7 @@ if (option == qpyconst.MULTIUSER_START):
                       mode='popen')
     exit()
 
-
-# The qpy administrator tutorial
-elif (option == qpyconst.MULTIUSER_TUTORIAL):
-    
+elif (option == qpyconst.MULTIUSER_TUTORIAL):    
     pattern = ''
     for i in sys.argv[2:3]:
         pattern += i
@@ -108,7 +104,6 @@ elif (option == qpyconst.MULTIUSER_TUTORIAL):
     except:
         sys.exit( 'Error when loading the tutorial.')
     exit()
-
 
 try:
     msg_back = qpycomm.message_transfer((option, arguments),
