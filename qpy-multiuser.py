@@ -8,7 +8,6 @@ History:
   10 May 2019 - Distributing classes and functions over
                 other files and avoiding global variables
 """
-
 import os
 
 import qpy_system as qpysys
@@ -20,7 +19,6 @@ from qpy_multiuser_interaction import handle_client
 if (not(os.path.isdir(qpysys.qpy_multiuser_dir))):
     os.makedirs(qpysys.qpy_multiuserdir)
 os.chmod(qpysys.qpy_multiuser_dir, 0700)
-
 qpynodes.load_nodes()
 qpyusers.load_users()
 check_nodes = qpynodes.CheckNodes()

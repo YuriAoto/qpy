@@ -224,10 +224,13 @@ def load_users():
         allowed_users.append( line.strip())
     f.close()
     for user in allowed_users:
-        (address,
-         port,
-         conn_key) = qpycomm.read_conn_files(qpysys.user_conn_file + user)
-        if (port != None and conn_key != None):
+        address = qpycomm.read_address_file(qpysys.user_conn_file + user)
+        try:
+            port, conn_key = qpycomm.read_conn_files(
+                qpysys.user_conn_file + user)
+        except:
+            pass
+        else:
             new_user = User(user, address, port, conn_key)
             try:
                 cur_jobs = qpycomm.message_transfer((FROM_MULTI_CUR_JOBS, ()),

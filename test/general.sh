@@ -90,7 +90,7 @@ done
 
 for i in 1 2 3 4
 do
-    echo @ Waiting 10 seconds, ${i}/4
+    print Waiting 10 seconds, ${i}/4
     sleep 10
     testqpy $QPY_U1 check
     testqpy $QPY_U1 status

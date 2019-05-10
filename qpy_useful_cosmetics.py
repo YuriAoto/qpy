@@ -1,8 +1,51 @@
 """Cosmetic/useful functions
 
 """
-__version__ = '0.0'
-__author__ = 'Yuri Alexandre Aoto'
+import sys
+from time import sleep
+import re
+
+import qpy_communication as qpycomm
+
+def kill_master_instances(user, address, qpy_master_command):
+    """Kill all qpy-master instances from this user.
+    
+    Behaviour:
+    It does it only from the same source directory.
+    """
+    killed_instances = []
+    ps_stdout = qpycomm.node_exec(address,
+                                  ["ps", "-fu", user],
+                                  get_outerr=True,
+                                  mode='popen')
+    ps_stdout = ps_stdout[0].split('\n')
+    for l in ps_stdout:
+        if re.search(qpy_master_command + '$', l) != None:
+            pid = l.split()[1]
+            qpycomm.node_exec(address,
+                              "kill " + pid,
+                              get_outerr=False,
+                              mode='popen')
+            sys.stdout.write('Killing older qpy-master instance: ' + pid + '\n')
+            killed_instances.append(pid)
+    return ' '.join(killed_instances)
+
+def start_master_driver(user, address, qpy_master_command):
+    """Start qpy-master.
+    
+    TODO:
+    Only main programs should exit.
+    should we indeed write to stdout? and wait?
+    """
+    sys.stdout.write("Starting qpy-master driver..."
+                     + "It takes a few seconds, be patient.\n")
+    sleep(5.)
+    kill_master_instances(user, address, qpy_master_command)
+    qpycomm.node_exec(address,
+                      qpy_master_command + ' > /dev/null 2> /dev/null',
+                      get_outerr=False,
+                      mode='popen')
+    exit()
 
 def get_all_children(x, parent_of):
     """Get all children and further generations

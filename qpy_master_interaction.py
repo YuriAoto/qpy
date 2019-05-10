@@ -12,15 +12,6 @@ import qpy_useful_cosmetics as qpyutil
 import qpy_communication as qpycomm
 from qpy_job import JobId, Job, ParseError, HelpException
 
-
-# CHANGE PLACE should be common to job_control
-(multiuser_address,
- multiuser_port,
- multiuser_key) = qpycomm.read_conn_files(qpysys.multiuser_conn_file)
-if (multiuser_port == None or multiuser_key == None):
-    sys.exit("Information for multiuser connection could not be obtained. Contact your administrator.")
-
-
 class MultiuserHandler(threading.Thread):
     """Handle the messages sent from qpy-multiuser.
     
@@ -104,9 +95,9 @@ class MultiuserHandler(threading.Thread):
                                                   self.port,
                                                   self.conn_key,
                                                   multiuser_cur_jobs)),
-                                                multiuser_address,
-                                                multiuser_port,
-                                                multiuser_key)
+                                                qpycomm.multiuser_address,
+                                                qpycomm.multiuser_port,
+                                                qpycomm.multiuser_key)
         except:
             self.multiuser_alive.clear()
             self.config.messages.add('MULTIUSER_HANDLER: Exception in message transfer: '
@@ -272,9 +263,9 @@ def handle_qpy(jobs,
             try:
                 msg_back = qpycomm.message_transfer(
                     (qpyconst.MULTIUSER_STATUS, ()),
-                    multiuser_address,
-                    multiuser_port,
-                    multiuser_key
+                    qpycomm.multiuser_address,
+                    qpycomm.multiuser_port,
+                    qpycomm.multiuser_key
                 )
             except:
                 msg = ('qpy-multiuser seems not to be running.'

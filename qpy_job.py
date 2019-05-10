@@ -1,9 +1,6 @@
 """A job (a code being or to be executed in a node)
 
 """
-__version__ = '0.0'
-__author__ = 'Yuri Alexandre Aoto'
-
 from optparse import OptionParser,OptionError
 from collections import deque
 from datetime import datetime

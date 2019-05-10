@@ -2,9 +2,6 @@
 
 
 """
-__version__ = '0.0'
-__author__ = 'Yuri Alexandre Aoto'
-
 import os
 
 import termcolor.termcolor as termcolour

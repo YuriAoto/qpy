@@ -4,9 +4,6 @@ This module is central in qpy, as it deals with message
 transfer between threads, and execution of programs in a node
 
 """
-__version__ = '0.0'
-__author__ = 'Yuri Alexandre Aoto'
-
 from multiprocessing import connection
 import os
 import sys
@@ -19,6 +16,8 @@ try:
     # Check version??
 except:
     is_paramiko = False
+
+import qpy_system as qpysys
 
 def write_conn_files(f_name,
                      address,
@@ -41,26 +40,17 @@ def read_address_file(f_name):
         f = open(f_name + '_address', 'r')
         address = f.read().strip()
         f.close()
-    except:
+    except IOError:
         address = 'localhost'
     return address
 
 def read_conn_files(f_name):
     """Read the connection information from files."""
-    address = read_address_file(f_name)
-    try:
-        f = open(f_name + '_port', 'r')
+    with open(f_name + '_port', 'r') as f:
         port = int(f.read())
-        f.close()
-    except:
-        port = None
-    try:
-        f = open(f_name + '_conn_key', 'r')
+    with open(f_name + '_conn_key', 'r') as f:
         conn_key = f.read()
-        f.close()
-    except:
-        conn_key = None
-    return address, port, conn_key
+    return port, conn_key
 
 def establish_Listener_connection(address,
                                   port_min,
@@ -250,3 +240,13 @@ def node_exec(node,
             return
     else:
         raise Exception("Unknown mode for node_exec")
+
+multiuser_address = read_address_file(qpysys.multiuser_conn_file)
+try:
+    multiuser_port, multiuser_key = read_conn_files(
+        qpysys.multiuser_conn_file)
+except IOError:
+    assert (qpysys.qpy_instance != 'qpy-master.py'
+            and qpysys.qpy_instance != 'qpy'), \
+            'Failed when reading multiuser information.'
+    multiuser_port = multiuser_key = None

@@ -290,19 +290,18 @@ def handle_client():
     
     To terminate, send a qpyconst.MULTIUSER_FINISH
     """
-    (multiuser_address,
-     multiuser_port,
-     multiuser_key) = qpycomm.read_conn_files(qpysys.multiuser_conn_file)
     try:
         (conn,
          multiuser_port,
-         multiuser_key) = qpycomm.establish_Listener_connection(multiuser_address,
-                                                                qpyconst.PORT_MIN_MULTI,
-                                                                qpyconst.PORT_MAX_MULTI,
-                                                                port = multiuser_port,
-                                                                conn_key = multiuser_key)
+         multiuser_key) = qpycomm.establish_Listener_connection(
+             qpycomm.multiuser_address,
+             qpyconst.PORT_MIN_MULTI,
+             qpyconst.PORT_MAX_MULTI,
+             port = qpycomm.multiuser_port,
+             conn_key = qpycomm.multiuser_key
+         )
         qpycomm.write_conn_files(qpysys.multiuser_conn_file,
-                                 multiuser_address,
+                                 qpycomm.multiuser_address,
                                  multiuser_port,
                                  multiuser_key)
     except:

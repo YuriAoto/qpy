@@ -1,8 +1,8 @@
 """ System's and user's information
 
 """
-import sys
 import os
+import sys
 
 qpy_instance = sys.argv[0].split('/')[-1]
 source_dir = os.path.dirname(os.path.abspath( __file__)) + '/'
@@ -16,7 +16,7 @@ if qpy_instance == 'qpy' or qpy_instance == 'qpy-master.py':
             user = os.environ['QPY_TEST_USER']
         except KeyError:
             raise Exception('Please, set the environment variable QPY_TEST_USER.')
-        qpy_dir = os.path.expanduser('~/.qpy-test_'+user+'/')
+        qpy_dir = os.path.expanduser('~/.qpy-test_' + user + '/')
     else:
         user = os.environ['USER']
         qpy_dir = os.path.expanduser('~/.qpy/')
@@ -35,8 +35,7 @@ else:
     if test_run:
         qpy_multiuser_dir = os.path.expanduser('~/.qpy-multiuser-test/')
     else:
-        qpy_multiuser_dir = os.path.expanduser('~/.qpy-multiuser/')
-    
+        qpy_multiuser_dir = os.path.expanduser('~/.qpy-multiuser/')    
     nodes_file = qpy_multiuser_dir + 'nodes'
     allowed_users_file = qpy_multiuser_dir + 'allowed_users'
     cores_distribution_file = qpy_multiuser_dir + 'distribution_rules'
@@ -44,6 +43,8 @@ else:
     multiuser_conn_file = qpy_multiuser_dir + 'multiuser_connection'
     multiuser_log_file = qpy_multiuser_dir + 'multiuser.log'
     tutorial_file = source_dir + '/doc/adm_tutorial'
-
-
+    qpy_multiuser_command = ['python',
+                             source_dir + 'qpy-multiuser.py',
+                             '>', '/dev/null',
+                             '2>', '/dev/null']
 

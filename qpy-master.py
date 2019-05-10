@@ -12,7 +12,10 @@ import threading
 
 import qpy_system as qpysys
 import qpy_constants as qpyconst
-import qpy_communication as qpycomm
+try:
+    import qpy_communication as qpycomm
+except AssertionError as e:
+    sys.exit(str(e) + "\nContact the system administrator.")
 import qpy_control_jobs as qpyctrl
 from qpy_configurations import Configurations
 from qpy_job import JobCollection

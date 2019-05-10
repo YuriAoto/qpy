@@ -1,224 +1,37 @@
-#!/usr/bin/python
-# qpy - queueing manager for qpy
-#
-# 29 May 2015 - Pradipta and Yuri
-from time import sleep
+#!/usr/bin/env python
+"""
+qpy - The Queue Management System in Python
+
+History:
+    29 May 2015 - started by Pradipta and Yuri
+
+"""
+__version__ = '1.0'
+__author__ = 'Yuri Alexandre Aoto'
+
 import os
 import sys
-import subprocess
 import re
 
 import qpy_system as qpysys
 import qpy_constants as qpyconst
-import qpy_communication as qpycomm
-import qpy_useful_cosmetics as qpyutil
-
-
-### TODO: find a better place for these functions
-def kill_master_instances(user, address, qpy_master_command):
-    """Kill all qpy-master instances from this user.
-    
-    Behaviour:
-    It does it only from the same source directory.
-    """
-    ps_stdout = qpycomm.node_exec(address,
-                                  ["ps", "-fu", user],
-                                  get_outerr = True,
-                                  mode='popen')
-    ps_stdout = ps_stdout[0].split( '\n')
-    for l in ps_stdout:
-        if re.search(qpy_master_command+'$', l) != None:
-            pid = l.split()[1]
-            qpycomm.node_exec(address,
-                              "kill " + pid,
-                              get_outerr=False,
-                              mode='popen')
-            sys.stdout.write('Killing older qpy-master instance: ' + pid + '\n')
-
-def start_master_driver(user, address, qpy_master_command):
-    """Start qpy-master and exit.
-    
-    TODO:
-    Only main programs should exit.
-    """
-    sys.stdout.write("Starting qpy-master driver... It takes a few seconds, be patient.\n")
-    sleep(5.)
-    kill_master_instances(user, address, qpy_master_command)
-    qpycomm.node_exec(address,
-                      qpy_master_command + ' > /dev/null 2> /dev/null',
-                      get_outerr=False,
-                      mode='popen')
-    exit()
-
-
-# '--options' are to be called only by qpy-master, not by the users
-if len(sys.argv) > 1:
-    if (sys.argv[1] == '--jobkill'):
-        job_id = sys.argv[2]
-        command = 'ps -fu ' + qpysys.sys_user
-        kill_job_ps = subprocess.Popen(command,
-                                       shell = True,
-                                       stdout = subprocess.PIPE,
-                                       stderr = subprocess.PIPE)
-        ps_out = kill_job_ps.stdout.readlines()
-        grand_PID = ''
-        parents = {}
-        for l in ps_out:
-            new_pid = l.split()
-            parents[new_pid[1]] = new_pid[2]
-            re_res = re.search('export QPY_JOB_ID=' + job_id + ';', l)
-            if (re_res):
-                grand_PID = new_pid[1]
-        pid_kill = qpyutil.get_all_children(grand_PID, parents)
-        pid_kill.reverse()
-        for i in pid_kill:
-            kill_job = subprocess.call(['kill', '-9', i])
-            print 'Killing PID ' + i
-        exit()
-# end of '--options'
-
 try:
-    option = qpyconst.KEYWORDS[sys.argv[1]][0]
-except:
-    str_len = 0
-    for opt in qpyconst.KEYWORDS:
-        if (str_len < len( opt)):
-            str_len = len( opt)
-    format_spc = '{0:' + str( str_len+1) + 's}'
-    usage_msg = 'Usage: ' + sys.argv[0] +  ' <option> [<arguments>].\n'
-    usage_msg += 'Options:'
-    for opt in qpyconst.KEYWORDS:
-        usage_msg += ('\n  ' + format_spc.format(opt + ':')
-                      + ' ' + qpyconst.KEYWORDS[opt][1])
-    sys.exit( usage_msg)
+    import qpy_communication as qpycomm
+except AssertionError as e:
+    sys.exit(str(e) + "\nContact the system administrator.")
+import qpy_useful_cosmetics as qpyutil
+from qpy_parser import parse_qpy_cmd_line
 
-start_qpy_master = option == qpyconst.JOBTYPE_RESTART
-if start_qpy_master:
-    option = qpyconst.JOBTYPE_FINISH
+option, arguments, start_qpy_master = parse_qpy_cmd_line()
 
-arguments = ()
-if option == qpyconst.JOBTYPE_SUB:
-    job = ''
-    next_is_attr = False
-    for i in sys.argv[2:]:
-        if next_is_attr:
-            i = i.replace(' ', '##')
-        job += ' ' + i
-        next_is_attr = i == '-a' or i == '--node_attr' or i == '--attribute'
-    arguments = [job, os.getcwd()]
-
-if option == qpyconst.JOBTYPE_CHECK:
-    arguments = {}
-    for x in sys.argv[2:]:
-        if x in JOB_STATUS:
-            if ('status' in arguments):
-                arguments['status'].append(x)
-            else:
-                arguments['status'] = [x]
-        else:
-            if (os.path.isdir(x)):
-                if 'dir' in arguments:
-                    arguments['dir'].append(os.path.abspath(x))
-                else:
-                    arguments['dir'] = [os.path.abspath(x)]
-            else:
-                try:
-                    new_jobids = qpyutil.string_to_int_list(x)
-                except:
-                    sys.exit( 'Unknown pattern for checking jobs: ' + x)
-                if ('job_id' in arguments):
-                    arguments['job_id'].extend( new_jobids)
-                else:
-                    arguments['job_id'] = new_jobids
-
-elif option == qpyconst.JOBTYPE_CONFIG:
-    if (len(sys.argv) == 4):
-        arguments = (sys.argv[2], sys.argv[3])
-    elif (len( sys.argv) > 4):
-        arguments = (sys.argv[2], sys.argv[3:])
-    elif (len( sys.argv) == 3):
-        arguments = (sys.argv[2], ())
-
-elif (option == qpyconst.JOBTYPE_KILL
-      or option == qpyconst.JOBTYPE_CLEAN):
-    if option == qpyconst.JOBTYPE_KILL:
-        status_bound = (0,2)
-    else:
-        status_bound = (2,5)
-    arguments = []
-    for x in sys.argv[2:]:
-        try:
-            new_range = qpyutil.string_to_int_list(x)
-            arguments.extend( new_range)
-        except:
-            if (x == 'all' or x in qpyconst.JOB_STATUS[status_bound[0]:status_bound[1]]):
-                arguments.append( x)
-            elif (os.path.isdir(x)):
-                arguments.append(os.path.abspath(x))
-            else:
-                sys.exit( 'Range with wrong format or invalid status: ' + x)
-    arguments = list( set( arguments))
-
-elif option == qpyconst.JOBTYPE_CTRLQUEUE:
-    if len( sys.argv) < 3:
-        sys.exit('Give the queue control type.')
-    else:
-        if sys.argv[2] == 'jump':
-            new_range = []
-            for x in sys.argv[3:-1]:
-                try:
-                    new_range.extend(qpyutil.string_to_int_list(x))
-                except:
-                    sys.exit('Range with wrong format: ' + x)
-            if not new_range:
-                    sys.exit('Give the jobs to change position.')
-            try:
-                pos = int(sys.argv[-1])
-            except:
-                if sys.argv[-1] == 'begin':
-                    pos = 0
-                elif sys.argv[-1] == 'end':
-                    pos = -1
-                else:
-                    sys.exit('Invalid jump position: ' + sys.argv[-1])
-            arguments = ('jump', new_range, pos)
-        else:
-            arguments = sys.argv[2:]
-
-# Notes
-elif option == qpyconst.JOBTYPE_NOTE:
-    if len(sys.argv) < 3:
-        arguments = ()
-    elif len(sys.argv) == 3:
-        arguments = [sys.argv[2]]
-    else:
-        arguments = [sys.argv[2], ' '.join(sys.argv[3:])]
-
-# The qpy tutorial
-elif option == qpyconst.JOBTYPE_TUTORIAL:
-    pattern = ''
-    for i in sys.argv[2:3]:
-        pattern += i
-    for i in sys.argv[3:]:
-        pattern += ' ' + i
-    if pattern in qpyconst.KEYWORDS:
-        pattern = '--pattern "# ' + pattern + '"'
-    elif pattern:
-        pattern = '--pattern "' + pattern + '"'
-    command = 'less '  + pattern + ' ' + qpysys.tutorial_file
-    try:
-        subprocess.call(command, shell = True)
-    except:
-        sys.exit('Error when loading the tutorial.')
-    exit()
-
-address, port, conn_key = qpycomm.read_conn_files(qpysys.master_conn_file)
-
-if port == None or conn_key == None:
+address = qpycomm.read_address_file(qpysys.master_conn_file)
+try:
+    port, conn_key = qpycomm.read_conn_files(qpysys.master_conn_file)
+except IOError:
     if start_qpy_master:
-        start_master_driver(qpysys.sys_user,
-                            address,
-                            qpysys.qpy_master_command)
+        qpyutil.start_master_driver(qpysys.sys_user,
+                                    address,
+                                    qpysys.qpy_master_command)
     else:
         sys.exit('Problem to get the connection information.'
                  + ' Are you sure that qpy-master is running?')
@@ -235,13 +48,12 @@ except:
         start_master_driver(qpysys.sys_user,
                             address,
                             qpysys.qpy_master_command)
-    sys.exit('Time for connection exceeded.'
-             + ' Are you sure that qpy-master is running?')
-
-ansi_escape = re.compile(r'\x1b[^m]*m')
+    else:
+        sys.exit('Time for connection exceeded.'
+                 + ' Are you sure that qpy-master is running?')
 if not sys.stdout.isatty():
+    ansi_escape = re.compile(r'\x1b[^m]*m')
     master_msg = ansi_escape.sub('', master_msg)
 sys.stdout.write(master_msg)
-
 if start_qpy_master:
     start_master_driver(qpysys.sys_user, address, qpysys.qpy_master_command)

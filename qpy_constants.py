@@ -1,7 +1,6 @@
 """Main constants for qpy
 
 """
-
 MULTIUSER_NODES          = 1
 MULTIUSER_DISTRIBUTE     = 2
 MULTIUSER_STATUS         = 3

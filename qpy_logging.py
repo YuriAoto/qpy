@@ -1,9 +1,6 @@
 """Logging and messages for qpy
 
 """
-__version__ = '0.0'
-__author__ = 'Yuri Alexandre Aoto'
-
 import traceback
 import logging
 import logging.handlers

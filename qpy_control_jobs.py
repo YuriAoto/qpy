@@ -1,7 +1,6 @@
 """Main threads to check and control the jobs
 
 """
-
 import os
 import sys
 import threading
@@ -14,13 +13,9 @@ import qpy_constants as qpyconst
 import qpy_communication as qpycomm
 
 
-## CHANGE PLACE
-(multiuser_address,
- multiuser_port,
- multiuser_key) = qpycomm.read_conn_files(qpysys.multiuser_conn_file)
-if (multiuser_port == None or multiuser_key == None):
-    sys.exit("Information for multiuser connection could not be obtained. Contact your administrator.")
-
+if (qpycomm.multiuser_port == None):
+    sys.exit("Information for multiuser connection could not be obtained."
+             + " Contact your administrator.")
 
 class CheckRun(threading.Thread):
     """Check if the jobs are still running.
@@ -86,9 +81,9 @@ class CheckRun(threading.Thread):
                                                              (qpysys.user,
                                                               job.ID,
                                                               len(self.jobs.queue))),
-                                                            multiuser_address,
-                                                            multiuser_port,
-                                                            multiuser_key)
+                                                            qpycomm.multiuser_address,
+                                                            qpycomm.multiuser_port,
+                                                            qpycomm.multiuser_key)
                     except:
                         self.multiuser_alive.clear()
                         self.config.logger.error('Exception in CHECK_RUN message transfer',
@@ -149,7 +144,7 @@ class JobsKiller( threading.Thread):
                 if (job == 'kill'):
                     break
 
-            command = qpysys.source_dir + '/qpy --jobkill ' + str(job.ID)
+            command = 'python ' + qpysys.source_dir + '/qpy_job_killer.py ' + str(job.ID)
             try:
                 if (job.status != qpyconst.JOB_ST_RUNNING):
                     raise
@@ -175,9 +170,9 @@ class JobsKiller( threading.Thread):
                                                          (qpysys.user,
                                                           job.ID,
                                                           len(self.jobs.queue))),
-                                                        multiuser_address,
-                                                        multiuser_port,
-                                                        multiuser_key)
+                                                        qpycomm.multiuser_address,
+                                                        qpycomm.multiuser_port,
+                                                        qpycomm.multiuser_key)
                 except:
                     self.multiuser_alive.clear()
                     self.config.logger.error('Exception in JOBS_KILLER message transfer',
@@ -261,9 +256,9 @@ class Submission(threading.Thread):
                                                               next_mem,
                                                               len(self.jobs.queue),
                                                               next_node_attr)),
-                                                            multiuser_address,
-                                                            multiuser_port,
-                                                            multiuser_key)
+                                                            qpycomm.multiuser_address,
+                                                            qpycomm.multiuser_port,
+                                                            qpycomm.multiuser_key)
                     except:
                         self.muHandler.multiuser_alive.clear()
                         self.config.messages.add('SUB_CTRL: Exception in message transfer: '
