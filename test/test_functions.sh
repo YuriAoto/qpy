@@ -5,10 +5,10 @@
 #       for errors
 #
 #
-QPY_SOURCE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1; cd .. && pwd )"
+QPY_SOURCE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1; cd ../src/ && pwd )"
 QPY_MU_DIR="${HOME}/.qpy-multiuser-test"
 exe_QPY_MU="python ${QPY_SOURCE_DIR}/qpy-access-multiuser.py"
-exe_QPY="python ${QPY_SOURCE_DIR}/qpy"
+exe_QPY="python ${QPY_SOURCE_DIR}/../qpy"
 
 normal=$(tput sgr0)
 bold=`tput bold`
