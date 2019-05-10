@@ -566,7 +566,7 @@ class Job(object):
                 req = req or self.info[1] in pattern[k]
         return req
 
-class Job_Collection():
+class JobCollection():
     """Store information about the jobs.
     
     Attributes:

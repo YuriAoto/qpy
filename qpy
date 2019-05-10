@@ -7,7 +7,6 @@ import os
 import sys
 import subprocess
 import re
-import threading
 
 import qpy_system as qpysys
 import qpy_constants as qpyconst
@@ -34,7 +33,7 @@ def kill_master_instances(user, address, qpy_master_command):
                               "kill " + pid,
                               get_outerr=False,
                               mode='popen')
-            sys.stdout.write( 'Killing older qpy-master instance: ' + pid + '\n')
+            sys.stdout.write('Killing older qpy-master instance: ' + pid + '\n')
 
 def start_master_driver(user, address, qpy_master_command):
     """Start qpy-master and exit.
@@ -52,14 +51,8 @@ def start_master_driver(user, address, qpy_master_command):
     exit()
 
 
-
-
-
-
-
-
 # '--options' are to be called only by qpy-master, not by the users
-if (len( sys.argv) > 1):
+if len(sys.argv) > 1:
     if (sys.argv[1] == '--jobkill'):
         job_id = sys.argv[2]
         command = 'ps -fu ' + qpysys.sys_user
@@ -68,8 +61,6 @@ if (len( sys.argv) > 1):
                                        stdout = subprocess.PIPE,
                                        stderr = subprocess.PIPE)
         ps_out = kill_job_ps.stdout.readlines()
-
-        # Get calling PID and parents associations:
         grand_PID = ''
         parents = {}
         for l in ps_out:
@@ -78,16 +69,13 @@ if (len( sys.argv) > 1):
             re_res = re.search('export QPY_JOB_ID=' + job_id + ';', l)
             if (re_res):
                 grand_PID = new_pid[1]
-
-        pid_kill = qpyutil.get_all_children( grand_PID, parents)
+        pid_kill = qpyutil.get_all_children(grand_PID, parents)
         pid_kill.reverse()
         for i in pid_kill:
             kill_job = subprocess.call(['kill', '-9', i])
             print 'Killing PID ' + i
-
         exit()
 # end of '--options'
-
 
 try:
     option = qpyconst.KEYWORDS[sys.argv[1]][0]
@@ -97,21 +85,19 @@ except:
         if (str_len < len( opt)):
             str_len = len( opt)
     format_spc = '{0:' + str( str_len+1) + 's}'
-    usage_msg =  'Usage: ' + sys.argv[0] +  ' <option> [<arguments>].\n'
+    usage_msg = 'Usage: ' + sys.argv[0] +  ' <option> [<arguments>].\n'
     usage_msg += 'Options:'
     for opt in qpyconst.KEYWORDS:
-        usage_msg += '\n  ' + format_spc.format( opt+':') + ' ' + qpyconst.KEYWORDS[opt][1]
+        usage_msg += ('\n  ' + format_spc.format(opt + ':')
+                      + ' ' + qpyconst.KEYWORDS[opt][1])
     sys.exit( usage_msg)
 
 start_qpy_master = option == qpyconst.JOBTYPE_RESTART
-if (start_qpy_master):
+if start_qpy_master:
     option = qpyconst.JOBTYPE_FINISH
 
-# Get arguments, according to the option
 arguments = ()
-
-# Submit a job
-if (option == qpyconst.JOBTYPE_SUB):
+if option == qpyconst.JOBTYPE_SUB:
     job = ''
     next_is_attr = False
     for i in sys.argv[2:]:
@@ -121,13 +107,12 @@ if (option == qpyconst.JOBTYPE_SUB):
         next_is_attr = i == '-a' or i == '--node_attr' or i == '--attribute'
     arguments = [job, os.getcwd()]
 
-# Check jobs
-if (option == qpyconst.JOBTYPE_CHECK):
+if option == qpyconst.JOBTYPE_CHECK:
     arguments = {}
     for x in sys.argv[2:]:
         if x in JOB_STATUS:
             if ('status' in arguments):
-                arguments['status'].append( x)
+                arguments['status'].append(x)
             else:
                 arguments['status'] = [x]
         else:
@@ -146,8 +131,7 @@ if (option == qpyconst.JOBTYPE_CHECK):
                 else:
                     arguments['job_id'] = new_jobids
 
-# Config
-elif (option == qpyconst.JOBTYPE_CONFIG):
+elif option == qpyconst.JOBTYPE_CONFIG:
     if (len(sys.argv) == 4):
         arguments = (sys.argv[2], sys.argv[3])
     elif (len( sys.argv) > 4):
@@ -155,8 +139,8 @@ elif (option == qpyconst.JOBTYPE_CONFIG):
     elif (len( sys.argv) == 3):
         arguments = (sys.argv[2], ())
 
-# Kill jobs or clean list
-elif (option == qpyconst.JOBTYPE_KILL or option == qpyconst.JOBTYPE_CLEAN):
+elif (option == qpyconst.JOBTYPE_KILL
+      or option == qpyconst.JOBTYPE_CLEAN):
     if option == qpyconst.JOBTYPE_KILL:
         status_bound = (0,2)
     else:
@@ -173,77 +157,71 @@ elif (option == qpyconst.JOBTYPE_KILL or option == qpyconst.JOBTYPE_CLEAN):
                 arguments.append(os.path.abspath(x))
             else:
                 sys.exit( 'Range with wrong format or invalid status: ' + x)
-
     arguments = list( set( arguments))
 
-# Control queue
-elif (option == qpyconst.JOBTYPE_CTRLQUEUE):
-    if (len( sys.argv) < 3):
-        sys.exit( 'Give the queue control type.')
+elif option == qpyconst.JOBTYPE_CTRLQUEUE:
+    if len( sys.argv) < 3:
+        sys.exit('Give the queue control type.')
     else:
-        if (sys.argv[2] == 'jump'):
+        if sys.argv[2] == 'jump':
             new_range = []
             for x in sys.argv[3:-1]:
                 try:
                     new_range.extend(qpyutil.string_to_int_list(x))
                 except:
-                    sys.exit( 'Range with wrong format: ' + x)
-            if (not( new_range)):
-                    sys.exit( 'Give the jobs to change position.')
+                    sys.exit('Range with wrong format: ' + x)
+            if not new_range:
+                    sys.exit('Give the jobs to change position.')
             try:
-                pos = int( sys.argv[-1])
+                pos = int(sys.argv[-1])
             except:
-                if (sys.argv[-1] == 'begin'):
+                if sys.argv[-1] == 'begin':
                     pos = 0
-                elif (sys.argv[-1] == 'end'):
+                elif sys.argv[-1] == 'end':
                     pos = -1
                 else:
-                    sys.exit( 'Invalid jump position: ' + sys.argv[-1])
+                    sys.exit('Invalid jump position: ' + sys.argv[-1])
             arguments = ('jump', new_range, pos)
-
         else:
             arguments = sys.argv[2:]
 
 # Notes
-elif (option == qpyconst.JOBTYPE_NOTE):
-    if (len( sys.argv) < 3):
+elif option == qpyconst.JOBTYPE_NOTE:
+    if len(sys.argv) < 3:
         arguments = ()
-    elif (len( sys.argv) == 3):
-        arguments = [ sys.argv[2]]
+    elif len(sys.argv) == 3:
+        arguments = [sys.argv[2]]
     else:
-        arguments = [ sys.argv[2], ' '.join( sys.argv[3:])]
+        arguments = [sys.argv[2], ' '.join(sys.argv[3:])]
 
 # The qpy tutorial
-elif (option == qpyconst.JOBTYPE_TUTORIAL):
-    
+elif option == qpyconst.JOBTYPE_TUTORIAL:
     pattern = ''
     for i in sys.argv[2:3]:
         pattern += i
     for i in sys.argv[3:]:
         pattern += ' ' + i
-
-    if (pattern in qpyconst.KEYWORDS):
+    if pattern in qpyconst.KEYWORDS:
         pattern = '--pattern "# ' + pattern + '"'
-    elif (pattern):
+    elif pattern:
         pattern = '--pattern "' + pattern + '"'
-
     command = 'less '  + pattern + ' ' + qpysys.tutorial_file
     try:
-        subprocess.call( command, shell = True)
+        subprocess.call(command, shell = True)
     except:
-        sys.exit( 'Error when loading the tutorial.')
+        sys.exit('Error when loading the tutorial.')
     exit()
-
-
 
 address, port, conn_key = qpycomm.read_conn_files(qpysys.master_conn_file)
 
-if (port == None or conn_key == None):
-    if (start_qpy_master):
-        start_master_driver(qpysys.sys_user, address, qpysys.qpy_master_command)
+if port == None or conn_key == None:
+    if start_qpy_master:
+        start_master_driver(qpysys.sys_user,
+                            address,
+                            qpysys.qpy_master_command)
     else:
-        sys.exit('Problem to get the connection information. Are you sure that qpy-master is running?')
-
+        sys.exit('Problem to get the connection information.'
+                 + ' Are you sure that qpy-master is running?')
 try:
     master_msg = qpycomm.message_transfer((option, arguments),
                                           address,
@@ -251,16 +229,19 @@ try:
                                           conn_key,
                                           timeout = 3.0)
 except:
-    if (start_qpy_master):
+    if start_qpy_master:
         os.remove(qpysys.master_conn_file + '_port')
         os.remove(qpysys.master_conn_file + '_conn_key')
-        start_master_driver(qpysys.sys_user, address, qpysys.qpy_master_command)
-    sys.exit('Time for connection exceeded. Are you sure that qpy-master is running?')
+        start_master_driver(qpysys.sys_user,
+                            address,
+                            qpysys.qpy_master_command)
+    sys.exit('Time for connection exceeded.'
+             + ' Are you sure that qpy-master is running?')
 
 ansi_escape = re.compile(r'\x1b[^m]*m')
-if (not(sys.stdout.isatty())):
+if not sys.stdout.isatty():
     master_msg = ansi_escape.sub('', master_msg)
 sys.stdout.write(master_msg)
 
-if (start_qpy_master):
+if start_qpy_master:
     start_master_driver(qpysys.sys_user, address, qpysys.qpy_master_command)
