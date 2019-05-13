@@ -229,3 +229,24 @@ def parse_qpy_multiuser_cmd_line():
         exit()
 
     return option, arguments, start_qpy_multiuser
+
+
+def parse_node_info(L):
+    """A parser for the line in nodes_file"""
+    lspl = L.split()
+    name = lspl.pop(0)
+    address = name
+    n_cores = int(lspl.pop(0))
+    if 'M' in lspl:
+        multicore = True
+        lspl.remove('M')
+    else:
+        multicore = False
+    for i in lspl:
+        if 'address=' in i:
+            address = i.split('=')[1]
+            lspl.remove(i)
+            break
+    attributes = lspl
+
+    return name, n_cores, address, multicore, attributes

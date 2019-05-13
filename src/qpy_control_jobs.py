@@ -11,6 +11,7 @@ from Queue import Queue
 import qpy_system as qpysys
 import qpy_constants as qpyconst
 import qpy_communication as qpycomm
+import qpy_nodes_management as qpynodes
 
 class CheckRun(threading.Thread):
     """Check if the jobs are still running.
@@ -152,7 +153,7 @@ class JobsKiller(threading.Thread):
             try:
                 if job.status != qpyconst.JOB_ST_RUNNING:
                     raise
-                (std_out, std_err) = qpycomm.node_exec(job.node,
+                (std_out, std_err) = qpycomm.node_exec(job.node.address,
                                                        command,
                                                        pKey_file=self.config.ssh_p_key_file)
             except:
@@ -164,7 +165,7 @@ class JobsKiller(threading.Thread):
                 self.jobs.mv(job, self.jobs.running, self.jobs.killed)
                 self.jobs.write_all_jobs()
                 self.config.messages.add('Killing: ' + str(job.ID)
-                                         + ' on node ' + job.node + '. stdout = '
+                                         + ' on node ' + repr(job.node) + '. stdout = '
                                          + repr(std_out)  + '. stderr = '
                                          + repr(std_err))
                 try:
@@ -279,12 +280,12 @@ class Submission(threading.Thread):
                         self.config.messages.add('SUB_CTRL: Message from multiuser: '
                                                  + str(msg_back))
                         if msg_back[0] == 0:
-                            avail_node = msg_back[1]
+                            avail_node = qpynodes.UsersNode.from_string(msg_back[1])
                         else:
                             self.skip_job_sub = 30
                         if avail_node != None:
                             self.config.messages.add("SUB_CTRL: submitting job in "
-                                                     + avail_node)
+                                                     + repr(avail_node))
                             job = self.jobs.Q_pop()
                             job.node = avail_node
                             try:
@@ -293,8 +294,8 @@ class Submission(threading.Thread):
                                 # If it's not running, we have to tell qpy-multiuser back somehow...
                                 self.config.messages.add("SUB_CTRL: exception when submitting job: "
                                                          + repr(sys.exc_info()[1]))
-                                self.logger.error("Exception in SUB_CTRL when submitting job",
-                                                  exc_info=True)
+                                self.config.logger.error("Exception in SUB_CTRL when submitting job",
+                                                         exc_info=True)
                                 job.node = None
                                 self.job.append(job, self.jobs.queue)
                                 self.job.append(job, self.jobs.Q)

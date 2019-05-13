@@ -360,7 +360,7 @@ def handle_qpy(jobs,
                 all_notes = os.listdir(qpysys.notes_dir)
                 msg = ''
                 for n in all_notes:
-                    ifn[0:6] == 'notes.':
+                    if n[0:6] == 'notes.':
                         msg += n[6:] + ' '
                 if msg:
                     msg = 'You have notes for the following jobs:\n' + msg + '\n'

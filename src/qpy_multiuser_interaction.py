@@ -68,8 +68,8 @@ def _format_node(node, info):
     return infos + messages
 
 def _format_nodes(nodes):
-    return "\n".join(_format_node(node,info)
-                     for node,info in nodes.iteritems())
+    return "\n".join(_format_node(node, info)
+                     for node, info in nodes.iteritems())
 
 def _handle_reload_nodes(args, nodes):
     """Handle a request to reload the nodes.
@@ -242,9 +242,9 @@ def _handle_add_job(args, users, nodes):
                                                users,
                                                nodes)
         users.logger.debug('I am here: ' + str(status))
-        if isinstance(status,str):
+        if isinstance(status, str):
             users.all_[user].n_queue = queue_size -1
-            return 0,status
+            return 0, status
         else:
             users.all_[user].n_queue = queue_size
             return (1,'No node with this requirement.') if status == 1 \

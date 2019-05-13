@@ -2,19 +2,56 @@
 
 
 """
+import sys
 from collections import namedtuple
 import threading
 
+from qpy_parser import parse_node_info
 import qpy_system as qpysys
 import qpy_logging as qpylog
 import qpy_communication as qpycomm
 
+class UsersNode(object):
+    """A node from the point of view of a qpy user
+    
+    Attributes:
+    name (str)        Node name
+    address (str)     Node address (hostname, where one can ssh)
+    """
+    __slots__ = (
+        'name',
+        'address')
+
+    def __init__(self, name, address):
+        """Initialise the class"""
+        self.name = name
+        self.address = address
+
+    def __str__(self):
+        """String representation: just the name"""
+        return self.name
+
+    def __repr__(self):
+        """Full representation: <name>=<address>"""
+        return self.name + '=' + self.address
+
+    @classmethod
+    def from_string(cls, string):
+        """Return object from string, as "<name>=<address>"; see __repr__."""
+        try:
+            name, address = string.split('=')
+        except:
+            name = address = string
+        return cls(name, address)
+
+    
 class Node(object):
     """A node from the qpy-multiuser point of view.
     
     Attributes:
     
     name (str)               Name for the node
+    address (str)            Address of the node
     max_cores (int)          Total number of cores this node has available
     messages (Messages)      Messages
     is_up (bool)             If True, the node is up, accessible and running
@@ -33,6 +70,7 @@ class Node(object):
     attributes (list)        A list, with the attributes of this node
     """
     __slots__ = ('name',
+                 'address',
                  'max_cores',
                  'messages',
                  'is_up',
@@ -46,6 +84,7 @@ class Node(object):
                  'logger')
     def __init__(self, name, max_cores, logger):
         self.name = name
+        self.address = name
         self.max_cores = max_cores
         self.messages = qpylog.Messages()
         self.messages.save = True
@@ -82,7 +121,7 @@ class Node(object):
 
         command = "top -b -n1"# | sed -n '8,50p'"
         try:
-            (std_out, std_err) = qpycomm.node_exec(self.name,
+            (std_out, std_err) = qpycomm.node_exec(self.address,
                                                    command)
             # dumb: should be improved
             std_out = '\n'.join(std_out.split('\n')[8:max(len(std_out),50)])
@@ -106,7 +145,7 @@ class Node(object):
 
         command = "free -g"
         try:
-            (std_out, std_err) = qpycomm.node_exec(self.name,
+            (std_out, std_err) = qpycomm.node_exec(self.address,
                                                    command)
         except:
             self.logger.exception(
@@ -220,22 +259,22 @@ class NodesCollection(object):
             return -1
         nodes_in_file = []
         cores_in_file = []
+        addresses_in_file = []
         attr_in_file = []
         nodes_for_multicores = []
         for line in f:
-            line_spl = line.split()
             try:
-                nodes_in_file.append(line_spl[0])
-                cores_in_file.append(int(line_spl[1]))
+                name, n_cores, address, multicore, attributes = parse_node_info(line)
             except:
+                print(sys.exc_info())
                 f.close()
                 return -2
-            if ('M' in line_spl[2:]):
-                nodes_for_multicores.append(line_spl[0])
-            if len(line_spl) > 2:
-                attr_in_file.append(line_spl[2:])
-            else:
-                attr_in_file.append([])
+            nodes_in_file.append(name)
+            addresses_in_file.append(address)
+            cores_in_file.append(n_cores)
+            if multicore:
+                nodes_for_multicores.append(name)
+            attr_in_file.append(attributes)
         f.close()
         # Put messages
         for i in range(len(nodes_in_file)):
@@ -247,6 +286,7 @@ class NodesCollection(object):
                 self.all_[n].attributes = attr_in_file[i]
             else:
                 new_node = Node(n, c, self.logger)
+                new_node.address = addresses_in_file[i]
                 new_node.attributes = attr_in_file[i]
                 self.all_[n] = new_node
                 self.N_cores += new_node.max_cores
@@ -255,8 +295,8 @@ class NodesCollection(object):
         nodes_to_remove = []
         names = []
         for n in self.all_:
-            if (n in nodes_in_file):
-                if (n in nodes_for_multicores):
+            if n in nodes_in_file:
+                if n in nodes_for_multicores:
                     self.all_[n].pref_multicores = True
                     names.insert(0, n)
                 else:

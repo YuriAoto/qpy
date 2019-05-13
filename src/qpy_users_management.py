@@ -213,7 +213,7 @@ class User(object):
                 return 1
             new_job = MultiuserJob(self.name, jobID, mem, num_cores, best_node)
             self.add_job(new_job, nodes)
-            return best_node
+            return best_node + '=' + nodes.all_[best_node].address
         return 2
 
 class UsersCollection(object):

@@ -14,6 +14,7 @@ import termcolor.termcolor as termcolour
 import qpy_system as qpysys
 import qpy_constants as qpyconst
 import qpy_communication as qpycomm
+import qpy_nodes_management as qpynodes
 
 class JobId(object):
     """The job ID.
@@ -172,7 +173,7 @@ class Job(object):
     n_cores (int)           Number of cores used by the job
     mem (float)             Memory requested for this job
     node_attr (list)        The node attributes for this job
-    node (str)              The node name where this job is running
+    node (UsersNode)        The node where this job is running
                             It is None for jobs in the queue or undone
     status (int)            The status of the job. These can be:
                             qpyconst.JOB_ST_QUEUE
@@ -281,7 +282,7 @@ class Job(object):
         if (self.node == None):
             job_str += 'None'
         else:
-            job_str += self.node
+            job_str += repr(self.node)
         job_str += ('---' + str(self.queue_time)
                     + '---' + str(self.start_time)
                     + '---' + str(self.end_time) + '\n')
@@ -398,11 +399,11 @@ class Job(object):
                     + ' 2> ' + out_or_err_name( self, '.err'))
         config.logger.debug('Command: ' + command)
         try:
-            qpycomm.node_exec(self.node,
+            qpycomm.node_exec(self.node.address,
                               command,
                               get_outerr=False,
                               pKey_file=config.ssh_p_key_file,
-                              localhost_popen_shell=(self.node == 'localhost'))
+                              localhost_popen_shell=(self.node.address == 'localhost'))
         except:
             config.logger.error("Exception in run", exc_info=True)
             raise Exception( "Exception in run: " + str(sys.exc_info()[1]))
@@ -423,7 +424,7 @@ class Job(object):
         connection to the node is not successful.
         """
         command = 'ps -fu ' + qpysys.sys_user
-        (std_out, std_err) = qpycomm.node_exec(self.node,
+        (std_out, std_err) = qpycomm.node_exec(self.node.address,
                                                command,
                                                pKey_file=config.ssh_p_key_file)
         re_res = re.search('export QPY_JOB_ID=' + str(self.ID) + ';', std_out)
@@ -693,7 +694,7 @@ class JobCollection(object):
                                              job.ID,
                                              job.mem,
                                              job.n_cores,
-                                             job.node))
+                                             job.node.name))
         return cur_jobs
 
     def initialize_old_jobs(self, sub_ctrl):
@@ -722,7 +723,7 @@ class JobCollection(object):
                         elif i%4 == 2:
                             new_node_and_times = line.strip().split('---')
                             new_node = new_node_and_times[0]
-                            if (len( new_node_and_times) == 1):
+                            if len(new_node_and_times) == 1:
                                 new_times = ['None','None','None']
                             else:
                                 new_times = new_node_and_times[1:]
@@ -754,7 +755,7 @@ class JobCollection(object):
                             if new_node == 'None':
                                 new_job.node = None
                             else:
-                                new_job.node = new_node
+                                new_job.node = qpynodes.UsersNode.from_string(new_node)
                             new_job.status = int(new_status)
                             new_job.node_attr = new_node_attr
                             self.all.append(new_job)
