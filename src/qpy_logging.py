@@ -57,7 +57,7 @@ def traceback_exception(msg):
                                                              tb[3])
     return tb_msg
 
-class Messages():
+class Messages(object):
     """The messages for debbuging, generated at run time.
     
     Attributes:
@@ -79,7 +79,11 @@ class Messages():
     TODO:
     replace clean to __del__?
     """
-    
+    __slots__ = (
+        'save',
+        'messages',
+        'max_len')
+
     def __init__(self):
         """Initialise the class."""
         self.save = False

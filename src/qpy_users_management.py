@@ -8,7 +8,7 @@ import qpy_logging as qpylog
 import qpy_communication as qpycomm
 from qpy_job import MultiuserJob
 
-class User():
+class User(object):
     """A user from the qpy-multiuser point of view.
 
     This class contains the main functions to handle the interaction
@@ -32,6 +32,19 @@ class User():
     messages      Debugging messages
     """
 
+    __slots__ = (
+        'name',
+        'address',
+        'port',
+        'conn_key',
+        'min_cores',
+        'extra_cores',
+        'max_cores',
+        'n_used_cores',
+        'n_queue',
+        'cur_jobs',
+        'messages')
+        
     def __init__(self, name, address, port, conn_key):
         """Initiate the class
         
@@ -213,7 +226,7 @@ class UsersCollection(object):
     def __init__(self, logger):
         """ Initialise the class"""
         self.all_ = {}
-        self.logger
+        self.logger = logger
 
     def load_users(self, nodes):
         """Load the users.

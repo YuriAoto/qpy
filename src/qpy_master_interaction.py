@@ -38,6 +38,11 @@ class MultiuserHandler(threading.Thread):
     
     the arguments are option dependent.
     """
+    __slots__ = (
+        'jobs',
+        'multiuser_alive',
+        'config',
+        'address')
 
     def __init__(self, jobs, multiuser_alive, config):
         """Initiates the class
@@ -57,7 +62,6 @@ class MultiuserHandler(threading.Thread):
         self.multiuser_alive = multiuser_alive
         self.config = config
         self.address = qpycomm.read_address_file(qpysys.master_conn_file)
-
         (self.Listener_master,
          self.port,
          self.conn_key) = qpycomm.establish_Listener_connection(
@@ -74,16 +78,16 @@ class MultiuserHandler(threading.Thread):
             (msg_type, arguments) = client_master.recv()
             self.config.messages.add('MULTIUSER_HANDLER: Received: '
                                      + str(msg_type) + ' -> ' + str(arguments))
-            if (msg_type == qpyconst.FROM_MULTI_CUR_JOBS):
+            if msg_type == qpyconst.FROM_MULTI_CUR_JOBS:
                 multiuser_cur_jobs = self.jobs.multiuser_cur_jobs()
                 client_master.send(multiuser_cur_jobs)
                 self.multiuser_alive.set()
-            elif (msg_type == qpyconst.FROM_MULTI_FINISH):
+            elif msg_type == qpyconst.FROM_MULTI_FINISH:
                 client_master.send('Finishing MULTIUSER_HANDLER.')
                 self.Listener_master.close()
                 break
             else:
-                client_master.send( 'Unknown option: ' + str( job_type) + '\n')
+                client_master.send('Unknown option: ' + str(job_type) + '\n')
 
     def add_to_multiuser(self):
         """Contact qpy-multiuser to tell connection details and jobs."""
@@ -106,7 +110,7 @@ class MultiuserHandler(threading.Thread):
             self.config.logger.error('Exception in MULTIUSER_HANDLER message transfer',
                                      exc_info=True)
         else:
-            if (msg_back[0] ==  2):
+            if msg_back[0] ==  2:
                 self.multiuser_alive.clear()
             else:
                 self.multiuser_alive.set()
@@ -158,7 +162,7 @@ def handle_qpy(jobs,
                             + str(job_type) + " -> " + str(arguments))
         # Send a job
         # arguments = the job info (see JOB.info)
-        if (job_type == qpyconst.JOBTYPE_SUB):
+        if job_type == qpyconst.JOBTYPE_SUB:
             new_job = Job(int(job_id), arguments, config)
             try:
                 new_job.parse_options()
@@ -200,7 +204,7 @@ def handle_qpy(jobs,
         
         # Check jobs
         # arguments: a dictionary, indicating patterns (see JOB.asked)
-        elif (job_type == qpyconst.JOBTYPE_CHECK):
+        elif job_type == qpyconst.JOBTYPE_CHECK:
             if (config.sub_paused):
                 msg_pause = 'Job submission is paused.\n'
             else:
@@ -209,16 +213,16 @@ def handle_qpy(jobs,
 
         # Kill a job
         # arguments = a list of jobIDs and status (all, queue, running)
-        elif (job_type == qpyconst.JOBTYPE_KILL):
-            kill_q = (( 'all' in arguments) or ('queue' in arguments))
-            kill_r = (( 'all' in arguments) or ('running' in arguments))
+        elif job_type == qpyconst.JOBTYPE_KILL:
+            kill_q = ('all' in arguments) or ('queue' in arguments)
+            kill_r = ('all' in arguments) or ('running' in arguments)
             for st in ['all', 'queue', 'running']:
                 while (st in arguments):
                     arguments.remove( st)
             n_kill_q = 0
             to_remove = []
             for job in jobs.queue:
-                if (job.ID in arguments or kill_q):
+                if job.ID in arguments or kill_q:
                     to_remove.append(job)
             for job in to_remove:
                 job.status = qpyconst.JOB_ST_UNDONE
@@ -230,21 +234,21 @@ def handle_qpy(jobs,
             to_remove = []
             with jobs.lock:
                 for job in jobs.running:
-                    if (job.ID in arguments or kill_r):
+                    if job.ID in arguments or kill_r:
                         to_remove.append(job)
             for job in to_remove:
                 jobs_killer.to_kill.put(job)
                 n_kill_r += 1
-            if (n_kill_q + n_kill_r):
+            if n_kill_q + n_kill_r:
                 sub_ctrl.skip_job_sub = 0
             msg = ''
-            if (n_kill_q):
-                plural = qpyutil.get_plural( ('job', 'jobs'), n_kill_q)
+            if n_kill_q:
+                plural = qpyutil.get_plural(('job', 'jobs'), n_kill_q)
                 msg += plural[1] + ' ' + plural[0] + ' removed from the queue.\n'
-            if (n_kill_r):
+            if n_kill_r:
                 plural = qpyutil.get_plural( ('job', 'jobs'), n_kill_r)
                 msg += plural[1] + ' ' + plural[0] + ' will be killed.\n'
-            if (not( msg)):
+            if not msg:
                 msg = 'Nothing to do: required jobs not found.\n'
             else:
                 jobs.write_all_jobs()
@@ -252,14 +256,14 @@ def handle_qpy(jobs,
 
         # Finish the execution
         # argumets: no arguments
-        if (job_type == qpyconst.JOBTYPE_FINISH):
+        if job_type == qpyconst.JOBTYPE_FINISH:
             client_master.send('Stopping qpy-master driver.\n')
             Listener_master.close()
             break
 
         # Show status
         # No arguments (yet)
-        elif (job_type == qpyconst.JOBTYPE_STATUS):
+        elif job_type == qpyconst.JOBTYPE_STATUS:
             try:
                 msg_back = qpycomm.message_transfer(
                     (qpyconst.MULTIUSER_STATUS, ()),
@@ -278,31 +282,31 @@ def handle_qpy(jobs,
 
         # Control queue
         # arguments: a list: [<type>, <arguments>].
-        elif (job_type == qpyconst.JOBTYPE_CTRLQUEUE):
+        elif job_type == qpyconst.JOBTYPE_CTRLQUEUE:
             ctrl_type = arguments[0]
-            if (ctrl_type == 'pause' or ctrl_type == 'continue'):
-                if (ctrl_type == 'pause'):
+            if ctrl_type == 'pause' or ctrl_type == 'continue':
+                if ctrl_type == 'pause':
                     config.sub_paused = True
                     msg = 'Job submission paused.\n'
                 else:
                     config.sub_paused = False
                     msg = 'Job submission continued.\n'
                 config.write_on_file()
-                sub_ctrl.submit_jobs = not(config.sub_paused)
+                sub_ctrl.submit_jobs = not config.sub_paused
 
-            elif (ctrl_type == 'jump'):
-                if (not(config.sub_paused)):
+            elif ctrl_type == 'jump':
+                if not config.sub_paused:
                     msg = 'Pause the queue before trying to control it.\n'
                 else:
                     msg = jobs.jump_Q(arguments[1], arguments[2])
             else:
                 msg = 'Unknown ctrlQueue type: ' + ctrl_type + '.\n'
-            client_master.send( msg)
+            client_master.send(msg)
 
         # Show current configuration
         # arguments: optionally, a pair to change the configuration: (<key>, <value>)
-        elif (job_type == qpyconst.JOBTYPE_CONFIG):
-            if (arguments):
+        elif job_type == qpyconst.JOBTYPE_CONFIG:
+            if arguments:
                 (status, msg) = config.set_key(arguments[0], arguments[1])
                 msg = msg + '\n'
                 config.write_on_file()
@@ -312,36 +316,36 @@ def handle_qpy(jobs,
 
         # Clean finished jobs
         # arguments = a list of jobIDs and status (all, done, killed, undone)
-        elif (job_type == qpyconst.JOBTYPE_CLEAN):
+        elif job_type == qpyconst.JOBTYPE_CLEAN:
             n_jobs = 0
             for i in arguments:
                 arg_is_id = isinstance(i, int)
                 arg_is_dir = isinstance(i, str) and os.path.isdir(i)
                 ij = 0
                 with jobs.lock:
-                    while (ij < len( jobs.all)):
+                    while ij < len(jobs.all):
                         job = jobs.all[ij]
                         remove = False
-                        if (job.status > 1):
+                        if job.status > 1:
                             remove = arg_is_id and i == job.ID
                             remove = remove or (arg_is_dir and i == job.info[1])
-                            remove = remove or not(arg_is_id) and i == 'all'
-                            remove = (remove or not(arg_is_id)
+                            remove = remove or (not arg_is_id) and i == 'all'
+                            remove = (remove or (not arg_is_id)
                                       and i == qpyconst.JOB_STATUS[job.status])
-                            if (remove):
-                                if (job.status == qpyconst.JOB_ST_DONE):
+                            if remove:
+                                if job.status == qpyconst.JOB_ST_DONE:
                                     jobs.remove(job, jobs.done)
-                                elif (job.status == qpyconst.JOB_ST_KILLED):
+                                elif job.status == qpyconst.JOB_ST_KILLED:
                                     jobs.remove(job, jobs.killed)
-                                elif (job.status == qpyconst.JOB_ST_UNDONE):
+                                elif job.status == qpyconst.JOB_ST_UNDONE:
                                     jobs.remove(job, jobs.undone)
                                 jobs.remove(job, jobs.all)
                                 n_jobs += 1
-                                if (os.path.isfile(qpysys.notes_dir + 'notes.' + str(job.ID))):
-                                    os.remove(     qpysys.notes_dir + 'notes.' + str(job.ID))
-                        if (not( remove)):
+                                if os.path.isfile(qpysys.notes_dir + 'notes.' + str(job.ID)):
+                                    os.remove(qpysys.notes_dir + 'notes.' + str(job.ID))
+                        if not remove:
                             ij += 1
-            if (n_jobs):
+            if n_jobs:
                 jobs.write_all_jobs()
                 plural = qpyutil.get_plural(('job', 'jobs'), n_jobs)
                 msg = plural[1] + ' finished ' + plural[0] + ' removed.\n'
@@ -351,27 +355,27 @@ def handle_qpy(jobs,
 
         # Add and read notes
         # arguments = (jobID[, note])
-        elif (job_type == qpyconst.JOBTYPE_NOTE):
-            if (len( arguments) == 0):
-                all_notes = os.listdir( qpysys.notes_dir)
+        elif job_type == qpyconst.JOBTYPE_NOTE:
+            if len(arguments) == 0:
+                all_notes = os.listdir(qpysys.notes_dir)
                 msg = ''
                 for n in all_notes:
-                    if (n[0:6] == 'notes.'):
+                    ifn[0:6] == 'notes.':
                         msg += n[6:] + ' '
-                if (msg):
+                if msg:
                     msg = 'You have notes for the following jobs:\n' + msg + '\n'
                 else:
                     msg = 'You have no notes.\n'
             else:
                 notes_file = qpysys.notes_dir + 'notes.' + str(arguments[0])
                 if (os.path.isfile( notes_file)):
-                    f = open( notes_file, 'r')
+                    f = open(notes_file, 'r')
                     notes = f.read()
                     f.close()
                 else:
                     notes = ''
-                if (len( arguments) == 1):
-                    if (not( notes)):
+                if len(arguments) == 1:
+                    if not notes:
                         msg = 'No notes for ' + arguments[0] + '\n'
                     else:
                         msg = notes + '\n'
@@ -383,7 +387,7 @@ def handle_qpy(jobs,
                     f.write(notes)
                     f.close()
                     msg = 'Note stored.\n'
-            client_master.send( msg)
+            client_master.send(msg)
 
         else:
-            client_master.send( 'Unknown option: ' + str( job_type) + '\n')
+            client_master.send('Unknown option: ' + str( job_type) + '\n')

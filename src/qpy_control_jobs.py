@@ -30,6 +30,12 @@ class CheckRun(threading.Thread):
     This is done at each config.sleep_time_check_run seconds.
     """
 
+    __slots__ = (
+        'jobs',
+        'multiuser_alive',
+        'config',
+        'finish')
+    
     def __init__(self, jobs, multiuser_alive, config):
         """Initiate the class.
 
@@ -60,10 +66,10 @@ class CheckRun(threading.Thread):
                     self.config.messages.add('CHECK_RUN: Exception in is_running: '
                                              + repr(sys.exc_info()[0]))
                     is_running = True
-                if (not is_running and job.status == qpyconst.JOB_ST_RUNNING):
+                if (not is_running) and job.status == qpyconst.JOB_ST_RUNNING:
                     job.status = qpyconst.JOB_ST_DONE
                     job.end_time = datetime.today()
-                    job.run_duration()
+                    job.run_duration_()
                     jobs_modification = True
                     self.jobs.mv(job, self.jobs.running, self.jobs.done)
                     self.skip_job_sub = 0
@@ -90,13 +96,13 @@ class CheckRun(threading.Thread):
                         self.config.messages.add('CHECK_RUN: Multiuser message: ' + str(msg_back))
                 else:
                     i += 1
-            if (jobs_modification):
+            if jobs_modification:
                 self.jobs.write_all_jobs()
                 jobs_modification = False
             sleep (self.config.sleep_time_check_run)
 
 
-class JobsKiller( threading.Thread):
+class JobsKiller(threading.Thread):
     """Kill the jobs when required.
     
     Attributes:
@@ -115,6 +121,12 @@ class JobsKiller( threading.Thread):
     we have to kill several times
     """
 
+    __slots__ = (
+        'jobs',
+        'multiuser_alive',
+        'config',
+        'to_kill')
+    
     def __init__( self, jobs, multiuser_alive, config):
         """Initiate the class.
 
@@ -126,7 +138,6 @@ class JobsKiller( threading.Thread):
         self.jobs = jobs
         self.multiuser_alive = multiuser_alive
         self.config = config
-
         threading.Thread.__init__( self)
         self.to_kill = Queue()
 
@@ -134,14 +145,12 @@ class JobsKiller( threading.Thread):
         """Kill jobs, see class documentation."""
         while True:
             job = self.to_kill.get()
-
-            if (isinstance(job, str)):
-                if (job == 'kill'):
+            if isinstance(job, str):
+                if job == 'kill':
                     break
-
             command = 'python ' + qpysys.source_dir + '/qpy_job_killer.py ' + str(job.ID)
             try:
-                if (job.status != qpyconst.JOB_ST_RUNNING):
+                if job.status != qpyconst.JOB_ST_RUNNING:
                     raise
                 (std_out, std_err) = qpycomm.node_exec(job.node,
                                                        command,
@@ -151,15 +160,13 @@ class JobsKiller( threading.Thread):
             else:
                 job.status = qpyconst.JOB_ST_KILLED
                 job.end_time = datetime.today()
-                job.run_duration()
+                job.run_duration_()
                 self.jobs.mv(job, self.jobs.running, self.jobs.killed)
                 self.jobs.write_all_jobs()
-
                 self.config.messages.add('Killing: ' + str(job.ID)
                                          + ' on node ' + job.node + '. stdout = '
                                          + repr(std_out)  + '. stderr = '
                                          + repr(std_err))
-
                 try:
                     msg_back = qpycomm.message_transfer((qpyconst.MULTIUSER_REMOVE_JOB,
                                                          (qpysys.user,
@@ -197,8 +204,15 @@ class Submission(threading.Thread):
     a node is given.
 
     Each cycle is done at each config.sleep_time_sub_ctrl seconds.
-
     """
+
+    __slots__ = (
+        'jobs'
+        'muHandler'
+        'config'
+        'finish'
+        'skip_job_sub'
+        'submit_jobs')
 
     def __init__(self, jobs, muHandler, config):
         """Initiate the class.
@@ -211,10 +225,8 @@ class Submission(threading.Thread):
         self.jobs = jobs
         self.muHandler = muHandler
         self.config = config
-        
         threading.Thread.__init__(self)
         self.finish = threading.Event()
-        
         self.skip_job_sub = 0
         self.submit_jobs = True
 
@@ -223,7 +235,7 @@ class Submission(threading.Thread):
         n_time_multiuser = 0
         self.jobs.initialize_old_jobs(self)
         jobs_modification = False
-        if not(self.muHandler.multiuser_alive.is_set()):
+        if not self.muHandler.multiuser_alive.is_set():
             self.skip_job_sub = 30
             
         while not self.finish.is_set():
@@ -231,12 +243,12 @@ class Submission(threading.Thread):
             if ((not self.muHandler.multiuser_alive.is_set())
                 and self.skip_job_sub == 0):
                 self.muHandler.add_to_multiuser()
-                if not(self.muHandler.multiuser_alive.is_set()):
+                if not self.muHandler.multiuser_alive.is_set():
                     self.skip_job_sub = 30
 
-            if (self.submit_jobs and self.skip_job_sub == 0):
+            if self.submit_jobs and self.skip_job_sub == 0:
 
-                if (len(self.jobs.Q) != 0):
+                if len(self.jobs.Q) != 0:
                     next_jobID = self.jobs.Q[-1].ID
                     next_Ncores = self.jobs.Q[-1].n_cores
                     next_mem = self.jobs.Q[-1].mem
@@ -266,11 +278,11 @@ class Submission(threading.Thread):
                         self.muHandler.multiuser_alive.set()
                         self.config.messages.add('SUB_CTRL: Message from multiuser: '
                                                  + str(msg_back))
-                        if (msg_back[0] == 0):
+                        if msg_back[0] == 0:
                             avail_node = msg_back[1]
                         else:
                             self.skip_job_sub = 30
-                        if (avail_node != None):
+                        if avail_node != None:
                             self.config.messages.add("SUB_CTRL: submitting job in "
                                                      + avail_node)
                             job = self.jobs.Q_pop()
@@ -289,11 +301,11 @@ class Submission(threading.Thread):
                             else:
                                 self.jobs.mv(job, self.jobs.queue, self.jobs.running)
                                 jobs_modification = True
-                if (jobs_modification):
+                if jobs_modification:
                     self.jobs.write_all_jobs()
                     jobs_modification = False
             else:
-                if (self.skip_job_sub > 0):
+                if self.skip_job_sub > 0:
                     self.skip_job_sub -= 1
                 self.config.messages.add("SUB_CTRL: Skipping job submission.")
             sleep(self.config.sleep_time_sub_ctrl)

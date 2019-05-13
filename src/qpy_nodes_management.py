@@ -9,7 +9,7 @@ import qpy_system as qpysys
 import qpy_logging as qpylog
 import qpy_communication as qpycomm
 
-class Node():
+class Node(object):
     """A node from the qpy-multiuser point of view.
     
     Attributes:
@@ -32,17 +32,18 @@ class Node():
                              commant top)
     attributes (list)        A list, with the attributes of this node
     """
-    # __slots__ = ('name',
-    #              'max_cores',
-    #              'messages',
-    #              'is_up',
-    #              'n_used_cores',
-    #              'pref_multicores',
-    #              'req_mem',
-    #              'total_mem',
-    #              'free_mem_real',
-    #              'n_outsiders',
-    #              'attributes')
+    __slots__ = ('name',
+                 'max_cores',
+                 'messages',
+                 'is_up',
+                 'n_used_cores',
+                 'pref_multicores',
+                 'req_mem',
+                 'total_mem',
+                 'free_mem_real',
+                 'n_outsiders',
+                 'attributes',
+                 'logger')
     def __init__(self, name, max_cores, logger):
         self.name = name
         self.max_cores = max_cores
@@ -176,9 +177,10 @@ class NodesCollection(object):
         'N_min_cores',
         'N_used_cores',
         'N_used_min_cores',
-        'N_outsiders')
+        'N_outsiders',
+        'logger')
     
-    def __init__(self):
+    def __init__(self, logger):
         """Initilise the class
         """
         self.all_ = {}
@@ -191,6 +193,7 @@ class NodesCollection(object):
         self.N_used_cores  = 0
         self.N_used_min_cores = 0
         self.N_outsiders = 0
+        self.logger = logger
 
     def load_nodes(self):
         """Load the nodes.
@@ -243,7 +246,7 @@ class NodesCollection(object):
                 self.all_[n].max_cores = c
                 self.all_[n].attributes = attr_in_file[i]
             else:
-                new_node = Node(n, c)
+                new_node = Node(n, c, self.logger)
                 new_node.attributes = attr_in_file[i]
                 self.all_[n] = new_node
                 self.N_cores += new_node.max_cores
@@ -278,8 +281,13 @@ class CheckNodes(threading.Thread):
     
     This check is done at each (global) check_time seconds
     """
+
+    __slots__ = (
+        'finish',
+        'all_nodes',
+        'logger')
     
-    def __init__(self, all_nodes):
+    def __init__(self, all_nodes, logger):
         """Initialte the class"""
         threading.Thread.__init__(self)
         self.finish = threading.Event()
@@ -294,7 +302,7 @@ class CheckNodes(threading.Thread):
                 for node in self.all_nodes.all_:
                     self.logger.info("checking %s",node)
                     nodes_info[node] = self.all_nodes.all_[node].check()
-                    logger.logger.info("done with %s",node)
+                    self.logger.info("done with %s",node)
                 with self.all_nodes.check_lock:
                     self.all_nodes.N_outsiders += (nodes_info[node].n_outsiders
                                                    - self.all_nodes.all_[node].n_outsiders)
@@ -304,6 +312,6 @@ class CheckNodes(threading.Thread):
                         self.all_nodes.all_[node].total_mem = nodes_info[node].total_mem
                         self.all_nodes.all_[node].free_mem_real = nodes_info[node].free_mem_real
             except:
-                logger.exception("Error in CHECK_NODES")
+                self.logger.exception("Error in CHECK_NODES")
             self.finish.wait(self.all_nodes.check_time)
 

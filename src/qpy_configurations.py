@@ -11,7 +11,7 @@ import qpy_logging as qpylog
 import qpy_constants as qpyconst
 import qpy_useful_cosmetics as qpyutil
 
-class Configurations():
+class Configurations(object):
     """The current configuration of qpy.
     
     Attributes:
@@ -46,6 +46,24 @@ class Configurations():
     See also:
     Messages
     """
+    __slots__ = (
+        'config_file',
+        'messages',
+        'job_fmt_pattern',
+        'use_colour',
+        'colour_scheme',
+        'use_script_copy',
+        'sub_paused',
+        'default_attr',
+        'and_attr',
+        'or_attr',
+        'sleep_time_sub_ctrl',
+        'sleep_time_check_run',
+        'source_these_files',
+        'ssh_p_key_file',
+        'logger_level',
+        'logger')
+    
     def __init__(self, config_file):
         """Initialise a new set of configurations
         
