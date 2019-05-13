@@ -19,13 +19,18 @@ from qpy_multiuser_interaction import handle_client
 if (not(os.path.isdir(qpysys.qpy_multiuser_dir))):
     os.makedirs(qpysys.qpy_multiuserdir)
 os.chmod(qpysys.qpy_multiuser_dir, 0700)
-qpynodes.load_nodes()
-qpyusers.load_users()
-check_nodes = qpynodes.CheckNodes()
+
+logger = configure_logger(qpysys.multiuser_log_file,
+                          logging.WARNING)
+nodes = qpynodes.NodesCollection(logger)
+nodes.load_nodes()
+users = qpyusers.UsersCollection(logger)
+users.load_users(nodes)
+check_nodes = qpynodes.CheckNodes(nodes, logger)
 check_nodes.start()
 try:
-    handle_client()
+    handle_client(users, nodes, logger)
 except:
     qpylog.logging.exception("Exception at handle_client")
-qpylog.logger.info('Finishing main thread of qpy-multiuser')
+logger.info('Finishing main thread of qpy-multiuser')
 check_nodes.finish.set()

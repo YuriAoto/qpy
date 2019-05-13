@@ -9,19 +9,6 @@ import qpy_system as qpysys
 import qpy_logging as qpylog
 import qpy_communication as qpycomm
 
-# Put in a class?
-nodes_list = []
-nodes = {}
-nodes_check_lock = threading.RLock()
-nodes_check_alive = True
-nodes_check_time = 300
-N_cores = 0
-N_min_cores = 0
-N_used_cores  = 0
-N_used_min_cores = 0
-N_outsiders = 0
-
-
 class Node():
     """A node from the qpy-multiuser point of view.
     
@@ -56,7 +43,7 @@ class Node():
     #              'free_mem_real',
     #              'n_outsiders',
     #              'attributes')
-    def __init__(self, name, max_cores):
+    def __init__(self, name, max_cores, logger):
         self.name = name
         self.max_cores = max_cores
         self.messages = qpylog.Messages()
@@ -69,6 +56,7 @@ class Node():
         self.free_mem_real = 0.0
         self.n_outsiders = 0
         self.attributes = []
+        self.logger = logger
 
     def check(self):
         """Check several things in the node.
@@ -98,7 +86,7 @@ class Node():
             # dumb: should be improved
             std_out = '\n'.join(std_out.split('\n')[8:max(len(std_out),50)])
         except:
-            qpylog.logger.exception(
+            self.logger.exception(
                 "finding the number of untracked jobs failed for node: %s",
                 self.name)
             self.messages.add('outsiders: Exception: ' + repr(sys.exc_info()[0]))
@@ -120,7 +108,7 @@ class Node():
             (std_out, std_err) = qpycomm.node_exec(self.name,
                                                    command)
         except:
-            qpylog.logger.exception(
+            self.logger.exception(
                 "finding the the free memory failed for node: %s",
                 self.name)
             self.messages.add('memory: Exception: ' + repr(sys.exc_info()[0]))
@@ -134,7 +122,7 @@ class Node():
                 info.free_mem_real = float(std_out[2].split()[3])
             else:
                 info.free_mem_real = float(std_out[1].split()[6])
-            qpylog.logger.info("node %s is up",self.name)
+            self.logger.info("node %s is up",self.name)
         return info
 
     def has_attributes(self, node_attr):
@@ -163,14 +151,122 @@ class Node():
             a = eval(' '.join(expression))
         except:
             a = True
-        qpylog.logger.debug('In has_attributes: node_attr = '
+        self.logger.debug('In has_attributes: node_attr = '
                             + str(node_attr))
-        qpylog.logger.debug('In has_attributes: expression = '
+        self.logger.debug('In has_attributes: expression = '
                             + str(expression))
-        qpylog.logger.debug('In has_attributes: result (Node) = '
+        self.logger.debug('In has_attributes: result (Node) = '
                             + str(a) + str(self.name))
         return a
 
+
+class NodesCollection(object):
+    """Store information about all nodes
+    
+    TODO: use an iterator, but check thread safety before
+    """
+    
+    __slots__ = (
+        'names',
+        'all_',
+        'check_lock',
+        'check_alive',
+        'check_time',
+        'N_cores',
+        'N_min_cores',
+        'N_used_cores',
+        'N_used_min_cores',
+        'N_outsiders')
+    
+    def __init__(self):
+        """Initilise the class
+        """
+        self.all_ = {}
+        self.names = []
+        self.check_lock = threading.RLock()
+        self.check_alive = True
+        self.check_time = 300
+        self.N_cores = 0
+        self.N_min_cores = 0
+        self.N_used_cores  = 0
+        self.N_used_min_cores = 0
+        self.N_outsiders = 0
+
+    def load_nodes(self):
+        """Load the nodes.
+        
+        The nodes are given in the file on the global variable
+        nodes_file.
+        
+        The file should be formatted as:
+        
+        <node1> <n cores node1> [M] [<node1, attr1> [<node1, attr2> ...]]
+        <node1> <n cores node1> [M] [<node2, attr1> [<node2, attr2> ...]]
+        
+        Each line of the file starts with the node name to be loaded.
+        The node name is followed by the number of cores that this node
+        has available and, optionally, a sequence of attributes of this
+        node. In particular, the attribute "M" means that this node is
+        preferred for multicores jobs. The attributes are strings that
+        can be used to select or avoid particular nodes by the user,
+        see USER.request_node.
+        """
+        try:
+            f = open(qpysys.nodes_file, 'r')
+        except:
+            return -1
+        nodes_in_file = []
+        cores_in_file = []
+        attr_in_file = []
+        nodes_for_multicores = []
+        for line in f:
+            line_spl = line.split()
+            try:
+                nodes_in_file.append(line_spl[0])
+                cores_in_file.append(int(line_spl[1]))
+            except:
+                f.close()
+                return -2
+            if ('M' in line_spl[2:]):
+                nodes_for_multicores.append(line_spl[0])
+            if len(line_spl) > 2:
+                attr_in_file.append(line_spl[2:])
+            else:
+                attr_in_file.append([])
+        f.close()
+        # Put messages
+        for i in range(len(nodes_in_file)):
+            n = nodes_in_file[i]
+            c = cores_in_file[i]
+            if (n in self.all_):
+                self.N_cores += c - self.all_[n].max_cores
+                self.all_[n].max_cores = c
+                self.all_[n].attributes = attr_in_file[i]
+            else:
+                new_node = Node(n, c)
+                new_node.attributes = attr_in_file[i]
+                self.all_[n] = new_node
+                self.N_cores += new_node.max_cores
+            if 'M' in self.all_[n].attributes:
+                self.all_[n].attributes.remove('M')
+        nodes_to_remove = []
+        names = []
+        for n in self.all_:
+            if (n in nodes_in_file):
+                if (n in nodes_for_multicores):
+                    self.all_[n].pref_multicores = True
+                    names.insert(0, n)
+                else:
+                    self.all_[n].pref_multicores = False
+                    names.append(n)
+            else:
+                nodes_to_remove.append(n)
+        for n in nodes_to_remove:
+            self.N_cores -= self.all_[n].max_cores
+            self.all_.pop(n)
+        return 0
+
+    
 class CheckNodes(threading.Thread):
     """Check the nodes regularly.
     
@@ -180,109 +276,34 @@ class CheckNodes(threading.Thread):
     This Thread enters in the nodes regularly and checks if they are up,
     their memory, and outsiders jobs
     
-    This check is done at each (global) nodes_check_time seconds
+    This check is done at each (global) check_time seconds
     """
     
-    def __init__(self):
+    def __init__(self, all_nodes):
         """Initialte the class"""
         threading.Thread.__init__(self)
         self.finish = threading.Event()
+        self.all_nodes = all_nodes
+        self.logger = logger
 
     def run(self):
         """Checks the nodes."""
-        global N_outsiders
         while not self.finish.is_set():
             nodes_info = {}
             try:
-                for node in nodes:
-                    qpylog.logger.info("checking %s",node)
-                    nodes_info[node] = nodes[node].check()
-                    qpylog.logger.info("done with %s",node)
-                nodes_check_lock.acquire()
-                N_outsiders += (nodes_info[node].n_outsiders
-                                - nodes[node].n_outsiders)
-                for node in nodes:
-                    nodes[node].is_up = nodes_info[node].is_up
-                    nodes[node].n_outsiders = nodes_info[node].n_outsiders
-                    nodes[node].total_mem = nodes_info[node].total_mem
-                    nodes[node].free_mem_real = nodes_info[node].free_mem_real
-                nodes_check_lock.release()
+                for node in self.all_nodes.all_:
+                    self.logger.info("checking %s",node)
+                    nodes_info[node] = self.all_nodes.all_[node].check()
+                    logger.logger.info("done with %s",node)
+                with self.all_nodes.check_lock:
+                    self.all_nodes.N_outsiders += (nodes_info[node].n_outsiders
+                                                   - self.all_nodes.all_[node].n_outsiders)
+                    for node in self.all_nodes.all_:
+                        self.all_nodes.all_[node].is_up = nodes_info[node].is_up
+                        self.all_nodes.all_[node].n_outsiders = nodes_info[node].n_outsiders
+                        self.all_nodes.all_[node].total_mem = nodes_info[node].total_mem
+                        self.all_nodes.all_[node].free_mem_real = nodes_info[node].free_mem_real
             except:
-                qpylog.logger.exception("Error in CHECK_NODES")
-            self.finish.wait(nodes_check_time)
+                logger.exception("Error in CHECK_NODES")
+            self.finish.wait(self.all_nodes.check_time)
 
-def load_nodes():
-    """Load the nodes.
-    
-    The nodes are given in the file on the global variable
-    nodes_file.
-    
-    The file should be formatted as:
-    
-    <node1> <n cores node1> [M] [<node1, attr1> [<node1, attr2> ...]]
-    <node1> <n cores node1> [M] [<node2, attr1> [<node2, attr2> ...]]
-    
-    Each line of the file starts with the node name to be loaded.
-    The node name is followed by the number of cores that this node
-    has available and, optionally, a sequence of attributes of this
-    node. In particular, the attribute "M" means that this node is
-    preferred for multicores jobs. The attributes are strings that
-    can be used to select or avoid particular nodes by the user,
-    see USER.request_node.
-    """
-    global N_cores
-    global nodes_list
-    try:
-        f = open(qpysys.nodes_file, 'r')
-    except:
-        return -1
-    nodes_in_file = []
-    cores_in_file = []
-    attr_in_file = []
-    nodes_for_multicores = []
-    for line in f:
-        line_spl = line.split()
-        try:
-            nodes_in_file.append( line_spl[0])
-            cores_in_file.append( int( line_spl[1]))
-        except:
-            f.close()
-            return -2
-        if ('M' in line_spl[2:]):
-            nodes_for_multicores.append( line_spl[0])
-        if len(line_spl) > 2:
-            attr_in_file.append(line_spl[2:])
-        else:
-            attr_in_file.append([])
-    f.close()
-    # Put messages
-    for i in range(len(nodes_in_file)):
-        n = nodes_in_file[i]
-        c = cores_in_file[i]
-        if (n in nodes):
-            N_cores += c - nodes[n].max_cores
-            nodes[n].max_cores = c
-            nodes[n].attributes = attr_in_file[i]
-        else:
-            new_node = Node( n, c)
-            new_node.attributes = attr_in_file[i]
-            nodes[n] = new_node
-            N_cores += new_node.max_cores
-        if 'M' in nodes[n].attributes:
-            nodes[n].attributes.remove('M')
-    nodes_to_remove = []
-    nodes_list = []
-    for n in nodes:
-        if (n in nodes_in_file):
-            if (n in nodes_for_multicores):
-                nodes[n].pref_multicores = True
-                nodes_list.insert(0, n)
-            else:
-                nodes[n].pref_multicores = False
-                nodes_list.append( n)
-        else:
-            nodes_to_remove.append( n)
-    for n in nodes_to_remove:
-        N_cores -= nodes[n].max_cores
-        nodes.pop( n)
-    return 0

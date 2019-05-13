@@ -12,11 +12,6 @@ import qpy_system as qpysys
 import qpy_constants as qpyconst
 import qpy_communication as qpycomm
 
-
-if (qpycomm.multiuser_port == None):
-    sys.exit("Information for multiuser connection could not be obtained."
-             + " Contact your administrator.")
-
 class CheckRun(threading.Thread):
     """Check if the jobs are still running.
     
