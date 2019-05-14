@@ -3,23 +3,25 @@
 QPY_SOURCE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1; cd .. && pwd )"
 . ${QPY_SOURCE_DIR}/test/test_functions.sh
 
+thisScript=`basename "$0"`
 
-#testqpy User1 
-#exit
-
-QPY_U1='qpyUser1'
-QPY_U1_DIR="${HOME}/.qpy-test_$QPY_U1"
-
-testHeader small Small test, one user, one sub
-
+testHeader $thisScript Basic behaviour of nodes
 checkIsTestRunning
 makeTestDir
 
+# =====
+# Nodes
 echo 'node1 6 address=localhost' > ${QPY_MU_DIR}/nodes
 echo 'node2 6 address=localhost' >> ${QPY_MU_DIR}/nodes
 echo 'even' > ${QPY_MU_DIR}/distribution_rules
-echo $QPY_U1 > ${QPY_MU_DIR}/allowed_users
 
+# =====
+# Users
+QPY_U1='qpyUser1'
+all_users="$QPY_U1"
+
+# =====
+# Go!
 testqpy_multiuser start
 sleep 1
 showMUlog
@@ -29,21 +31,7 @@ print
 testqpy_multiuser status
 print
 
-print Creating a users...
-for d in ${QPY_U1_DIR}
-do
-    if [[ -d ${d} ]]
-    then
-	print Found directory ${d}. Removing it...
-	rm -rf ${d}
-    fi
-
-    mkdir ${d}
-    cp ${QPY_MU_DIR}/multiuser_connection_address ${d}
-    cp ${QPY_MU_DIR}/multiuser_connection_conn_key ${d}
-    cp ${QPY_MU_DIR}/multiuser_connection_port ${d}
-done
-
+createUser ${QPY_U1}
 testqpy ${QPY_U1} restart
 sleep 2
 
@@ -82,10 +70,14 @@ sleep 20
 testqpy $QPY_U1 check
 testqpy $QPY_U1 status
 
-testqpy $QPY_U1 config
 
+# =====
+# The end
 showMUlog
-showUlog $QPY_U1
-
-finish_test $QPY_U1
+for user in $all_users
+do
+    testqpy $user config
+    showUlog  $user
+done
+finish_test $all_users
 

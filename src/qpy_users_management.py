@@ -239,7 +239,10 @@ class UsersCollection(object):
         The file should contain just the username of the users, one in each line.
         """
         allowed_users = []
-        f = open(qpysys.allowed_users_file, 'r')
+        try:
+            f = open(qpysys.allowed_users_file, 'r')
+        except IOError:
+            return
         for line in f:
             allowed_users.append( line.strip())
         f.close()

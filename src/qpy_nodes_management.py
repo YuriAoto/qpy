@@ -155,8 +155,13 @@ class Node(object):
                 line_spl = line.split()
                 # read load from header
                 if start_count == 0:
-                   if len(line_spl) > 9 and line_spl[9] == 'load':
-                      info.load = float(line_spl[12].replace(',',''))
+                   if len(line_spl) > 9:
+                       try:
+                           load_index = line_spl.index('load')
+                       except ValueError:
+                           pass
+                       else:
+                           info.load = float(line_spl[load_index+3].replace(',',''))
                    if len(line_spl) > 2 and line_spl[0] == 'PID' and line_spl[1] == 'USER':
                       start_count = 1  # start counting jobs from next line on
                 else:
@@ -196,13 +201,13 @@ class Node(object):
             info.free_disk = 0.0
             info.total_disk = 0.0
         else:
-            self.logger.debug('on '+self.name+': finding this: '+std_out)
+            self.logger.debug('on '+self.name+': finding this: '+ std_out)
             std_out = std_out.split("\n")
             if len(std_out)>1:
                info.total_disk = float(std_out[1].split()[1].replace('G',''))
                info.free_disk = float(std_out[1].split()[3].replace('G',''))
             else:
-               self.logger.exception("parsing the df command failed for node: %s",self.name)
+               self.logger.error("parsing the df command failed for node: %s",self.name)
                info.total_disk = 0.0
                info.free_disk = 0.0
 
@@ -309,7 +314,7 @@ class NodesCollection(object):
             try:
                 name, n_cores, address, multicore, attributes = parse_node_info(line)
             except:
-                print(sys.exc_info())
+                self.logger.exception('Exception when parsing node info:')
                 f.close()
                 return -2
             nodes_in_file.append(name)

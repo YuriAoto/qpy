@@ -21,7 +21,7 @@ if (not(os.path.isdir(qpysys.qpy_multiuser_dir))):
 os.chmod(qpysys.qpy_multiuser_dir, 0700)
 
 logger = qpylog.configure_logger(qpysys.multiuser_log_file,
-                                 qpylog.logging.WARNING)
+                                 qpylog.logging.DEBUG)
 nodes = qpynodes.NodesCollection(logger)
 nodes.load_nodes()
 users = qpyusers.UsersCollection(logger)

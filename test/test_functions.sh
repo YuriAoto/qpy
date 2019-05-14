@@ -19,6 +19,22 @@ offunderline=`tput rmul`
 bgred=$(tput setab 1)
 bgwhite=$(tput setab 7)
 
+
+# =============
+# Important dir
+function qpyDir(){
+    user=$1; shift
+    echo "${HOME}/.qpy-test_${user}"
+}
+
+function qpyWdir(){
+    user=$1; shift
+    echo "${user}-wdir/"
+}
+
+
+# ===============
+# print functions
 function print(){
     echo "${bold}qpy_test>${normal} $@"
 }
@@ -36,16 +52,37 @@ function printSep(){
     print "-------------------------------------------------------"
 }
 
+function printBox(){
+    printSep
+    print $@
+    printSep
+}
+
 function testHeader(){
     printSep
     print Test run for qpy.
     print
-    print Test $1
+    print '-->' $1 '<--'
     shift
     print $@
     printSep
 }
 
+function showMUlog(){
+    printMU cat ${QPY_MU_DIR}/multiuser.log '#' The log file
+    cat ${QPY_MU_DIR}/multiuser.log
+}
+
+function showUlog(){
+    user=$1; shift
+    Udir=`qpyDir ${user}`
+    printU $user cat ${Udir}/master.log '#' The log file
+    cat ${Udir}/master.log
+}
+
+
+# ===============
+# Init functions
 function makeTestDir(){
     if [[ -d ${QPY_MU_DIR} ]]
     then
@@ -66,37 +103,60 @@ function checkIsTestRunning(){
     touch ${QPY_SOURCE_DIR}/test_dir
 }
 
-
-function showMUlog(){
-    printMU cat ~/.qpy-multiuser-test/multiuser.log '#' The log file
-    cat ~/.qpy-multiuser-test/multiuser.log
-}
-
-
-# Wrapper to qpy functions
-function runUser(){
+function createUser(){
     user=$1; shift
-    printU $user $@
-    $@
+    QPY_Udir=`qpyDir $user`
+    QPY_Wdir=`qpyWdir $user`
+    print Creating user $user
+    if [[ ! -d ${QPY_MU_DIR} ]]
+    then
+	print Please, start qpy-multiuser before creating users.
+	print Aborting...
+	exit
+    fi
+    if [[ -d ${QPY_Udir} ]]
+    then
+	print Found directory ${QPY_Udir}. Removing it.
+	rm -rf ${QPY_Udir}
+    fi
+    if [[ -d ${QPY_Wdir} ]]
+    then
+	print Found directory ${QPY_Wdir}. Removing it.
+	rm -rf ${QPY_Wdir}
+    fi
+    mkdir ${QPY_Udir}
+    mkdir ${QPY_Wdir}
+    cp ${QPY_MU_DIR}/multiuser_connection_address ${QPY_Udir}
+    cp ${QPY_MU_DIR}/multiuser_connection_conn_key ${QPY_Udir}
+    cp ${QPY_MU_DIR}/multiuser_connection_port ${QPY_Udir}
+    echo ${user} >> ${QPY_MU_DIR}/allowed_users
 }
 
-function showUlog(){
-    user=$1; shift
-    printU $user cat ~/.qpy-test_${user}/master.log '#' The log file
-    cat ~/.qpy-test_${user}/master.log
-}
 
+
+# ===============
+# Function to execute something
 function testqpy_multiuser(){
     printMU qpy-multiuser $@
     $exe_QPY_MU $@
 }
 
+function runUser(){
+    user=$1; shift
+    (cd `qpyWdir ${user}`
+     printU $user $@
+     $@
+    )
+}
+
 function testqpy(){
     user=$1; shift
-    qpy_option=$1; shift
-    export QPY_TEST_USER=${user};
-    printU $user qpy $qpy_option $@
-    $exe_QPY $qpy_option $@
+    (cd `qpyWdir ${user}`
+     qpy_option=$1; shift
+     export QPY_TEST_USER=${user};
+     printU $user qpy $qpy_option $@
+     $exe_QPY $qpy_option $@
+    )
 
     ## Why this does not work with qpy restart?
     ## It seems that the output from qpy-master is still connected
@@ -107,6 +167,8 @@ function testqpy(){
 
 }
 
+# ===============
+# End functions
 function finish_test(){
     print Finishing the test
     for u in $@
@@ -117,4 +179,3 @@ function finish_test(){
     rm ${QPY_SOURCE_DIR}/test_dir
     print Done!
 }
-
