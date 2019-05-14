@@ -1,5 +1,4 @@
-"""
-qpy - control the nodes distribution for several users
+""" qpy - Control the core distribution among several users
 
 History:
   26 December 2015 - Pradipta and Yuri

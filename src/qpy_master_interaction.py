@@ -1,4 +1,4 @@
-"""
+""" qpy - Threads and funtions for interaction with qpy-master
 
 """
 import os
@@ -10,7 +10,8 @@ import qpy_system as qpysys
 import qpy_constants as qpyconst
 import qpy_useful_cosmetics as qpyutil
 import qpy_communication as qpycomm
-from qpy_job import JobId, Job, ParseError, HelpException
+from qpy_job import JobId, Job
+from qpy_exceptions import *
 
 class MultiuserHandler(threading.Thread):
     """Handle the messages sent from qpy-multiuser.
@@ -76,14 +77,14 @@ class MultiuserHandler(threading.Thread):
         while True:
             client_master = self.Listener_master.accept()
             (msg_type, arguments) = client_master.recv()
-            self.config.messages.add('MULTIUSER_HANDLER: Received: '
+            self.config.messages.add('MultiuserHandler: Received: '
                                      + str(msg_type) + ' -> ' + str(arguments))
             if msg_type == qpyconst.FROM_MULTI_CUR_JOBS:
                 multiuser_cur_jobs = self.jobs.multiuser_cur_jobs()
                 client_master.send(multiuser_cur_jobs)
                 self.multiuser_alive.set()
             elif msg_type == qpyconst.FROM_MULTI_FINISH:
-                client_master.send('Finishing MULTIUSER_HANDLER.')
+                client_master.send('Finishing MultiuserHandler.')
                 self.Listener_master.close()
                 break
             else:
@@ -190,10 +191,10 @@ def handle_qpy(jobs,
                                               + str( new_job.ID))
                         copyfile( script_name, copied_script_name)
                         new_job.cp_script_to_replace = (first_arg, copied_script_name)
-            except HelpException,ex :
-                client_master.send(ex.message)
-            except ParseError, ex:
-                client_master.send('Job  rejected.\n'+ex.message+'\n')
+            except qpyHelpException as ex:
+                client_master.send('qpy: ' + ex.message)
+            except qpyParseError, ex:
+                client_master.send('qpy: Job rejected:\n' + ex.message + '\n')
             else:
                 jobs.append(new_job, jobs.all)
                 jobs.append(new_job, jobs.queue)
@@ -249,7 +250,7 @@ def handle_qpy(jobs,
                 plural = qpyutil.get_plural( ('job', 'jobs'), n_kill_r)
                 msg += plural[1] + ' ' + plural[0] + ' will be killed.\n'
             if not msg:
-                msg = 'Nothing to do: required jobs not found.\n'
+                msg = 'qpy: Nothing to do: required jobs not found.\n'
             else:
                 jobs.write_all_jobs()
             client_master.send(msg)
@@ -272,13 +273,13 @@ def handle_qpy(jobs,
                     qpycomm.multiuser_key
                 )
             except:
-                msg = ('qpy-multiuser seems not to be running.'
+                msg = ('qpy: qpy-multiuser seems not to be running.'
                        + ' Contact the qpy-team.\n')
                 multiuser_alive.clear()
             else:
                 msg = msg_back[1]
                 multiuser_alive.set()
-            client_master.send( msg)
+            client_master.send(msg)
 
         # Control queue
         # arguments: a list: [<type>, <arguments>].
@@ -300,14 +301,17 @@ def handle_qpy(jobs,
                 else:
                     msg = jobs.jump_Q(arguments[1], arguments[2])
             else:
-                msg = 'Unknown ctrlQueue type: ' + ctrl_type + '.\n'
+                msg = 'qpy: Unknown ctrlQueue type: ' + ctrl_type + '.\n'
             client_master.send(msg)
 
         # Show current configuration
         # arguments: optionally, a pair to change the configuration: (<key>, <value>)
         elif job_type == qpyconst.JOBTYPE_CONFIG:
             if arguments:
-                (status, msg) = config.set_key(arguments[0], arguments[1])
+                try:
+                    msg = config.set_key(arguments[0], arguments[1])
+                except (qpyKeyError, qpyValueError) as e:
+                    msg = 'qpy: ' + str(e)
                 msg = msg + '\n'
                 config.write_on_file()
             else:
@@ -350,7 +354,7 @@ def handle_qpy(jobs,
                 plural = qpyutil.get_plural(('job', 'jobs'), n_jobs)
                 msg = plural[1] + ' finished ' + plural[0] + ' removed.\n'
             else:
-                msg = 'Nothing to do: required jobs not found.\n'
+                msg = 'qpy: Nothing to do: required jobs not found.\n'
             client_master.send( msg)
 
         # Add and read notes
@@ -390,4 +394,4 @@ def handle_qpy(jobs,
             client_master.send(msg)
 
         else:
-            client_master.send('Unknown option: ' + str( job_type) + '\n')
+            client_master.send('qpy: Unknown option: ' + str(job_type) + '\n')

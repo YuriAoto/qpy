@@ -1,10 +1,5 @@
-"""qpy-master - set the main driver for qpy
+""" qpy - Main driver for each user's qpy
 
-History:
-    29 May 2015 - Pradipta and Yuri
-    2017 - Arne - Several code improvements
-    10 May 2019 - Distributing classes and functions over
-                other files and avoiding global variables
 """
 import os
 import sys
@@ -51,8 +46,13 @@ check_run.start()
 jobs_killer = qpyctrl.JobsKiller(jobs, multiuser_alive, config)
 jobs_killer.start()
 
-multiuser_handler = MultiuserHandler(jobs, multiuser_alive, config)
+try:
+    multiuser_handler = MultiuserHandler(jobs, multiuser_alive, config)
+except qpyError:
+    config.logger.error('Exception at MultiuserHandler', exc_info=True)
+
 multiuser_handler.start()
+    
 
 sub_ctrl = qpyctrl.Submission(jobs, multiuser_handler, config)
 sub_ctrl.start()

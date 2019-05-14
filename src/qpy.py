@@ -3,8 +3,11 @@
 qpy - The Queue Management System in Python
 
 History:
-    29 May 2015 - started by Pradipta and Yuri
-
+    29 May 2015 - Started by Pradipta and Yuri
+    31 Dec 2015 - Starting multiuser, Pradipta and Yuri
+           2017 - Several code improvements by Arne
+    10 May 2019 - Distributing classes and functions over
+                  other files and avoiding global variables
 """
 __version__ = '1.0'
 __author__ = 'Yuri Alexandre Aoto'
@@ -49,11 +52,16 @@ except:
                             address,
                             qpysys.qpy_master_command)
     else:
-        sys.exit('Time for connection exceeded.'
+        sys.exit('qpy: Time for connection exceeded.'
                  + ' Are you sure that qpy-master is running?')
 if not sys.stdout.isatty():
     ansi_escape = re.compile(r'\x1b[^m]*m')
     master_msg = ansi_escape.sub('', master_msg)
-sys.stdout.write(master_msg)
+error = re.match(r'qpy:', master_msg) is not None
+if error:
+    sys.stderr.write(master_msg)
+else:
+    sys.stdout.write(master_msg)
 if start_qpy_master:
     start_master_driver(qpysys.sys_user, address, qpysys.qpy_master_command)
+exit(int(error))

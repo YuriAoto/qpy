@@ -1,4 +1,4 @@
-"""qpy users
+""" qpy - Functions and classes related to users
 
 """
 from math import copysign

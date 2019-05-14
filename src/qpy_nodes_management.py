@@ -1,5 +1,4 @@
-"""Node related classes and functions
-
+""" qpy - Classes and functions related to nodes
 
 """
 import sys

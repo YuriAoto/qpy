@@ -1,7 +1,7 @@
-"""A job (a code being or to be executed in a node)
+""" qpy - A job (a code being or to be executed in a node)
 
 """
-from optparse import OptionParser,OptionError
+from optparse import OptionParser
 from collections import deque
 from datetime import datetime
 import threading
@@ -130,17 +130,6 @@ class MultiuserJob(object):
                 + ", n_cores = " + str(self.n_cores)
                 + ", mem = " + str(self.mem))
 
-#TODO: improve exception handling
-class MyError(Exception):
-    def __init__(self,msg):
-        self.message=msg
-
-class ParseError(MyError):
-    pass
-
-class HelpException(MyError):
-    pass
-
 class JobParser(OptionParser):
     """An Option Parser that does not exit the program, but just raises a ParseError
     
@@ -151,16 +140,16 @@ class JobParser(OptionParser):
     TODO:
     replace it by argparse
     """
-    def exit(self,prog='',message=''):
-        raise ParseError(message)
-    def error(self,message):
-        raise ParseError(message)
+    def exit(self, prog='', message=''):
+        raise qpyParseError(message)
+    def error(self, message):
+        raise qpyParseError(message)
     def print_usage(self):
         pass
     def print_version(self):
         pass
     def print_help(self):
-        raise HelpException(self.format_help())
+        raise qpyHelpException(self.format_help())
 
 
 class Job(object):
@@ -455,9 +444,9 @@ class Job(object):
                     except ValueError:
                         raise ParseError("Invalid Value for {atr} found.".format(atr=attr))
             if not option_found:
-                raise ParseError("QPY directive found, but no options supplied."\
-                                 "Please remove the #QPY directive if you don't"\
-                                 " want to supply a valid option.")
+                raise qpyParseError("QPY directive found, but no options supplied."\
+                                    "Please remove the #QPY directive if you don't"\
+                                    " want to supply a valid option.")
 
     def _parse_file_for_options(self, file_name):
         """Parse a submission script file for options set in the script.
@@ -503,7 +492,7 @@ class Job(object):
         The command, without the parsed options.
         
         Raise:
-        ParseError, if the parse was not successful
+        qpyParseError, if the parse was not successful
         """
         try:
             options,command = self.parser.parse_args(command.split())
@@ -516,18 +505,18 @@ class Job(object):
             if options.cpScript == None and options.orScript == None:
                 pass
             elif options.cpScript != None and options.orScript != None:
-                raise ParseError("Please, do not supply both cpScript and orScript")
+                raise qpyParseError("Please, do not supply both cpScript and orScript")
             elif options.cpScript != None:
                 self.use_script_copy = True
             else:
                 self.use_script_copy = False
 
         except (AttributeError, TypeError), ex:
-            raise ParseError("Something went wrong. please contact the qpy-team\n"
-                             + ex.message)
+            raise qpyParseError("Something went wrong. please contact the qpy-team\n"
+                                + ex.message)
         except ValueError:
-            raise ParseError("Please supply only full numbers for memory or"
-                             + " number of cores, true or false for cpScript")
+            raise qpyParseError("Please supply only full numbers for memory or"
+                                + " number of cores, true or false for cpScript")
         return ' '.join(command)
 
     def _expand_script_name(self, file_name):
@@ -551,7 +540,7 @@ class Job(object):
         elif len(script_list) == 0:
             return
         else:
-            raise ParseError('Nonexitstent or ambigous script name')
+            raise qpyParseError('Nonexitstent or ambigous script name')
 
     def parse_options(self):
         """Parse the input and the submission script for options."""

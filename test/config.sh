@@ -6,7 +6,7 @@ QPY_SOURCE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1; cd .. 
 
 thisScript=`basename "$0"`
 
-testHeader $thisScript Small test, one user, one sub
+testHeader $thisScript Configurations and their changes
 checkIsTestRunning
 makeTestDir
 
@@ -25,36 +25,26 @@ all_users="$QPY_U1"
 # Go!
 testqpy_multiuser start
 sleep 1
-showMUlog
 print Waiting a cicle in qpy-multiuser...
 sleep 15
-print
-testqpy_multiuser status
 print
 
 createUser ${QPY_U1}
 testqpy ${QPY_U1} restart
-sleep 2
-
 print User has been created. Waiting a cicle...
 sleep 5
-showUlog $QPY_U1
 
-testqpy_multiuser status
-testqpy_multiuser variables
-
-print Testing basic qpy commands for user $QPY_U1
-print
+testqpy $QPY_U1 config
 testqpy $QPY_U1 config saveMessages true
-testqpy $QPY_U1 status
+testqpy $QPY_U1 config
+testqpy $QPY_U1 config maxMessages qwe
+testqpy $QPY_U1 config
+testqpy $QPY_U1 config maxMessages 10
+testqpy $QPY_U1 config
 
-testqpy $QPY_U1 sub -m 0.01 date
-testqpy $QPY_U1 check
-print Waiting a bit...
-sleep 3
-testqpy $QPY_U1 check
-runUser $QPY_U1 cat job_1.out
-runUser $QPY_U1 cat job_1.err
+showUlog $QPY_U1
+testqpy $QPY_U1 config
+
 
 # =====
 # The end

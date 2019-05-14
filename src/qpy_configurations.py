@@ -1,5 +1,4 @@
-"""Users Configurations in qpy
-
+""" qpy - Users configurations in qpy
 
 """
 import os
@@ -10,6 +9,7 @@ import qpy_system as qpysys
 import qpy_logging as qpylog
 import qpy_constants as qpyconst
 import qpy_useful_cosmetics as qpyutil
+from qpy_exceptions import *
 
 class Configurations(object):
     """The current configuration of qpy.
@@ -92,26 +92,27 @@ class Configurations(object):
         self.logger = qpylog.configure_logger(qpysys.master_log_file,
                                               qpylog.logging.DEBUG)
 
-        if (os.path.isfile(self.config_file)):
+        if os.path.isfile(self.config_file):
             f = open(self.config_file, 'r')
             for l in f:
                 l_spl = l.split()
-                if (not(l_spl)):
+                if not l_spl:
                     continue
                 key = l_spl[0]
-                if (key == 'checkFMT'):
+                if key == 'checkFMT':
                     val = l.strip()[10:-1]
-                elif (key == 'job_fmt_pattern'):
+                elif key == 'job_fmt_pattern':
                     val = l.strip()[17:-1]
-                elif (len(l_spl) == 1):
+                elif len(l_spl) == 1:
                     val = ()
-                elif (len(l_spl) == 2):
+                elif len(l_spl) == 2:
                     val = l_spl[1]
                 else:
                     val = l_spl[1:]
-                (status, msg) = self.set_key(key, val)
-                if (status != 0):
-                    self.messages.add('Reading config file: ' + msg)
+                try:
+                    msg = self.set_key(key, val)
+                except (qpyKeyError, qpyValueError) as e:
+                    self.messages.add('Reading config file: ' + str(e))
             f.close()
         else:
             self.write_on_file()
@@ -128,120 +129,99 @@ class Configurations(object):
         key k.
         
         Return:
-        The tuple (status, msg) where status is:
-        0 - successfull
-        1 - key problem
-        2 - value problem
-        msg (str) is a informative message.
-        
-        TODO: change return status to Exception?
+        msg (str)    An informative message.
+
+        Raise:
+        qpyKeyError
+        qpyValueError
         """
-        if (k == 'checkFMT' or k == 'job_fmt_pattern'): # job_fmt_pattern: obsolete
-            if (v == 'default'):
+        if k == 'checkFMT' or k == 'job_fmt_pattern': # job_fmt_pattern: obsolete
+            if v == 'default':
                 self.job_fmt_pattern = JOB_FMT_PATTERN_DEF
                 msg = ('Check pattern restored to the default value: '
                        + repr(self.job_fmt_pattern) + '.')
-                status = 0
             else:
                 self.job_fmt_pattern = v.decode('string_escape')
                 msg = ('Check pattern modified to '
                        + repr(self.job_fmt_pattern) + '.')
-                status = 0
 
-        elif (k == 'paused_jobs'):
+        elif k == 'paused_jobs':
             try:
                 self.sub_paused = qpyutil.true_or_false(v)
             except:
-                msg = "Key for paused_jobs must be true or false."
-                status = 2
+                raise qpyValueError("Value for paused_jobs must be true or false.")
             else:
                 msg = "paused_jobs set to " + str(self.sub_paused) + '.'
-                status = 0
 
-        elif (k == 'defaultAttr'):
+        elif k == 'defaultAttr':
             try:
                 self.default_attr = [v] if isinstance(v, str) else v
             except:
-                msg = "Key for " + k + " must be a string."
-                status = 2
+                raise qpyValueError("Value for " + k + " must be a string.")
             else:
                 if v:
                     msg = k + " set to " + ' '.join(self.default_attr) + '.'
                 else:
                     msg = k + " unset."
-                status = 0
 
-        elif (k == 'andAttr'):
+        elif k == 'andAttr':
             try:
                 self.and_attr = [v] if isinstance(v, str) else v
             except:
-                msg = "Key for " + k + " must be a string."
-                status = 2
+                raise qpyValueError("Value for " + k + " must be a string.")
             else:
                 if v:
                     msg = k + " set to " + ' '.join(self.and_attr) + '.'
                 else:
                     msg = k + " unset."
-                status = 0
 
-        elif (k == 'orAttr'):
+        elif k == 'orAttr':
             try:
                 self.or_attr = [v] if isinstance(v, str) else v
             except:
-                msg = "Key for " + k + " must be a string."
-                status = 2
+                raise qpyValueError("Value for " + k + " must be a string.")
             else:
                 if v:
                     msg = k + " set to " + ' '.join(self.or_attr) + '.'
                 else:
                     msg = k + " unset."
-                status = 0
 
-        elif (k == 'copyScripts' or k == 'use_script_copy'): # use_script_copy: obsolete
+        elif k == 'copyScripts' or k == 'use_script_copy': # use_script_copy: obsolete
             try:
                 self.use_script_copy = qpyutil.true_or_false(v)
             except:
-                msg = "Key for copyScripts must be true or false."
-                status = 2
+                raise qpyValueError("Value for copyScripts must be true or false.")
             else:
                 msg = "copyScripts set to " + str(self.use_script_copy)
-                status = 0
 
-        elif (k == 'saveMessages' or k == 'save_messages'):
+        elif k == 'saveMessages' or k == 'save_messages':
             try:
                 self.messages.save = qpyutil.true_or_false(v)
             except:
-                msg = "Key for saveMessages must be true or false."
-                status = 2
+                raise qpyValueError("Value for saveMessages must be true or false.")
             else:
                 msg = "saveMessages set to " + str(self.messages.save)
-                status = 0
 
-        elif (k == 'maxMessages'):
+        elif k == 'maxMessages':
             try:
                 self.messages.max_len = int(v)
             except:
-                msg = "Key for maxMessages must be and integer."
-                status = 2
+                raise qpyValueError("Value for maxMessages must be an integer.")
             else:
                 msg = "maxMessages set to " + str(self.messages.max_len)
-                status = 0
 
-        elif (k == 'ssh_p_key_file' or k == 'ssh_pKey'):
-            if (v == 'None'):
+        elif k == 'ssh_p_key_file' or k == 'ssh_pKey':
+            if v == 'None':
                 self.ssh_p_key_file = None
             else:
                 self.ssh_p_key_file = v
-
             msg = "ssh_pKey set to " + str(self.ssh_p_key_file)
-            status = 0
 
-        elif (k == 'cleanMessages'):
+        elif k == 'cleanMessages':
             self.messages.clean()
             msg = "Messages were cleand."
-            status = 0
 
-        elif (k == 'loggerLevel'):
+        elif k == 'loggerLevel':
             if v in ['debug', 'DEBUG']:
                 vnew = qpylog.logging.DEBUG
             elif v in ['info', 'INFO']:
@@ -257,86 +237,65 @@ class Configurations(object):
                     vnew = int(v)
                 except:
                     vnew = None
-
             if vnew is not None:
                 self.logger_level = v
                 self.logger.setLevel(vnew)
                 msg = 'Logger level set to ' + v
-                status = 0
             else:
-                msg = 'Unknown logging level: ' + v
-                status = 1
+                raise qpyValueError('Unknown logging level: ' + v)
 
-        elif (k == 'colour' or k == 'use_colour'):
+        elif k == 'colour' or k == 'use_colour':
             try:
                 self.use_colour = qpyutil.true_or_false(v)
             except:
-                msg = "Key for colour must be true or false."
-                status = 2
+                raise qpyValueError("Value for colour must be true or false.")
             else:
                 msg = "colour set to " + str(self.use_colour)
-                status = 0
 
-        elif (k == 'coloursScheme'):
-            colours_ok = True
+        elif k == 'coloursScheme':
             for i in v:
-                if (not(i in qpyconst.POSSIBLE_COLOURS)):
-                    msg = 'Unknown colour: ' + i + '.\n'
-                    status = 2
-                    colours_ok = False
-                    break
-            if (len(v) != 5):
-                msg = 'Give five colours for coloursScheme.\n'
-                status = 2
-                colours_ok = False
-            if (colours_ok):
-                self.colour_scheme = list(v)
-                msg = 'Colours scheme changed.\n'
-                status = 0
+                if not i in qpyconst.POSSIBLE_COLOURS:
+                    raise qpyValueError('Unknown colour: ' + i)
+            if len(v) != 5:
+                raise qpyValueError('Give five colours for coloursScheme.')
+            self.colour_scheme = list(v)
+            msg = 'Colours scheme changed.\n'
 
-        elif (k == 'sleepTimeSubCtrl'):
+        elif k == 'sleepTimeSubCtrl':
             try:
                 self.sleep_time_sub_ctrl = float(v)
             except:
-                msg = "Key for sleepTimeSubCtrl must be a float number."
-                status = 2
+                raise qpyValueError("Value for sleepTimeSubCtrl must be a float number.")
             else:
                 msg = ("sleepTimeSubCtrl set to "
                        + str(self.sleep_time_sub_ctrl) + '.')
-                status = 0
 
-        elif (k == 'sleepTimeCheckRun'):
+        elif k == 'sleepTimeCheckRun':
             try:
                 self.sleep_time_check_run = float(v)
             except:
-                msg = "Key for sleepTimeCheckRun must be a float number."
-                status = 2
+                raise qpyValueError("Value for sleepTimeCheckRun must be a float number.")
             else:
                 msg = ("sleepTimeCheckRun set to " +
                        str(self.sleep_time_check_run) + '.')
-                status = 0
 
-        elif (k == 'sourceTheseFiles'):
-            if (isinstance(v, list)):
+        elif k == 'sourceTheseFiles':
+            if isinstance(v, list):
                 self.source_these_files = v
                 msg = ("sourceTheseFiles set to "
                        + str(self.source_these_files) + '.')
-                status = 0
-            elif (isinstance(v, str)):
+            elif isinstance(v, str):
                 self.source_these_files = [v]
                 msg = ("sourceTheseFiles set to "
                        + str(self.source_these_files) + '.')
-                status = 0
             else:
-                msg = ("sourceTheseFiles should receive a "
-                       + "file name or a list of files.")
-                status = 2
+                raise qpyValueError("sourceTheseFiles should receive a "
+                                       + "file name or a list of files.")
 
         else:
-            msg = 'Unknown key: ' + k
-            status = 1
+            raise qpyKeyError('Unknown key: ' + k)
 
-        return (status, msg)
+        return msg
 
     def write_on_file(self):
         """Write the current configurations in the file."""

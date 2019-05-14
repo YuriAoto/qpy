@@ -1,4 +1,4 @@
-"""
+""" qpy - Funtions for interaction with qpy-multiuser
 
 """
 import qpy_system as qpysys
@@ -308,15 +308,14 @@ def handle_client(users, nodes, logger):
              port = qpycomm.multiuser_port,
              conn_key = qpycomm.multiuser_key
          )
-        qpycomm.write_conn_files(qpysys.multiuser_conn_file,
-                                 qpycomm.multiuser_address,
-                                 multiuser_port,
-                                 multiuser_key)
-    except:
-        logger.exception("Error when establishing connection. Is there already a qpy-multiuser instance?")
+    except qpyConnectionError:
+        logger.exception("Error when establishing connection. "
+                         + "Is there already a qpy-multiuser instance?")
         return
-    if conn is None:
-        return
+    qpycomm.write_conn_files(qpysys.multiuser_conn_file,
+                             qpycomm.multiuser_address,
+                             multiuser_port,
+                             multiuser_key)
     while True:
         logger.info("Starting main loop.")
         try:

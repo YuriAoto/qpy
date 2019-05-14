@@ -1,4 +1,4 @@
-"""Main threads to check and control the jobs
+""" qpy - Threads to check and control the jobs
 
 """
 import os

@@ -1,4 +1,4 @@
-""" System's and user's information
+""" qpy - System's and user's information
 
 """
 import os

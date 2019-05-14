@@ -1,4 +1,4 @@
-"""Logging and messages for qpy
+""" qpy - Logging and messages
 
 """
 import traceback

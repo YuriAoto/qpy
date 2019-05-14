@@ -1,4 +1,4 @@
-"""Main constants for qpy
+""" qpy - Main constants for qpy
 
 """
 MULTIUSER_NODES          = 1

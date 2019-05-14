@@ -179,3 +179,13 @@ function finish_test(){
     rm ${QPY_SOURCE_DIR}/test_dir
     print Done!
 }
+
+function finish_users_test(){
+    print Finishing the test
+    for u in $@
+    do
+	testqpy ${u} finish
+    done
+    rm ${QPY_SOURCE_DIR}/test_dir
+    print Done!
+}

@@ -1,15 +1,16 @@
-"""Communication between threads, program instances and nodes
+""" qpy - Communication between threads, program instances, and nodes
 
 This module is central in qpy, as it deals with message
 transfer between threads, and execution of programs in a node
 
 """
-from multiprocessing import connection
 import os
 import sys
 import time
 import random
 import subprocess
+from multiprocessing import connection
+from socket import error as socketError
 try:
     import paramiko
     is_paramiko = True
@@ -18,6 +19,7 @@ except:
     is_paramiko = False
 
 import qpy_system as qpysys
+from qpy_exceptions import *
 
 def write_conn_files(f_name,
                      address,
@@ -93,17 +95,24 @@ def establish_Listener_connection(address,
             port = random.randint(port_min, port_max)
             try:
                 List_master = connection.Listener((address, port),
-                                                  authkey = conn_key)
+                                                  authkey=conn_key)
                 break
-            except: #TODO handle better this
+            except socketError:
                 pass
+            except:
+                raise qpyUnknowError("Unexpected exception after connection.Listener",
+                                     sys.exc_info())
     else:
         try:
             List_master = connection.Listener((address, port),
-                                              authkey = conn_key)
+                                              authkey=conn_key)
+        except socketError as e:
+            raise qpyConnectionError('Error when creating listener: '
+                                     + str(sys.exc_info()[1]))
         except:
-            List_master = None
-    return (List_master, port, conn_key)
+            raise qpyUnknowError("Unexpected exception after connection.Listener",
+                                 sys.exc_info())
+    return List_master, port, conn_key
 
 def message_transfer(msg,
                      address,
@@ -131,7 +140,7 @@ def message_transfer(msg,
     The message back from the connection.
     
     Raise:
-    An Exception if the connection is not established.
+    qpyConnectionError if the connection is not established.
     
     See also:
     multiprocessing.connect
@@ -141,9 +150,13 @@ def message_transfer(msg,
     connection._init_timeout = my_init_timeout
     try:
         conn = connection.Client((address, port), authkey=key)
+    except AuthenticationError:
+        raise qpyConnectionError("Connection failed due to Authentication Error.")
+    except TimeoutError:
+        raise qpyConnectionError("Connection failed due to Timeout Error.")
     except:
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        raise Exception("Connection not successful: " + str(exc_value))    
+        raise qpyUnknowError("Unexpected exception after connection.Client",
+                             sys.exc_info())
     conn.send(msg)
     back_msg = conn.recv()
     conn.close()
@@ -180,21 +193,22 @@ def node_exec(node,
     is set to True
     
     Raise:
-    SSH Exceptions if there is a problem in the SSH connection
+    qpyConnectionError if there is a problem in the SSH connection
+    qpyKeyError if mode is unknown
     """
     if node == 'localhost':
         if isinstance(command, str) and not localhost_popen_shell: # Just to make it work with localhost as node...
             command = command.split()
         if (get_outerr):
-            ssh = subprocess.Popen(command, shell = localhost_popen_shell,
+            ssh = subprocess.Popen(command, shell=localhost_popen_shell,
                                    stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE)
             std_outerr = ssh.communicate()
             return(std_outerr)
         else:
-            ssh = subprocess.Popen(command, shell = localhost_popen_shell)
+            ssh = subprocess.Popen(command, shell=localhost_popen_shell)
             return
-    elif (mode == "paramiko" and is_paramiko):
+    elif mode == "paramiko" and is_paramiko:
         if isinstance(command, list):
             command = ' '.join(command)
         if pKey_file is not None:
@@ -204,42 +218,42 @@ def node_exec(node,
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         try:
-            ssh.connect(node, pkey = k)
+            ssh.connect(node, pkey=k)
         except paramiko.BadHostKeyException:
-            raise Exception( "SSH error: server\'s host key could not be verified")
+            raise qpyConnectionError("SSH error: server's host key could not be verified")
         except paramiko.AuthenticationException:
-            raise Exception( "SSH error: authentication failed")
+            raise qpyConnectionError("SSH error: authentication failed")
         except:
-            exc_type, exc_value, exc_traceback = sys.exc_info()
-            raise Exception( "SSH error: Connection error" + str(exc_type) + "  " + str(exc_value))
-        if (get_outerr):
-            (stdin, stdout, stderr) = ssh.exec_command( command)
+            raise qpyUnknowError("Unexpected exception after ssh.connect",
+                                 sys.exc_info())
+        if get_outerr:
+            stdin, stdout, stderr = ssh.exec_command(command)
             out = stdout.read()
             err = stderr.read()
             stdin.flush()
             stdout.close()
             stderr.close()
             ssh.close()
-            return (out, err)
+            return out, err
         else:
             ssh.exec_command(command)
             sleep(1.)
             ssh.close()
             return
-    elif (mode == "popen"):
+    elif mode == "popen":
         if isinstance(command, str):
             command = command.split()
-        if (get_outerr):
-            ssh = subprocess.Popen(['ssh', node] + command, shell = False,
+        if get_outerr:
+            ssh = subprocess.Popen(['ssh', node] + command, shell=False,
                                    stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE)
             std_outerr = ssh.communicate()
-            return(std_outerr)
+            return std_outerr
         else:
-            ssh = subprocess.Popen(['ssh', node] + command, shell = False)
+            ssh = subprocess.Popen(['ssh', node] + command, shell=False)
             return
     else:
-        raise Exception("Unknown mode for node_exec")
+        raise qpyKeyError("Unknown mode for node_exec.")
 
 multiuser_address = read_address_file(qpysys.multiuser_conn_file)
 try:

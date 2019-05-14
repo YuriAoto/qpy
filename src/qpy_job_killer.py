@@ -1,7 +1,6 @@
-"""Kills jobs. This is to be called from qpy_control_job.JobKiller
+""" qpy - Kills jobs. This is to be called from qpy_control_job.JobKiller
 
 USAGE: qpy_job_killer.py <process_id 1> <process_id 2> ...
-
 """
 import sys
 import subprocess

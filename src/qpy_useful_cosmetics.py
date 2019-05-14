@@ -1,4 +1,4 @@
-"""Cosmetic/useful functions
+""" qpy - Cosmetic/useful functions
 
 """
 import sys

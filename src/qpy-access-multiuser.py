@@ -1,9 +1,6 @@
-""" qpy - user interface to the qpy-multiuser
+""" qpy - User interface to the qpy-multiuser
 
-History:
-    31 Dec 2015 - Creation, Pradipta and Yuri
 """
-
 from time import sleep
 import sys
 
@@ -26,7 +23,6 @@ try:
                                         qpycomm.multiuser_key,
                                         timeout=3.0)
 except Exception as ex:
-    print ex
     sys.exit('Time for connection exceeded.'
              + ' Are you sure that qpy-multiuser is running?')
 else:
