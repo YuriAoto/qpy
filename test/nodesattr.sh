@@ -42,8 +42,12 @@ print User has been created. Waiting a cicle...
 sleep 5
 showUlog $QPY_U1
 
-testqpy_multiuser status
-testqpy_multiuser variables
+
+printBox Changing check pattern to see the attributes of jobs in queue
+sleep 3
+testqpy $QPY_U1 config checkFMT '%j (%s):%c (on %A; wd: %d)\n'
+sleep 3
+
 
 #=========
 printBox Running some jobs without attributes:
@@ -133,6 +137,55 @@ do
     testqpy $QPY_U1 status
     testqpy $QPY_U1 check
     sleep 10
+done
+
+
+#=========
+printBox Adding default attribute, AND type
+testqpy $QPY_U1 config andAttr big
+sleep 3
+testqpy $QPY_U1 config
+sleep 3
+
+testqpy $QPY_U1 sub -m 0.01 sleep 10
+testqpy $QPY_U1 sub -m 0.01 sleep 10
+testqpy $QPY_U1 sub -m 0.01 sleep 10
+testqpy $QPY_U1 sub -m 0.01 sleep 10
+testqpy $QPY_U1 sub -m 0.01 -a 'infiband' sleep 10
+testqpy $QPY_U1 sub -m 0.01 -a 'infiband' sleep 10
+testqpy $QPY_U1 sub -m 0.01 -a 'infiband' sleep 10
+testqpy $QPY_U1 sub -m 0.01 -a 'infiband' sleep 10
+testqpy $QPY_U1 sub -m 0.01 -a 'infiband' sleep 10
+for i in `seq 1 10`
+do
+    testqpy $QPY_U1 status
+    testqpy $QPY_U1 check
+    sleep 5
+done
+
+
+#=========
+printBox Adding default attribute, of OR type
+testqpy $QPY_U1 config andAttr 
+testqpy $QPY_U1 config orAttr big
+sleep 3
+testqpy $QPY_U1 config
+sleep 3
+
+testqpy $QPY_U1 sub -m 0.01 sleep 10
+testqpy $QPY_U1 sub -m 0.01 sleep 10
+testqpy $QPY_U1 sub -m 0.01 sleep 10
+testqpy $QPY_U1 sub -m 0.01 sleep 10
+testqpy $QPY_U1 sub -m 0.01 -a 'infiband' sleep 10
+testqpy $QPY_U1 sub -m 0.01 -a 'infiband' sleep 10
+testqpy $QPY_U1 sub -m 0.01 -a 'infiband' sleep 10
+testqpy $QPY_U1 sub -m 0.01 -a 'infiband' sleep 10
+testqpy $QPY_U1 sub -m 0.01 -a 'infiband' sleep 10
+for i in `seq 1 10`
+do
+    testqpy $QPY_U1 status
+    testqpy $QPY_U1 check
+    sleep 5
 done
 
 

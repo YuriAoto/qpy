@@ -136,6 +136,8 @@ class Configurations(object):
         qpyValueError
         """
         if k == 'checkFMT' or k == 'job_fmt_pattern': # job_fmt_pattern: obsolete
+            if isinstance(v, list):
+                v = ' '.join(v)
             if v == 'default':
                 self.job_fmt_pattern = JOB_FMT_PATTERN_DEF
                 msg = ('Check pattern restored to the default value: '
