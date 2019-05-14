@@ -73,6 +73,9 @@ class NODE():
                              are not under qpy control (obtained by system's
                              commant top)
     attributes (list)        A list, with the attributes of this node
+    load (float)             The current load of the node, according to top
+    total_disk (float)       The total amount of available disk space on TMPDIR
+    free_disk (float)        The current free amount of available disk space on TMPDIR
     """
     def __init__( self, name, max_cores):
         self.name = name
@@ -93,6 +96,11 @@ class NODE():
 
         self.attributes = []
 
+        self.load = 0.0
+
+        self.total_disk = 0.0
+        self.free_disk = 0.0
+
     def check(self):
         """Check several things in the node.
 
@@ -107,28 +115,39 @@ class NODE():
         the node (except for adding messages), what should
         be done by the caller if desired.
         """
-        info = namedtuple('nodeInfo', ['is_up','n_outsiders','total_mem','free_mem_real'])
+        info = namedtuple('nodeInfo', ['is_up','n_outsiders','total_mem','free_mem_real',
+                                       'load','total_disk','free_disk'])
         info.is_up = True
 
         command = "top -b -n1"# | sed -n '8,50p'"
         try:
             (std_out, std_err) = node_exec(self.name, command)
-            # dumb: should be improved
-            std_out = '\n'.join(std_out.split('\n')[8:max(len(std_out),50)])
         except:
             logger.exception("finding the number of untracked jobs failed for node: %s",self.name)
             self.messages.add('outsiders: Exception: ' + repr(sys.exc_info()[0]))
             info.is_up = False
             info.n_outsiders = 0
+            info.load = 0
         else:
             std_out = std_out.split("\n")
             n_jobs = 0
+            # slightly improved parsing of top output
+            # read "load" from header and get running processes from the output
+            # that follows after the line starting with "PID  USER  ..."
+            start_count = 0
             for line in std_out:
                 line_spl = line.split()
-                if float(line_spl[8].replace(',','.')) > 50:
-                    n_jobs += 1
+                # read load from header
+                if start_count == 0:
+                   if len(line_spl) > 9 and line_spl[9] == 'load':
+                      info.load = float(line_spl[12].replace(',',''))
+                   if len(line_spl) > 2 and line_spl[0] == 'PID' and line_spl[1] == 'USER':
+                      start_count = 1  # start counting jobs from next line on
                 else:
-                    break
+                   if float(line_spl[8].replace(',','.')) > 50:
+                       n_jobs += 1
+                   else:
+                       break
             info.n_outsiders = max(n_jobs - self.n_used_cores, 0)
 
         command = "free -g"
@@ -148,6 +167,27 @@ class NODE():
             else:
                 info.free_mem_real = float(std_out[1].split()[6])
             logger.info("node %s is up",self.name)
+
+        command = "df -BG `dirname $TMPDIR`" # probably too specific assumption
+        try:
+            (std_out, std_err) = node_exec(self.name, command)
+        except:
+            logger.exception("finding the the free disk space failed for node: %s",self.name)
+            self.messages.add('disk: Exception: ' + repr(sys.exc_info()[0]))
+            info.is_up = False
+            info.free_disk = 0.0
+            info.total_disk = 0.0
+        else:
+            logger.debug('on '+self.name+': finding this: '+std_out)
+            std_out = std_out.split("\n")
+            if len(std_out)>1:
+               info.total_disk = float(std_out[1].split()[1].replace('G',''))
+               info.free_disk = float(std_out[1].split()[3].replace('G',''))
+            else:
+               logger.exception("parsing the df command failed for node: %s",self.name)
+               info.total_disk = 0.0
+               info.free_disk = 0.0
+
         return info
 
     def has_attributes(self, node_attr):
@@ -738,10 +778,10 @@ def handle_show_status(args):
 
     args : () or (user_name)
     """
-    sep1 = '-'*70 + '\n'
-    sep2 = '='*70 + '\n'
-    headerN =  '                                 cores              memory (GB)\n'
-    headerN += 'node                          used  total      used     req   total\n'
+    sep1 = '-'*88 + '\n'
+    sep2 = '='*88 + '\n'
+    headerN =  '                                   cores                    memory (GB)       disk (GB)\n'
+    headerN += 'node                            used  total   load     used     req   total  used total\n'
     headerU =  'user                          using cores        queue size\n' + sep1
 
     msgU = ''
@@ -753,7 +793,7 @@ def handle_show_status(args):
     msgU = headerU + msgU + sep2 if msgU else 'No users.\n'
 
     msgN = ''
-    format_spec = '{0:30s} {1:<5d} {2:<5d}' + ' '*2 + '{3:>7.1f} {4:>7.1f} {5:>7.1f}\n'
+    format_spec = '{0:30s} {1:>5d} {2:>5d} {3:>7.1f}' + ' '*2 + '{4:>7.1f} {5:>7.1f} {6:>7.1f} {7:5.0f} {8:5.0f}\n'
     with nodes_check_lock:
         for node in nodes:
             down=' (down)' if not( nodes[node].is_up) else ''
@@ -766,9 +806,12 @@ def handle_show_status(args):
             msgN += format_spec.format( node + attr + down,
                                         nodes[node].n_used_cores + nodes[node].n_outsiders,
                                         nodes[node].max_cores,
+                                        nodes[node].load,
                                         nodes[node].total_mem - nodes[node].free_mem_real,
                                         nodes[node].req_mem,
-                                        nodes[node].total_mem)
+                                        nodes[node].total_mem,
+                                        nodes[node].total_disk - nodes[node].free_disk,
+                                        nodes[node].total_disk)
             if len_node_row > 28 and nodes[node].attributes:
                 msgN += '    [' + ','.join(nodes[node].attributes) + ']\n'
     msgN = headerN + sep1 + msgN + sep2 if msgN else 'No nodes.\n'
@@ -1043,6 +1086,9 @@ class CHECK_NODES(threading.Thread):
                     nodes[node].n_outsiders = nodes_info[node].n_outsiders
                     nodes[node].total_mem = nodes_info[node].total_mem
                     nodes[node].free_mem_real = nodes_info[node].free_mem_real
+                    nodes[node].load = nodes_info[node].load
+                    nodes[node].total_disk = nodes_info[node].total_disk
+                    nodes[node].free_disk = nodes_info[node].free_disk
                 nodes_check_lock.release()
             except:
                 logger.exception("Error in CHECK_NODES")
