@@ -124,10 +124,10 @@ def _handle_show_status(args, users, nodes):
     
     args : () or (user_name)?
     """
-    sep1 = '-'*70 + '\n'
-    sep2 = '='*70 + '\n'
-    headerN =  '                                 cores              memory (GB)\n'
-    headerN += 'node                          used  total      used     req   total\n'
+    sep1 = '-'*88 + '\n'
+    sep2 = '='*88 + '\n'
+    headerN =  '                                   cores                    memory (GB)       disk (GB)\n'
+    headerN += 'node                            used  total   load     used     req   total  used total\n'
     headerU =  'user                          using cores        queue size\n' + sep1
     msgU = ''
     format_spec = '{0:32s} {1:<5d}' + ' '*13 + '{2:<5d}\n'
@@ -137,7 +137,7 @@ def _handle_show_status(args, users, nodes):
                                    users.all_[user].n_queue)
     msgU = headerU + msgU + sep2 if msgU else 'No users.\n'
     msgN = ''
-    format_spec = '{0:30s} {1:<5d} {2:<5d}' + ' '*2 + '{3:>7.1f} {4:>7.1f} {5:>7.1f}\n'
+    format_spec = '{0:30s} {1:>5d} {2:>5d} {3:>7.1f}' + ' '*2 + '{4:>7.1f} {5:>7.1f} {6:>7.1f} {7:5.0f} {8:5.0f}\n'
     with nodes.check_lock:
         for node in nodes.all_:
             down=' (down)' if not(nodes.all_[node].is_up) else ''
@@ -152,10 +152,15 @@ def _handle_show_status(args, users, nodes):
                                        nodes.all_[node].n_used_cores
                                        + nodes.all_[node].n_outsiders,
                                        nodes.all_[node].max_cores,
+                                       nodes.all_[node].load,
                                        nodes.all_[node].total_mem
                                        - nodes.all_[node].free_mem_real,
                                        nodes.all_[node].req_mem,
-                                       nodes.all_[node].total_mem)
+                                       nodes.all_[node].total_mem,
+                                       nodes.all_[node].total_disk
+                                       - nodes.all_[node].free_disk,
+                                       nodes.all_[node].total_disk)
+
             if len_node_row > 28 and nodes.all_[node].attributes:
                 msgN += '    [' + ','.join(nodes.all_[node].attributes) + ']\n'
     msgN = headerN + sep1 + msgN + sep2 if msgN else 'No nodes.\n'

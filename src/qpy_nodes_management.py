@@ -68,6 +68,10 @@ class Node(object):
                              are not under qpy control (obtained by system's
                              commant top)
     attributes (list)        A list, with the attributes of this node
+    load (float)             The current load of the node, according to top
+    total_disk (float)       The total amount of available disk space on TMPDIR
+    free_disk (float)        The current free amount of available disk space on TMPDIR
+    logger (Logger)          A logger
     """
     __slots__ = ('name',
                  'address',
@@ -81,6 +85,9 @@ class Node(object):
                  'free_mem_real',
                  'n_outsiders',
                  'attributes',
+                 'load',
+                 'total_disk',
+                 'free_disk',
                  'logger')
     def __init__(self, name, max_cores, logger):
         self.name = name
@@ -96,6 +103,9 @@ class Node(object):
         self.free_mem_real = 0.0
         self.n_outsiders = 0
         self.attributes = []
+        self.load = 0.0
+        self.total_disk = 0.0
+        self.free_disk = 0.0
         self.logger = logger
 
     def check(self):
@@ -116,15 +126,16 @@ class Node(object):
                           ['is_up',
                            'n_outsiders',
                            'total_mem',
-                           'free_mem_real'])
+                           'free_mem_real',
+                           'load',
+                           'total_disk',
+                           'free_disk'])
         info.is_up = True
 
         command = "top -b -n1"# | sed -n '8,50p'"
         try:
             (std_out, std_err) = qpycomm.node_exec(self.address,
                                                    command)
-            # dumb: should be improved
-            std_out = '\n'.join(std_out.split('\n')[8:max(len(std_out),50)])
         except:
             self.logger.exception(
                 "finding the number of untracked jobs failed for node: %s",
@@ -132,15 +143,27 @@ class Node(object):
             self.messages.add('outsiders: Exception: ' + repr(sys.exc_info()[0]))
             info.is_up = False
             info.n_outsiders = 0
+            info.load = 0
         else:
             std_out = std_out.split("\n")
             n_jobs = 0
+            # slightly improved parsing of top output
+            # read "load" from header and get running processes from the output
+            # that follows after the line starting with "PID  USER  ..."
+            start_count = 0
             for line in std_out:
                 line_spl = line.split()
-                if float(line_spl[8].replace(',','.')) > 50:
-                    n_jobs += 1
+                # read load from header
+                if start_count == 0:
+                   if len(line_spl) > 9 and line_spl[9] == 'load':
+                      info.load = float(line_spl[12].replace(',',''))
+                   if len(line_spl) > 2 and line_spl[0] == 'PID' and line_spl[1] == 'USER':
+                      start_count = 1  # start counting jobs from next line on
                 else:
-                    break
+                   if float(line_spl[8].replace(',','.')) > 50:
+                       n_jobs += 1
+                   else:
+                       break
             info.n_outsiders = max(n_jobs - self.n_used_cores, 0)
 
         command = "free -g"
@@ -163,6 +186,26 @@ class Node(object):
             else:
                 info.free_mem_real = float(std_out[1].split()[6])
             self.logger.info("node %s is up",self.name)
+        command = "df -BG `dirname $TMPDIR`" # probably too specific assumption
+        try:
+            (std_out, std_err) = qpycomm.node_exec(self.address, command)
+        except:
+            self.logger.exception("finding the the free disk space failed for node: %s",self.name)
+            self.messages.add('disk: Exception: ' + repr(sys.exc_info()[0]))
+            info.is_up = False
+            info.free_disk = 0.0
+            info.total_disk = 0.0
+        else:
+            self.logger.debug('on '+self.name+': finding this: '+std_out)
+            std_out = std_out.split("\n")
+            if len(std_out)>1:
+               info.total_disk = float(std_out[1].split()[1].replace('G',''))
+               info.free_disk = float(std_out[1].split()[3].replace('G',''))
+            else:
+               self.logger.exception("parsing the df command failed for node: %s",self.name)
+               info.total_disk = 0.0
+               info.free_disk = 0.0
+
         return info
 
     def has_attributes(self, node_attr):
@@ -351,6 +394,9 @@ class CheckNodes(threading.Thread):
                         self.all_nodes.all_[node].n_outsiders = nodes_info[node].n_outsiders
                         self.all_nodes.all_[node].total_mem = nodes_info[node].total_mem
                         self.all_nodes.all_[node].free_mem_real = nodes_info[node].free_mem_real
+                        self.all_nodes.all_[node].load = nodes_info[node].load
+                        self.all_nodes.all_[node].total_disk = nodes_info[node].total_disk
+                        self.all_nodes.all_[node].free_disk = nodes_info[node].free_disk
             except:
                 self.logger.exception("Error in CHECK_NODES")
             self.finish.wait(self.all_nodes.check_time)
