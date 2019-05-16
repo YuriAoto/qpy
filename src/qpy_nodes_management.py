@@ -391,9 +391,9 @@ class CheckNodes(threading.Thread):
                     nodes_info[node] = self.all_nodes.all_[node].check()
                     self.logger.info("done with %s",node)
                 with self.all_nodes.check_lock:
-                    self.all_nodes.N_outsiders += (nodes_info[node].n_outsiders
-                                                   - self.all_nodes.all_[node].n_outsiders)
                     for node in self.all_nodes.all_:
+                        self.all_nodes.N_outsiders += (nodes_info[node].n_outsiders
+                                                       - self.all_nodes.all_[node].n_outsiders)
                         self.all_nodes.all_[node].is_up = nodes_info[node].is_up
                         self.all_nodes.all_[node].n_outsiders = nodes_info[node].n_outsiders
                         self.all_nodes.all_[node].total_mem = nodes_info[node].total_mem
