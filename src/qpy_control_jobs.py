@@ -297,8 +297,8 @@ class Submission(threading.Thread):
                                 self.config.logger.error("Exception in SUB_CTRL when submitting job",
                                                          exc_info=True)
                                 job.node = None
-                                self.job.append(job, self.jobs.queue)
-                                self.job.append(job, self.jobs.Q)
+                                self.jobs.append(job, self.jobs.queue)
+                                self.jobs.append(job, self.jobs.Q)
                             else:
                                 self.jobs.mv(job, self.jobs.queue, self.jobs.running)
                                 jobs_modification = True

@@ -100,7 +100,7 @@ def establish_Listener_connection(address,
             except socketError:
                 pass
             except:
-                raise qpyUnknowError("Unexpected exception after connection.Listener",
+                raise qpyUnknownError("Unexpected exception after connection.Listener",
                                      sys.exc_info())
     else:
         try:
@@ -110,7 +110,7 @@ def establish_Listener_connection(address,
             raise qpyConnectionError('Error when creating listener: '
                                      + str(sys.exc_info()[1]))
         except:
-            raise qpyUnknowError("Unexpected exception after connection.Listener",
+            raise qpyUnknownError("Unexpected exception after connection.Listener",
                                  sys.exc_info())
     return List_master, port, conn_key
 
@@ -155,7 +155,7 @@ def message_transfer(msg,
     except TimeoutError:
         raise qpyConnectionError("Connection failed due to Timeout Error.")
     except:
-        raise qpyUnknowError("Unexpected exception after connection.Client",
+        raise qpyUnknownError("Unexpected exception after connection.Client",
                              sys.exc_info())
     conn.send(msg)
     back_msg = conn.recv()
@@ -224,7 +224,7 @@ def node_exec(node,
         except paramiko.AuthenticationException:
             raise qpyConnectionError("SSH error: authentication failed")
         except:
-            raise qpyUnknowError("Unexpected exception after ssh.connect",
+            raise qpyUnknownError("Unexpected exception after ssh.connect",
                                  sys.exc_info())
         if get_outerr:
             stdin, stdout, stderr = ssh.exec_command(command)
@@ -237,7 +237,7 @@ def node_exec(node,
             return out, err
         else:
             ssh.exec_command(command)
-            sleep(1.)
+            time.sleep(1.)
             ssh.close()
             return
     elif mode == "popen":
