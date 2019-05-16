@@ -48,7 +48,7 @@ except:
     if start_qpy_master:
         os.remove(qpysys.master_conn_file + '_port')
         os.remove(qpysys.master_conn_file + '_conn_key')
-        start_master_driver(qpysys.sys_user,
+        qpyutil.start_master_driver(qpysys.sys_user,
                             address,
                             qpysys.qpy_master_command)
     else:
@@ -63,5 +63,5 @@ if error:
 else:
     sys.stdout.write(master_msg)
 if start_qpy_master:
-    start_master_driver(qpysys.sys_user, address, qpysys.qpy_master_command)
+    qpyutil.start_master_driver(qpysys.sys_user, address, qpysys.qpy_master_command)
 exit(int(error))

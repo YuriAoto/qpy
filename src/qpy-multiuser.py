@@ -16,11 +16,12 @@ import qpy_users_management as qpyusers
 from qpy_multiuser_interaction import handle_client
 
 if (not(os.path.isdir(qpysys.qpy_multiuser_dir))):
-    os.makedirs(qpysys.qpy_multiuserdir)
+    os.makedirs(qpysys.qpy_multiuser_dir)
 os.chmod(qpysys.qpy_multiuser_dir, 0700)
 
 logger = qpylog.configure_logger(qpysys.multiuser_log_file,
                                  qpylog.logging.DEBUG)
+logger.info('Starting main thread of qpy-multiuser')
 nodes = qpynodes.NodesCollection(logger)
 nodes.load_nodes()
 users = qpyusers.UsersCollection(logger)
