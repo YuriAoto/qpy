@@ -12,7 +12,12 @@ makeTestDir
 
 # =====
 # Nodes
-echo 'localhost 5' > ${QPY_MU_DIR}/nodes
+if [[ -f nodes ]]
+then
+    cp nodes ${QPY_MU_DIR}/nodes
+else
+    echo 'localhost 5' > ${QPY_MU_DIR}/nodes
+fi
 echo 'even' > ${QPY_MU_DIR}/distribution_rules
 echo $QPY_U1 > ${QPY_MU_DIR}/allowed_users
 
@@ -24,15 +29,13 @@ all_users="$QPY_U1"
 # =====
 # Go!
 testqpy_multiuser start
-sleep 1
-print Waiting a cicle in qpy-multiuser...
-sleep 15
+wait_for 10
 print
 
 createUser ${QPY_U1}
 testqpy ${QPY_U1} restart
-print User has been created. Waiting a cicle...
-sleep 5
+print User has been created.
+wait_for 10
 
 testqpy $QPY_U1 config
 testqpy $QPY_U1 config saveMessages true
@@ -42,16 +45,14 @@ testqpy $QPY_U1 config
 testqpy $QPY_U1 config maxMessages 10
 testqpy $QPY_U1 config
 
-showUlog $QPY_U1
-testqpy $QPY_U1 config
 
 
 # =====
 # The end
-showMUlog
+#showMUlog
 for user in $all_users
 do
     testqpy $user config
-    showUlog  $user
+#    showUlog  $user
 done
 finish_test $all_users

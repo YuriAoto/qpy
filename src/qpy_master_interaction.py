@@ -215,6 +215,8 @@ def handle_qpy(jobs,
         # Kill a job
         # arguments = a list of jobIDs and status (all, queue, running)
         elif job_type == qpyconst.JOBTYPE_KILL:
+            orig_sub_jobs = sub_ctrl.submit_jobs
+            sub_ctrl.submit_jobs = False
             kill_q = ('all' in arguments) or ('queue' in arguments)
             kill_r = ('all' in arguments) or ('running' in arguments)
             for st in ['all', 'queue', 'running']:
@@ -231,6 +233,7 @@ def handle_qpy(jobs,
                 jobs.remove(job, jobs.queue)
                 jobs.append(job, jobs.undone)
                 n_kill_q += 1
+            sub_ctrl.submit_jobs = orig_sub_jobs
             n_kill_r = 0
             to_remove = []
             with jobs.lock:

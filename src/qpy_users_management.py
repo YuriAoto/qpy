@@ -7,6 +7,7 @@ import qpy_system as qpysys
 import qpy_logging as qpylog
 import qpy_communication as qpycomm
 from qpy_job import MultiuserJob
+from qpy_exceptions import *
 
 class User(object):
     """A user from the qpy-multiuser point of view.
@@ -149,31 +150,30 @@ class User(object):
         """
         space_available = False
         
-        users.logger.debug('jobID, attribute: '
+        users.logger.debug('In request_node. jobID, attribute: '
                             + str(jobID)
                             + str(node_attr) )
         
-        N_free_cores = ((nodes.N_cores
-                         - nodes.N_used_cores)
-                        - (nodes.N_min_cores
-                           - nodes.N_used_min_cores))
+        N_free_cores = ((nodes.N_cores - nodes.N_used_cores)
+                        - (nodes.N_min_cores - nodes.N_used_min_cores))
         free_cores = N_free_cores >= num_cores
-        if (self.n_used_cores + num_cores <= self.min_cores):
+        if self.n_used_cores + num_cores <= self.min_cores:
             space_available = True
         else:
             use_others_resource = (self.n_used_cores + num_cores
                                    > self.min_cores + self.extra_cores)
-            if (use_others_resource):
+            if use_others_resource:
                 N_users_with_queue = 1
                 N_extra = 0
                 for user,info in users.all_.iteritems():
-                    if (user == self.name):
+                    if user == self.name:
                         continue
                     if (info.n_queue > 0
-                        and info.n_used_cores >=
-                        info.min_cores + info.extra_cores):
+                        and (info.n_used_cores >=
+                             info.min_cores + info.extra_cores)
+                        ):
                         N_users_with_queue += 1
-                    elif (info.n_queue == 0):
+                    elif info.n_queue == 0:
                         N_extra += min(info.extra_cores + info.min_cores
                                        - info.n_used_cores,
                                        info.extra_cores)
@@ -184,32 +184,32 @@ class User(object):
                     space_available = True
             else:
                 space_available = free_cores 
-        if (space_available):
+        if space_available:
             best_node = None
             best_free = 0
             with nodes.check_lock:
-                if (num_cores == 1):
+                if num_cores == 1:
                     for node, info in nodes.all_.iteritems():
                         free = info.max_cores - info.n_outsiders - info.n_used_cores
                         if (info.has_attributes(node_attr) and
                             not(info.pref_multicores) and
                             free > best_free and
-                            (info.total_mem-info.req_mem) > mem and
+                            (info.total_mem - info.req_mem) > mem and
                             info.free_mem_real > mem):
                             best_node = node
                             best_free = free
-                if (best_node == None):
-                    for node in nodes.names:
-                        if (nodes.all_[node].is_up
+                if best_node is None:
+                    for node, info in nodes.all_.iteritems():
+                        if (info.is_up
                             and info.has_attributes(node_attr)
-                            and nodes.all_[node].max_cores
-                            - nodes.all_[node].n_outsiders
-                            - nodes.all_[node].n_used_cores >= num_cores
-                            and nodes.all_[node].total_mem
-                            - nodes.all_[node].req_mem > mem):
+                            and (info.max_cores
+                                 - info.n_outsiders
+                                 - info.n_used_cores >= num_cores)
+                            and (info.total_mem
+                                 - info.req_mem > mem)):
                             best_node = node
                             break
-            if (best_node == None):
+            if best_node == None:
                 return 1
             new_job = MultiuserJob(self.name, jobID, mem, num_cores, best_node)
             self.add_job(new_job, nodes)

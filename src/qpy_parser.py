@@ -8,6 +8,7 @@ import subprocess
 import qpy_system as qpysys
 import qpy_useful_cosmetics as qpyutil
 import qpy_constants as qpyconst
+from qpy_exceptions import *
 
 def parse_qpy_cmd_line():
     try:

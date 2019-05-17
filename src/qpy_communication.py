@@ -223,6 +223,8 @@ def node_exec(node,
             raise qpyConnectionError("SSH error: server's host key could not be verified")
         except paramiko.AuthenticationException:
             raise qpyConnectionError("SSH error: authentication failed")
+        except socketError:
+            raise qpyConnectionError("socket error: The node is probably unreachable")
         except:
             raise qpyUnknownError("Unexpected exception after ssh.connect",
                                  sys.exc_info())

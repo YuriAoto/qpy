@@ -12,6 +12,7 @@ import qpy_system as qpysys
 import qpy_constants as qpyconst
 import qpy_communication as qpycomm
 import qpy_nodes_management as qpynodes
+from qpy_exceptions import *
 
 class CheckRun(threading.Thread):
     """Check if the jobs are still running.

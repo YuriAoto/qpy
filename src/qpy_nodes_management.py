@@ -9,6 +9,7 @@ from qpy_parser import parse_node_info
 import qpy_system as qpysys
 import qpy_logging as qpylog
 import qpy_communication as qpycomm
+from qpy_exceptions import *
 
 class UsersNode(object):
     """A node from the point of view of a qpy user
@@ -132,14 +133,25 @@ class Node(object):
         info.is_up = True
 
         command = "top -b -n1"# | sed -n '8,50p'"
+        this_action = "Checking load and untracked jobs"
         try:
             (std_out, std_err) = qpycomm.node_exec(self.address,
                                                    command)
+        except qpyConnectionError as e:
+            msg = "{0} failed for node {1}: {2}".format(
+                this_action, self.name, str(e))
+            self.logger.warning(msg)
+            self.messages.add(msg)
+            info.is_up = False
+            info.n_outsiders = 0
+            info.load = 0
         except:
-            self.logger.exception(
-                "finding the number of untracked jobs failed for node: %s",
-                self.name)
-            self.messages.add('outsiders: Exception: ' + repr(sys.exc_info()[0]))
+            msg = "{0} failed for node {1}".format(
+                this_action, self.name)
+            self.logger.exception(msg)
+            msg = "{0} failed for node {1}: Exception: {2}".format(
+                this_action, self.name, repr(sys.exc_info()[1]))
+            self.messages.add(msg)
             info.is_up = False
             info.n_outsiders = 0
             info.load = 0
@@ -171,32 +183,56 @@ class Node(object):
             info.n_outsiders = max(n_jobs - self.n_used_cores, 0)
 
         command = "free -g"
+        this_action = "Finding free memory"
         try:
             (std_out, std_err) = qpycomm.node_exec(self.address,
                                                    command)
+        except qpyConnectionError as e:
+            msg = "{0} failed for node {1}: {2}".format(
+                this_action, self.name, str(e))
+            self.logger.warning(msg)
+            self.messages.add(msg)
+            info.is_up = False
+            info.free_mem_real = 0.0
+            info.total_mem = 0.0
         except:
-            self.logger.exception(
-                "finding the the free memory failed for node: %s",
-                self.name)
-            self.messages.add('memory: Exception: ' + repr(sys.exc_info()[0]))
+            msg = "{0} failed for node {1}".format(
+                this_action, self.name)
+            self.logger.exception(msg)
+            msg = "{0} failed for node {1}: Exception: {2}".format(
+                this_action, self.name, repr(sys.exc_info()[1]))
+            self.messages.add(msg)
+            self.logger.warning(msg)
             info.is_up = False
             info.free_mem_real = 0.0
             info.total_mem = 0.0
         else:
             std_out = std_out.split("\n")
             info.total_mem = float(std_out[1].split()[1])
-            if (len(std_out) == 5):
+            if len(std_out) == 5:
                 info.free_mem_real = float(std_out[2].split()[3])
             else:
                 info.free_mem_real = float(std_out[1].split()[6])
             self.logger.info("node %s is up",self.name)
         command = "df -BG `dirname $TMPDIR`" # probably too specific assumption
+        this_action = "Finding free disk space"
         try:
-            (std_out, std_err) = qpycomm.node_exec(self.address, command)
+            (std_out, std_err) = qpycomm.node_exec(self.address,
+                                                   command)
+        except qpyConnectionError as e:
+            msg = "{0} failed for node {1}: {2}".format(
+                this_action, self.name, str(e))
+            self.messages.add(msg)
+            self.logger.warning(msg)
+            info.free_disk = 0.0
+            info.total_disk = 0.0
         except:
-            self.logger.exception("finding the the free disk space failed for node: %s",self.name)
-            self.messages.add('disk: Exception: ' + repr(sys.exc_info()[0]))
-            info.is_up = False
+            msg = "{0} failed for node {1}".format(
+                this_action, self.name)
+            self.logger.exception(msg)
+            msg = "{0} failed for node {1}: Exception: {2}".format(
+                this_action, self.name, repr(sys.exc_info()[1]))
+            self.messages.add(msg)
             info.free_disk = 0.0
             info.total_disk = 0.0
         else:
@@ -243,7 +279,7 @@ class Node(object):
         self.logger.debug('In has_attributes: expression = '
                             + str(expression))
         self.logger.debug('In has_attributes: result (Node) = '
-                            + str(a) + str(self.name))
+                            + str(a) + ' ' + str(self.name))
         return a
 
 

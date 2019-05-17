@@ -35,17 +35,22 @@ function qpyWdir(){
 
 # ===============
 # print functions
+function prompt(){
+    echo "${bold}${@}>${normal} "
+}
+
+
 function print(){
-    echo "${bold}qpy_test>${normal} $@"
+    echo `prompt qpy_test` "$@"
 }
 
 function printU(){
-    u=$1; shift
-    echo "${bold}($u)>${normal} ${bgwhite}$@${normal}"
+    user=$1; shift
+    echo `prompt "($user)"` "${bgwhite}$@${normal}"
 }
 
 function printMU(){
-    echo "${bold}(multiuser)>${normal} ${bgwhite}$@${normal}"
+    echo `prompt "(multiuser)"` "${bgwhite}$@${normal}"
 }
 
 function printSep(){
@@ -136,6 +141,19 @@ function createUser(){
 
 # ===============
 # Function to execute something
+function wait_for(){
+    if [[ $# -gt 0 ]]; then sec=$1; shift; fi
+    if [[ $# -gt 0 ]]; then i=$1; shift; fi
+    if [[ $# -gt 0 ]]; then n=$1; shift; fi
+    if [[ -z "$n" ]]; then
+	i_n=''
+    else
+	i_n=", $i/$n"
+    fi
+    echo `prompt Waiting` $sec seconds${i_n} ...
+    sleep $sec
+}
+
 function testqpy_multiuser(){
     printMU qpy-multiuser $@
     $exe_QPY_MU $@

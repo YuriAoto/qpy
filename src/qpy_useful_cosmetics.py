@@ -6,6 +6,7 @@ from time import sleep
 import re
 
 import qpy_communication as qpycomm
+from qpy_exceptions import *
 
 def kill_master_instances(user, address, qpy_master_command):
     """Kill all qpy-master instances from this user.

@@ -7,6 +7,7 @@ import sys
 import qpy_system as qpysys
 import qpy_communication as qpycomm
 from qpy_parser import parse_qpy_multiuser_cmd_line
+from qpy_exceptions import *
 
 option, arguments, start_qpy_multiuser = parse_qpy_multiuser_cmd_line()
 if start_qpy_multiuser:

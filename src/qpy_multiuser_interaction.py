@@ -5,6 +5,7 @@ import qpy_system as qpysys
 import qpy_constants as qpyconst
 import qpy_communication as qpycomm
 import qpy_users_management as qpyusers
+from qpy_exceptions import *
 
 ## TODO: use exceptions instead of status codes
 def _format_general_variables(nodes):

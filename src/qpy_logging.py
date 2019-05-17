@@ -6,6 +6,7 @@ import logging
 import logging.handlers
 
 import qpy_system as qpysys
+from qpy_exceptions import *
 
 def configure_logger(base_file,
                      level):

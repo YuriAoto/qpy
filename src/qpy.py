@@ -24,6 +24,7 @@ except AssertionError as e:
     sys.exit(str(e) + "\nContact the system administrator.")
 import qpy_useful_cosmetics as qpyutil
 from qpy_parser import parse_qpy_cmd_line
+from qpy_exceptions import *
 
 option, arguments, start_qpy_master = parse_qpy_cmd_line()
 
