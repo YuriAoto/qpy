@@ -372,11 +372,12 @@ class Job(object):
             return ('{dir}/job_{id}{postfix}'.format(dir=job.info[1],
                                                      id=str(job.ID),
                                                      postfix=postfix))
-        command =  'export QPY_JOB_ID=' + str(self.ID) + '; '
+        command = 'exec > ' + out_or_err_name( self, '.out') + ';exec 2> ' + out_or_err_name( self, '.err') + ';' 
+        command += 'export QPY_JOB_ID=' + str(self.ID) + '; '
         command += 'export QPY_NODE=' + str(self.node) + '; '
         command += 'export QPY_N_CORES=' + str(self.n_cores) + '; '
         command += 'export QPY_MEM=' + str(self.mem) + '; '
-        command += 'ulimit -Sv ' + str(max(self.mem*1.5,10)*1048576) + '; '
+        command += 'ulimit -Sv ' + str("%d" % (max(self.mem*1.5,10)*1048576)) + '; '
         for sf in config.source_these_files:
            command += 'source ' + sf + '; '
         command += 'cd ' + self.info[1] + '; ' 
@@ -386,9 +387,9 @@ class Job(object):
                                              1))
         except:
             command += self.info[0]
-        command += (' > ' + out_or_err_name( self, '.out')
-                    + ' 2> ' + out_or_err_name( self, '.err'))
-        config.logger.debug('Command: ' + command)
+
+        config.logger.info("Sending command: %s", command)
+
         try:
             qpycomm.node_exec(self.node.address,
                               command,
@@ -398,6 +399,7 @@ class Job(object):
         except:
             config.logger.error("Exception in run", exc_info=True)
             raise Exception( "Exception in run: " + str(sys.exc_info()[1]))
+ 
         self.start_time = datetime.today()
         self.status = qpyconst.JOB_ST_RUNNING
 

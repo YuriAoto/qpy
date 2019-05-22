@@ -38,6 +38,8 @@ if (os.path.isfile(qpysys.master_conn_file+'_conn_key')):
 config = Configurations(qpysys.config_file)
 jobs = JobCollection(config)
 
+config.logger.info("Starting qpy-master")
+
 multiuser_alive = threading.Event()
 multiuser_alive.clear()
 
