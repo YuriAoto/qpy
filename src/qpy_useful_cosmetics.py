@@ -110,7 +110,7 @@ def true_or_false(v):
     elif (v.lower() == 'false'):
         return False
     else:
-        raise Exception('Neither true nor false.')
+        raise qpyValueError('Neither true nor false.')
 
 def get_plural(word_s, stuff):
     """Get the plural

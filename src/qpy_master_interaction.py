@@ -3,6 +3,7 @@
 """
 import os
 import sys
+import traceback
 import threading
 from shutil import copyfile
 
@@ -10,6 +11,7 @@ import qpy_system as qpysys
 import qpy_constants as qpyconst
 import qpy_useful_cosmetics as qpyutil
 import qpy_communication as qpycomm
+from qpy_parser import JobOptParser
 from qpy_job import JobId, Job
 from qpy_exceptions import *
 
@@ -156,6 +158,7 @@ def handle_qpy(jobs,
     qpycomm.write_conn_files(qpysys.master_conn_file,
                              address, port, conn_key)
     job_id = JobId(qpysys.jobID_file)
+    job_options_parser = JobOptParser.set_parser()
     while True:
         client_master = Listener_master.accept()
         (job_type, arguments) = client_master.recv()
@@ -164,9 +167,18 @@ def handle_qpy(jobs,
         # Send a job
         # arguments = the job info (see JOB.info)
         if job_type == qpyconst.JOBTYPE_SUB:
-            new_job = Job(int(job_id), arguments, config)
+            new_job = Job(int(job_id), arguments, config, job_options_parser)
             try:
                 new_job.parse_options()
+            except qpyParseError, e:
+                client_master.send('qpy: Job rejected due to its options:\n'
+                                   + e.message + '\n')
+            except:
+                client_master.send('qpy: Job rejected:\n'
+                                   + 'Unexpected exception after parsing options:\n'
+                                   + traceback.format_exc() + '\n'
+                                   + 'Please, contact the qpy team.\n')
+            else:
                 if config.default_attr and not new_job.node_attr:
                     new_job.node_attr = config.default_attr
                 if config.or_attr:
@@ -191,11 +203,6 @@ def handle_qpy(jobs,
                                               + str( new_job.ID))
                         copyfile( script_name, copied_script_name)
                         new_job.cp_script_to_replace = (first_arg, copied_script_name)
-            except qpyHelpException as ex:
-                client_master.send('qpy: ' + ex.message)
-            except qpyParseError, ex:
-                client_master.send('qpy: Job rejected:\n' + ex.message + '\n')
-            else:
                 jobs.append(new_job, jobs.all)
                 jobs.append(new_job, jobs.queue)
                 jobs.Q_appendleft(new_job)
