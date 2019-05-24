@@ -335,16 +335,16 @@ class Job(object):
                                                      id=str(job.ID),
                                                      postfix=postfix))
         command = []
-        command.append('exec > {}'.format(out_or_err_name(self, '.out')))
-        command.append('exec 2> {}'.format(out_or_err_name(self, '.err')))
-        command.append('export QPY_JOB_ID={}'.format(self.ID))
-        command.append('export QPY_NODE={}'.format(self.node))
-        command.append('export QPY_N_CORES={}'.format(self.n_cores))
-        command.append('export QPY_MEM={}'.format(self.mem))
-        command.append('ulimit -Sv {}'.format(int(max(self.mem*1.5, 10)*1048576)))
+        command.append('exec > {0}'.format(out_or_err_name(self, '.out')))
+        command.append('exec 2> {0}'.format(out_or_err_name(self, '.err')))
+        command.append('export QPY_JOB_ID={0}'.format(self.ID))
+        command.append('export QPY_NODE={0}'.format(self.node))
+        command.append('export QPY_N_CORES={0}'.format(self.n_cores))
+        command.append('export QPY_MEM={0}'.format(self.mem))
+        command.append('ulimit -Sv {0}'.format(int(max(self.mem*1.5, 10)*1048576)))
         for sf in config.source_these_files:
-            command.append('source {}'.format(sf))
-        command.append('cd {}'.format(self.info[1]))
+            command.append('source {0}'.format(sf))
+        command.append('cd {0}'.format(self.info[1]))
         try:
             command.append(self.info[0].replace(self.cp_script_to_replace[0],
                                                 'sh ' + self.cp_script_to_replace[1],
@@ -352,9 +352,7 @@ class Job(object):
         except:
             command.append(self.info[0])
         command = '; '.join(command)
-
         config.logger.info("Sending command: %s", command)
-
         try:
             qpycomm.node_exec(self.node.address,
                               command,
