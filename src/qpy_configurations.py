@@ -33,7 +33,7 @@ class Configurations(object):
                                    paused between each check
     source_these_files (list)      (default = ['~/.bash_profile'])
                                    files to be sourced in every job run
-    ssh_p_key_file                 (defaut = None)
+    ssh_p_key_file                 (default = None)
     logger_level (string, int)     (default = 'warning')
     logger                         A logger to print messages to file
                                    (global) master_log_file
@@ -221,7 +221,7 @@ class Configurations(object):
 
         elif k == 'cleanMessages':
             self.messages.clean()
-            msg = "Messages were cleand."
+            msg = "Messages were cleaned."
 
         elif k == 'loggerLevel':
             if v in ['debug', 'DEBUG']:

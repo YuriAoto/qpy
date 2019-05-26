@@ -214,7 +214,7 @@ class Node(object):
             else:
                 info.free_mem_real = float(std_out[1].split()[6])
             self.logger.info("node %s is up",self.name)
-        command = "df -BG `dirname $TMPDIR`" # probably too specific assumption
+        command = "df -BG $QPY_SCRATCH_ROOT"
         this_action = "Finding free disk space"
         try:
             (std_out, std_err) = qpycomm.node_exec(self.address,

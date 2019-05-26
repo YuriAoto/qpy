@@ -9,6 +9,7 @@ QPY_SOURCE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1; cd ../
 QPY_MU_DIR="${HOME}/.qpy-multiuser-test"
 exe_QPY_MU="python ${QPY_SOURCE_DIR}/qpy-access-multiuser.py"
 exe_QPY="python ${QPY_SOURCE_DIR}/../qpy"
+QPY_SCRATCH_ROOT="/SCR1" # find a way to generalize this
 
 normal=$(tput sgr0)
 bold=`tput bold`
