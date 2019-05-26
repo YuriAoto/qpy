@@ -1,7 +1,6 @@
 """ qpy - A job (a code being or to be executed in a node)
 
 """
-from optparse import OptionParser
 from collections import deque
 from datetime import datetime
 import threading
@@ -132,28 +131,6 @@ class MultiuserJob(object):
                 + ", n_cores = " + str(self.n_cores)
                 + ", mem = " + str(self.mem))
 
-class JobParser(OptionParser):
-    """An Option Parser that does not exit the program, but just raises a ParseError
-    
-    NOTE:
-    optparse is deprecated and the overwritten
-    functions are somewhat mentioned in the documentation.
-    
-    TODO:
-    replace it by argparse
-    """
-    def exit(self, prog='', message=''):
-        raise qpyParseError(message)
-    def error(self, message):
-        raise qpyParseError(message)
-    def print_usage(self):
-        pass
-    def print_version(self):
-        pass
-    def print_help(self):
-        raise qpyHelpException(self.format_help())
-
-
 class Job(object):
     """A job submitted by the user.
     
@@ -180,6 +157,9 @@ class Job(object):
                             (used in conjunction with use_script_copy)
     re_run (bool)           If True, it means that this job started to run in
                             a previous instance of qpy-master
+    opt_parser (JobParser)  A parser for the job options. It might be None, if is
+                            a job that has been restarted, and thus there is no
+                            need for a parse
     queue_time (datetime)   When the job was put in queue (that is, submited
                             by the user)
     start_time (datetime)   When the job started to run
@@ -193,6 +173,7 @@ class Job(object):
     """
     __slots__ = ("ID",
                  "info",
+                 "opt_parser",
                  "n_cores",
                  "mem",
                  "node_attr",
@@ -204,10 +185,9 @@ class Job(object):
                  "queue_time",
                  "start_time",
                  "end_time",
-                 "run_duration",
-                 "parser")
+                 "run_duration")
 
-    def __init__(self, jobID, job_info, config):
+    def __init__(self, jobID, job_info, config, options_parser = None):
         """Initiate the class.
         
         Arguments:
@@ -218,6 +198,7 @@ class Job(object):
         """
         self.ID = jobID
         self.info = job_info
+        self.opt_parser = options_parser
         self.n_cores = 1
         self.mem = 5.0
         self.node_attr = []
@@ -226,7 +207,6 @@ class Job(object):
         self.use_script_copy = config.use_script_copy
         self.cp_script_to_replace = None
         self.re_run = False
-        self.set_parser()
         self.queue_time = datetime.today()
         self.start_time = None
         self.end_time = None
@@ -347,24 +327,6 @@ class Job(object):
             job_str = job_str.replace(pattern, info)
         return job_str
 
-    def set_parser(self):
-        """Create a parser for the flags that can be set for a job."""
-        parser=JobParser()
-        parser.add_option("-n", "--cores", dest="cores",
-                          help="set the number of cores", default="1")
-        parser.add_option("-m", "--mem", "--memory", dest="memory",
-                          help="set the memory in GB", default="5")
-        parser.add_option("-a", "--node_attr", "--attributes", dest="node_attr",
-                          help="set the attributes for node", default='')
-        parser.add_option("-c", "--copyScript", dest="cpScript",
-                          help="script should be copied",
-                          action='store_false')
-        parser.add_option("-o", "--originalScript", dest="orScript",
-                          help="use original script",
-                          action='store_false')
-        parser.disable_interspersed_args()
-        self.parser=parser
-
     def run(self, config):
         """Run the job."""
         def out_or_err_name(job, postfix):
@@ -372,24 +334,25 @@ class Job(object):
             return ('{dir}/job_{id}{postfix}'.format(dir=job.info[1],
                                                      id=str(job.ID),
                                                      postfix=postfix))
-        command = 'exec > ' + out_or_err_name( self, '.out') + ';exec 2> ' + out_or_err_name( self, '.err') + ';' 
-        command += 'export QPY_JOB_ID=' + str(self.ID) + '; '
-        command += 'export QPY_NODE=' + str(self.node) + '; '
-        command += 'export QPY_N_CORES=' + str(self.n_cores) + '; '
-        command += 'export QPY_MEM=' + str(self.mem) + '; '
-        command += 'ulimit -Sv ' + str("%d" % (max(self.mem*1.5,10)*1048576)) + '; '
+        command = []
+        command.append('exec > {0}'.format(out_or_err_name(self, '.out')))
+        command.append('exec 2> {0}'.format(out_or_err_name(self, '.err')))
+        command.append('export QPY_JOB_ID={0}'.format(self.ID))
+        command.append('export QPY_NODE={0}'.format(self.node))
+        command.append('export QPY_N_CORES={0}'.format(self.n_cores))
+        command.append('export QPY_MEM={0}'.format(self.mem))
+        command.append('ulimit -Sv {0}'.format(int(max(self.mem*1.5, 10)*1048576)))
         for sf in config.source_these_files:
-           command += 'source ' + sf + '; '
-        command += 'cd ' + self.info[1] + '; ' 
+            command.append('source {0}'.format(sf))
+        command.append('cd {0}'.format(self.info[1]))
         try:
-            command += (self.info[0].replace(self.cp_script_to_replace[0],
-                                             'sh ' + self.cp_script_to_replace[1],
-                                             1))
+            command.append(self.info[0].replace(self.cp_script_to_replace[0],
+                                                'sh ' + self.cp_script_to_replace[1],
+                                                1))
         except:
-            command += self.info[0]
-
+            command.append(self.info[0])
+        command = '; '.join(command)
         config.logger.info("Sending command: %s", command)
-
         try:
             qpycomm.node_exec(self.node.address,
                               command,
@@ -425,104 +388,6 @@ class Job(object):
             return True
         return False
 
-    def _scanline(self, line, option_list):
-        """Parse the lines for qpy directives and options."""
-        if re.match('#QPY', line):
-            option_found=False
-            for attr,regexp in option_list:
-                re_res = regexp.search(line)
-                if re_res is not None:
-                    try:
-                        if attr == 'n_cores':
-                            self.n_cores = int(re_res.group(1))
-                        if attr == 'mem':
-                            self.mem = float(re_res.group(1))
-                        if attr == 'node_attr':
-                            self.node_attr = re_res.group(1).split()
-                        if attr == 'cpScript':
-                            self.use_script_copy = (True if
-                                                    (re_res.group(1) == 'true')
-                                                    else
-                                                    False)
-                        option_found = True
-                    except ValueError:
-                        raise ParseError("Invalid Value for {atr} found.".format(atr=attr))
-            if not option_found:
-                raise qpyParseError("QPY directive found, but no options supplied."\
-                                    "Please remove the #QPY directive if you don't"\
-                                    " want to supply a valid option.")
-
-    def _parse_file_for_options(self, file_name):
-        """Parse a submission script file for options set in the script.
-        
-        Arguments::
-        file_name (str)     the file name
-        
-        Behaviour:
-        The options can be set in the script by:
-        
-        #QPY <key>=<value>
-        #QPY <key> = <value>
-        #QPY <key> <value>
-        
-        where the possible key/values are:
-        n_cores     number of cores
-        mem         memory
-        node_attr   nodes attributes
-        cpScript    true or false, for copy script
-        """
-        option_list = [("n_cores"  , re.compile('n_cores\s*=?\s*(\d*)' ) ),
-                       ("mem"      , re.compile('mem\s*=?\s*(\d*)'     ) ),
-                       ("node_attr", re.compile('node_attr\s*=?\s*(.+)') ),
-                       ("cpScript" , re.compile('cpScript\s*=?\s*(\w*)') )]
-        try:
-            with open(file_name, 'r') as f:
-                for line in f:
-                    self._scanline(line, option_list)
-        except:
-            pass # Is an executable or file_name = None
-
-    def _parse_command_for_options(self, command):
-        """Parse the command for options.
-        
-        Arguments:
-        command (str)   the command to be parsed
-        
-        Behaviour:        
-        Set the options found in the command and return the
-        command free of these options.
-        
-        Return:
-        The command, without the parsed options.
-        
-        Raise:
-        qpyParseError, if the parse was not successful
-        """
-        try:
-            options,command = self.parser.parse_args(command.split())
-            self.n_cores = int(options.cores)
-            self.mem = float(options.memory)
-            if options.node_attr:
-                self.node_attr = options.node_attr.split('##')
-            else:
-                self.node_attr = []
-            if options.cpScript == None and options.orScript == None:
-                pass
-            elif options.cpScript != None and options.orScript != None:
-                raise qpyParseError("Please, do not supply both cpScript and orScript")
-            elif options.cpScript != None:
-                self.use_script_copy = True
-            else:
-                self.use_script_copy = False
-
-        except (AttributeError, TypeError), ex:
-            raise qpyParseError("Something went wrong. please contact the qpy-team\n"
-                                + ex.message)
-        except ValueError:
-            raise qpyParseError("Please supply only full numbers for memory or"
-                                + " number of cores, true or false for cpScript")
-        return ' '.join(command)
-
     def _expand_script_name(self, file_name):
         """Expand a filename to its absolute name, UNIX only.
         
@@ -548,11 +413,19 @@ class Job(object):
 
     def parse_options(self):
         """Parse the input and the submission script for options."""
-        self.info[0] = self._parse_command_for_options(self.info[0])
+        options = {'n_cores': self.n_cores,
+                   'mem': self.mem,
+                   'node_attr': self.node_attr,
+                   'use_script_copy': self.use_script_copy}
+        self.info[0] = self.opt_parser.parse_cmd_line(self.info[0], options)
         first_arg = self.info[0].split()[0]
         script_name = self._expand_script_name(first_arg)
-        self._parse_file_for_options(script_name)
-
+        if script_name is not None:
+            self.opt_parser.parse_file(script_name, options)
+        self.n_cores = options['n_cores']
+        self.mem = options['mem']
+        self.node_attr = options['node_attr']
+        self.use_script_copy = options['use_script_copy']
 
     def asked(self, pattern):
         """Return True if the job obbeys the pattern
