@@ -47,7 +47,7 @@ def parse_qpy_cmd_line():
     if option == qpyconst.JOBTYPE_CHECK:
         arguments = {}
         for x in sys.argv[2:]:
-            if x in JOB_STATUS:
+            if x in qpyconst.JOB_STATUS:
                 if ('status' in arguments):
                     arguments['status'].append(x)
                 else:

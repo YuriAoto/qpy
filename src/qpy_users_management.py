@@ -8,6 +8,7 @@ import qpy_logging as qpylog
 import qpy_communication as qpycomm
 from qpy_job import MultiuserJob
 from qpy_exceptions import *
+import qpy_constants as qpyconst
 
 class User(object):
     """A user from the qpy-multiuser point of view.
@@ -256,7 +257,7 @@ class UsersCollection(object):
             else:
                 new_user = User(user, address, port, conn_key)
                 try:
-                    cur_jobs = qpycomm.message_transfer((FROM_MULTI_CUR_JOBS, ()),
+                    cur_jobs = qpycomm.message_transfer((qpyconst.FROM_MULTI_CUR_JOBS, ()),
                                                         new_user.address,
                                                         new_user.port,
                                                         new_user.conn_key)
