@@ -2,7 +2,7 @@ qpy - The Queue Management System in Python
 version 0.0 - 2018
 
 Conceived and created by Pradipta Kumar Samanta and Yuri Alexandre Aoto
-With the kind help and support of Andreas Köhn and Arne Bargholz
+With the kind help and support of Andreas Koehn and Arne Bargholz
 
    Manual
 
@@ -27,7 +27,7 @@ All this said, the duties of the administrator of qpy are:
  Update qpy to newer versions.
 
 This section explains how this is done.
-First of all, it is a good idea to have a user dedicated to the administration of qpy, what keeps everything more organised.
+First of all, it is a good idea to have a user dedicated to the administration of qpy, what keeps everything more organized.
 We of course strongly discourage using the root for this task, for security reason.
 The administrator of qpy does not need any special permission.
 
@@ -149,7 +149,7 @@ This is a full list of the commands that are available to the administrator:
  start
   
   Starts a new qpy-multiuser instance.
-  Run this if you are starting qpy for the first time, if a update is needed or if the machine qhere qpy runs has crashed.
+  Run this if you are starting qpy for the first time, if a update is needed or if the machine where qpy runs has crashed.
   
   
 $ python <qpy_dir>/qpy-access-multiuser.py start
@@ -214,7 +214,7 @@ $ python <qpy_dir>/qpy-access-multiuser.py saveMessages
 
 
 
-There are some ``cheatting'' commands that the administrator can run, such as artificially adding or removing running jobs of users.
+There are some ``cheating'' commands that the administrator can run, such as artificially adding or removing running jobs of users.
 These commands are not supposed to be used in a normal run, but only if something went wrong and must be manually fixed.
 \textbf{Use only if you know exactly what you are doing!!}
 
@@ -254,7 +254,7 @@ $ python <qpy_dir>/qpy-access-multiuser.py __remove_job <user_name> \
 ## Files
 
 This is a list of the files in the qpy-multiuser directory.
-Some of them the administrator should edit to control the behaviour of qpy, some others not.
+Some of them the administrator should edit to control the behavior of qpy, some others not.
 
 
 
@@ -300,7 +300,7 @@ This means an even distribution among the users, with at least <n_cores> granted
 <hostname for qpy-multiuser>
   
   
-  Optionally, for the sake of organisation mainly, the programs qpy-multiuser and the qpy-master of each user can run on a machine different than the node where the users work and submit their jobs from.
+  Optionally, for the sake of organization mainly, the programs qpy-multiuser and the qpy-master of each user can run on a machine different than the node where the users work and submit their jobs from.
   For instance, you might have a machine (even a virtual machine) dedicated to qpy.
   To do this, <hostname for qpy-multiuser> must be the hostname of this machine
   In this case, the files master_connection_address that the users have in their qpy directory should have the correct hostname.

@@ -55,6 +55,7 @@ def parse_line(l):
 
     l = re.sub(r'\\texttt\{(.+?)\}', r'\1', l)
     l = re.sub(r'\\emph\{(.+?)\}', r'\1', l)
+    l = re.sub(r'\\verb\+(.+?)\+', r'\1', l)
 
 
     return l
@@ -120,7 +121,7 @@ def write_header(f):
     f.write(info['qpyVersion'] + ' - ' + info['qpyYear'] + '\n')
     f.write('\n')
     f.write(info['qpyAuthor'] + '\n')
-    f.write(info['qpyContrib'].replace(r'{\"o}','ö') + '\n')
+    f.write(info['qpyContrib'].replace(r'{\"o}','oe') + '\n')
     f.write('\n')
     f.write('   Manual\n')
     f.write('\n')

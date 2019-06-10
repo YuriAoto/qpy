@@ -1,16 +1,4 @@
 
-***** sort the jobs in check as required by the user
+# Sort the jobs in check as required by the user
 
-
-***** check this error:
-
-⎭<~> Traceback (most recent call last):
-                                         File "/users/fs/koehn_git/CommonTools/qpy-bin/qpy-multiuser.py", line 616, in <module>
-                                                                                                                                   handle_client()
-                                                                                                                                                    File "/users/fs/koehn_git/CommonTools/qpy-bin/qpy-multiuser.py", line 503, in handle_client
-                                                                  nodes[job[1]].n_used_cores += job[2]
-                                                                                                      KeyError: 'orpheus31'
-
-###
-
-automatically set configuration files for qpy-multiuser
+# Automatically set configuration files for qpy-multiuser
