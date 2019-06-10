@@ -260,7 +260,7 @@ class UsersCollection(object):
                     cur_jobs = qpycomm.message_transfer((qpyconst.FROM_MULTI_CUR_JOBS, ()),
                                                         new_user.address,
                                                         new_user.port,
-                                                        new_user.conn_key)
+                                                        new_user.conn_key, timeout=2.0)
                 except:
                     pass
                 else:

@@ -235,7 +235,6 @@ class Submission(threading.Thread):
     def run(self):
         """Submit the jobs, see class documentation."""
         n_time_multiuser = 0
-        self.jobs.initialize_old_jobs(self)
         jobs_modification = False
         if not self.muHandler.multiuser_alive.is_set():
             self.skip_job_sub = 30

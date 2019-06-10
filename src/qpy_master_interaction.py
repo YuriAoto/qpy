@@ -117,8 +117,8 @@ class MultiuserHandler(threading.Thread):
                 self.multiuser_alive.clear()
             else:
                 self.multiuser_alive.set()
-            self.config.messages.add('MULTIUSER_HANDLER: Message from multiuser: '
-                                     + str(msg_back))
+            self.config.logger.info('MULTIUSER_HANDLER: Message from multiuser: '
+                                    + str(msg_back))
 
 def handle_qpy(jobs,
                sub_ctrl,

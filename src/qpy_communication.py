@@ -9,7 +9,7 @@ import sys
 import time
 import random
 import subprocess
-from multiprocessing import connection
+from multiprocessing import connection, AuthenticationError, TimeoutError
 from socket import error as socketError
 try:
     import paramiko

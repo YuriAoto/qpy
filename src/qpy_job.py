@@ -488,6 +488,7 @@ class JobCollection(object):
         self.undone = []
         self.Q = deque()
         self.lock = threading.RLock()
+        self.initialize_old_jobs()
 
     def Q_pop(self):
         """Pop job of Q, and return it."""
@@ -563,7 +564,7 @@ class JobCollection(object):
                                              job.node.name))
         return cur_jobs
 
-    def initialize_old_jobs(self, sub_ctrl):
+    def initialize_old_jobs(self):
         """Initialize jobs from file (global) all_jobs_file."""
         with self.lock:
             if os.path.isfile(qpysys.all_jobs_file):

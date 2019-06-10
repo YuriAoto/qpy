@@ -419,6 +419,7 @@ class CheckNodes(threading.Thread):
 
     def run(self):
         """Checks the nodes."""
+        self.logger.info("Starting CheckNodes")
         while not self.finish.is_set():
             nodes_info = {}
             try:

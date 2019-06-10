@@ -139,7 +139,7 @@ class Configurations(object):
             if isinstance(v, list):
                 v = ' '.join(v)
             if v == 'default':
-                self.job_fmt_pattern = JOB_FMT_PATTERN_DEF
+                self.job_fmt_pattern = qpyconst.JOB_FMT_PATTERN_DEF
                 msg = ('Check pattern restored to the default value: '
                        + repr(self.job_fmt_pattern) + '.')
             else:
