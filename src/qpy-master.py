@@ -19,7 +19,7 @@ from qpy_exceptions import *
 
 if (not(os.path.isdir(qpysys.qpy_dir))):
     os.makedirs(qpysys.qpy_dir)
-os.chmod(qpysys.qpy_dir, 0700)
+os.chmod(qpysys.qpy_dir, 0o700)
 
 if (not(os.path.isdir(qpysys.scripts_dir))):
     os.makedirs(qpysys.scripts_dir)

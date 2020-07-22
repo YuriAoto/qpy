@@ -135,8 +135,8 @@ class Node(object):
         command = "top -b -n1"# | sed -n '8,50p'"
         this_action = "Checking load and untracked jobs"
         try:
-            (std_out, std_err) = qpycomm.node_exec(self.address,
-                                                   command)
+            std_out, std_err = qpycomm.node_exec(self.address,
+                                                 command)
         except qpyConnectionError as e:
             msg = "{0} failed for node {1}: {2}".format(
                 this_action, self.name, str(e))
@@ -172,11 +172,11 @@ class Node(object):
                        except ValueError:
                            pass
                        else:
-                           info.load = float(line_spl[load_index+3].replace(',',''))
+                           info.load = float(line_spl[load_index+3].replace(',', ''))
                    if len(line_spl) > 2 and line_spl[0] == 'PID' and line_spl[1] == 'USER':
                       start_count = 1  # start counting jobs from next line on
                 else:
-                   if float(line_spl[8].replace(',','.')) > 50:
+                   if float(line_spl[8].replace(',', '.')) > 50:
                        n_jobs += 1
                    else:
                        break
@@ -213,7 +213,7 @@ class Node(object):
                 info.free_mem_real = float(std_out[2].split()[3])
             else:
                 info.free_mem_real = float(std_out[1].split()[6])
-            self.logger.info("node %s is up",self.name)
+            self.logger.info("node %s is up", self.name)
         command = "df -BG $QPY_SCRATCH_ROOT"
         this_action = "Finding free disk space"
         try:
@@ -239,10 +239,10 @@ class Node(object):
             self.logger.debug('on '+self.name+': finding this: '+ std_out)
             std_out = std_out.split("\n")
             if len(std_out)>1:
-               info.total_disk = float(std_out[1].split()[1].replace('G',''))
-               info.free_disk = float(std_out[1].split()[3].replace('G',''))
+               info.total_disk = float(std_out[1].split()[1].replace('G', ''))
+               info.free_disk = float(std_out[1].split()[3].replace('G', ''))
             else:
-               self.logger.error("parsing the df command failed for node: %s",self.name)
+               self.logger.error("parsing the df command failed for node: %s", self.name)
                info.total_disk = 0.0
                info.free_disk = 0.0
 
@@ -267,9 +267,7 @@ class Node(object):
             return True
         expression = (' '.join(node_attr)).replace('(', ' ( ').replace(')', ' ) ')
         expression = expression.split()
-        expression = map(lambda x:
-                         x if x in keywords else str(x in self.attributes),
-                         expression)
+        expression = [x if x in keywords else str(x in self.attributes) for x in expression]
         try:
             a = eval(' '.join(expression))
         except:
@@ -424,9 +422,9 @@ class CheckNodes(threading.Thread):
             nodes_info = {}
             try:
                 for node in self.all_nodes.all_:
-                    self.logger.info("checking %s",node)
+                    self.logger.info("checking %s", node)
                     nodes_info[node] = self.all_nodes.all_[node].check()
-                    self.logger.info("done with %s",node)
+                    self.logger.info("done with %s", node)
                 with self.all_nodes.check_lock:
                     for node in self.all_nodes.all_:
                         self.all_nodes.N_outsiders += (nodes_info[node].n_outsiders

@@ -1,4 +1,4 @@
-from unittest import TestCase,defaultTestLoader,TextTestRunner
+from unittest import TestCase, defaultTestLoader, TextTestRunner
 
 
 #To test copy the tests (and imports) into  qpy-master and execute the following lines
@@ -8,27 +8,27 @@ from unittest import TestCase,defaultTestLoader,TextTestRunner
 class TestGetPlural(TestCase):
     """ class to test the get_plural function"""
     def test_zero(self):
-        inp1,inp2=("job", "jobs"), 0
+        inp1, inp2=("job", "jobs"), 0
         out=("jobs", "No")
-        self.assertEqual(qpyutil.get_plural(inp1,inp2),out)
+        self.assertEqual(qpyutil.get_plural(inp1, inp2), out)
     def test_one(self):
-        inp1,inp2=("job", "jobs"), 1
+        inp1, inp2=("job", "jobs"), 1
         out=("job", "1")
-        self.assertEqual(qpyutil.get_plural(inp1,inp2),out)
+        self.assertEqual(qpyutil.get_plural(inp1, inp2), out)
     def test_many(self):
-        inp1,inp2=("job", "jobs"), 16
+        inp1, inp2=("job", "jobs"), 16
         out=("jobs", "16")
-        self.assertEqual(qpyutil.get_plural(inp1,inp2),out)
+        self.assertEqual(qpyutil.get_plural(inp1, inp2), out)
     def test_no(self):
-        inp1,inp2=("job", "jobs"), []
+        inp1, inp2=("job", "jobs"), []
         out=("jobs", "No")
-        self.assertEqual(qpyutil.get_plural(inp1,inp2),out)
+        self.assertEqual(qpyutil.get_plural(inp1, inp2), out)
     def test_single(self):
-        inp1,inp2=("job", "jobs"), ["running"]
+        inp1, inp2=("job", "jobs"), ["running"]
         out=("job", "running")
-        self.assertEqual(qpyutil.get_plural(inp1,inp2),out)
+        self.assertEqual(qpyutil.get_plural(inp1, inp2), out)
     def test_multiple(self):
-        inp1,inp2=("job", "jobs"), ["queued", "running", "killed"]
+        inp1, inp2=("job", "jobs"), ["queued", "running", "killed"]
         out=("jobs", "queued, running and killed")
-        self.assertEqual(qpyutil.get_plural(inp1,inp2),out)
+        self.assertEqual(qpyutil.get_plural(inp1, inp2), out)
 

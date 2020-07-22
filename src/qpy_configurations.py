@@ -143,7 +143,7 @@ class Configurations(object):
                 msg = ('Check pattern restored to the default value: '
                        + repr(self.job_fmt_pattern) + '.')
             else:
-                self.job_fmt_pattern = v.decode('string_escape')
+                self.job_fmt_pattern = v.encode().decode('unicode_escape')
                 msg = ('Check pattern modified to '
                        + repr(self.job_fmt_pattern) + '.')
 

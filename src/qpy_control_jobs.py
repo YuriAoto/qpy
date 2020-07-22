@@ -6,7 +6,7 @@ import sys
 import threading
 from datetime import datetime
 from time import sleep
-from Queue import Queue
+from queue import Queue
 
 import qpy_system as qpysys
 import qpy_constants as qpyconst
@@ -150,7 +150,7 @@ class JobsKiller(threading.Thread):
             if isinstance(job, str):
                 if job == 'kill':
                     break
-            command = 'python ' + qpysys.source_dir + '/qpy_job_killer.py ' + str(job.ID)
+            command = 'python3 ' + qpysys.source_dir + '/qpy_job_killer.py ' + str(job.ID)
             try:
                 if job.status != qpyconst.JOB_ST_RUNNING:
                     raise

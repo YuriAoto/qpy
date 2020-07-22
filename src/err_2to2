@@ -1,0 +1,190 @@
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: apply
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: asserts
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: basestring
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Skipping optional fixer: buffer
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: dict
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: except
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: exec
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: execfile
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: exitfunc
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: filter
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: funcattrs
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: future
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: getcwdu
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: has_key
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: idioms
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: import
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: imports
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: imports2
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: input
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: intern
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: isinstance
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: itertools
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: itertools_imports
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: long
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: map
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: metaclass
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: methodattrs
+RefactoringTool: Adding transformation: ne
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: next
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: nonzero
+RefactoringTool: Adding transformation: numliterals
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: operator
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: paren
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: print
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: raise
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: raw_input
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: reduce
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: renames
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: repr
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Skipping optional fixer: set_literal
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: standarderror
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: sys_exc
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: throw
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: tuple_params
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: types
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: unicode
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: urllib
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: ws_comma
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: xrange
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: xreadlines
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: Adding transformation: zip
+RefactoringTool: Refactoring qpy-access-multiuser.py
+RefactoringTool: No changes to qpy-access-multiuser.py
+RefactoringTool: No changes to qpy-access-multiuser.py
+RefactoringTool: Refactoring qpy_communication.py
+RefactoringTool: No changes to qpy_communication.py
+RefactoringTool: No changes to qpy_communication.py
+RefactoringTool: Refactoring qpy_configurations.py
+RefactoringTool: No changes to qpy_configurations.py
+RefactoringTool: No changes to qpy_configurations.py
+RefactoringTool: Refactoring qpy_constants.py
+RefactoringTool: No changes to qpy_constants.py
+RefactoringTool: No changes to qpy_constants.py
+RefactoringTool: Refactoring qpy_control_jobs.py
+RefactoringTool: Refactored qpy_control_jobs.py
+RefactoringTool: Wrote changes to qpy_control_jobs.py
+RefactoringTool: Refactoring qpy_exceptions.py
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+root: Generating grammar tables from /usr/lib/python2.7/lib2to3/PatternGrammar.txt
+RefactoringTool: No changes to qpy_exceptions.py
+RefactoringTool: No changes to qpy_exceptions.py
+RefactoringTool: Refactoring qpy_job_killer.py
+RefactoringTool: No changes to qpy_job_killer.py
+RefactoringTool: No changes to qpy_job_killer.py
+RefactoringTool: Refactoring qpy_job.py
+RefactoringTool: Refactored qpy_job.py
+RefactoringTool: Wrote changes to qpy_job.py
+RefactoringTool: Refactoring qpy_logging.py
+RefactoringTool: No changes to qpy_logging.py
+RefactoringTool: No changes to qpy_logging.py
+RefactoringTool: Refactoring qpy_master_interaction.py
+RefactoringTool: Refactored qpy_master_interaction.py
+RefactoringTool: Wrote changes to qpy_master_interaction.py
+RefactoringTool: Refactoring qpy-master.py
+RefactoringTool: Refactored qpy-master.py
+RefactoringTool: Wrote changes to qpy-master.py
+RefactoringTool: Refactoring qpy-master_tests.py
+RefactoringTool: Refactored qpy-master_tests.py
+RefactoringTool: Wrote changes to qpy-master_tests.py
+RefactoringTool: Refactoring qpy_multiuser_interaction.py
+RefactoringTool: Refactored qpy_multiuser_interaction.py
+RefactoringTool: Wrote changes to qpy_multiuser_interaction.py
+RefactoringTool: Refactoring qpy-multiuser.py
+RefactoringTool: Refactored qpy-multiuser.py
+RefactoringTool: Wrote changes to qpy-multiuser.py
+RefactoringTool: Refactoring qpy_nodes_management.py
+RefactoringTool: Refactored qpy_nodes_management.py
+RefactoringTool: Wrote changes to qpy_nodes_management.py
+RefactoringTool: Refactoring qpy_parser.py
+RefactoringTool: Refactored qpy_parser.py
+RefactoringTool: Wrote changes to qpy_parser.py
+RefactoringTool: Refactoring qpy.py
+RefactoringTool: No changes to qpy.py
+RefactoringTool: No changes to qpy.py
+RefactoringTool: Refactoring qpy_system.py
+RefactoringTool: No changes to qpy_system.py
+RefactoringTool: No changes to qpy_system.py
+RefactoringTool: Refactoring qpy_useful_cosmetics.py
+RefactoringTool: Refactored qpy_useful_cosmetics.py
+RefactoringTool: Wrote changes to qpy_useful_cosmetics.py
+RefactoringTool: Refactoring qpy_users_management.py
+RefactoringTool: Refactored qpy_users_management.py
+RefactoringTool: Wrote changes to qpy_users_management.py
+RefactoringTool: Files that were modified:
+RefactoringTool: qpy-access-multiuser.py
+RefactoringTool: qpy_communication.py
+RefactoringTool: qpy_configurations.py
+RefactoringTool: qpy_constants.py
+RefactoringTool: qpy_control_jobs.py
+RefactoringTool: qpy_exceptions.py
+RefactoringTool: qpy_job_killer.py
+RefactoringTool: qpy_job.py
+RefactoringTool: qpy_logging.py
+RefactoringTool: qpy_master_interaction.py
+RefactoringTool: qpy-master.py
+RefactoringTool: qpy-master_tests.py
+RefactoringTool: qpy_multiuser_interaction.py
+RefactoringTool: qpy-multiuser.py
+RefactoringTool: qpy_nodes_management.py
+RefactoringTool: qpy_parser.py
+RefactoringTool: qpy.py
+RefactoringTool: qpy_system.py
+RefactoringTool: qpy_useful_cosmetics.py
+RefactoringTool: qpy_users_management.py

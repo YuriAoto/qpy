@@ -166,7 +166,7 @@ class User(object):
             if use_others_resource:
                 N_users_with_queue = 1
                 N_extra = 0
-                for user,info in users.all_.iteritems():
+                for user, info in users.all_.items():
                     if user == self.name:
                         continue
                     if (info.n_queue > 0
@@ -178,7 +178,7 @@ class User(object):
                         N_extra += min(info.extra_cores + info.min_cores
                                        - info.n_used_cores,
                                        info.extra_cores)
-                N_extra_per_user = N_extra/N_users_with_queue
+                N_extra_per_user = N_extra // N_users_with_queue
                 if (self.n_used_cores + num_cores <=
                     self.min_cores + self.extra_cores + N_extra_per_user
                     and free_cores):
@@ -190,7 +190,7 @@ class User(object):
             best_free = 0
             with nodes.check_lock:
                 if num_cores == 1:
-                    for node, info in nodes.all_.iteritems():
+                    for node, info in nodes.all_.items():
                         free = info.max_cores - info.n_outsiders - info.n_used_cores
                         if (info.has_attributes(node_attr) and
                             not(info.pref_multicores) and
@@ -200,7 +200,7 @@ class User(object):
                             best_node = node
                             best_free = free
                 if best_node is None:
-                    for node, info in nodes.all_.iteritems():
+                    for node, info in nodes.all_.items():
                         if (info.is_up
                             and info.has_attributes(node_attr)
                             and (info.max_cores
@@ -342,7 +342,7 @@ class UsersCollection(object):
             n_users = len(self.all_)
             if (n_users == 0):
                 return 0
-            N_per_user = left_cores/n_users
+            N_per_user = left_cores // n_users
             for user in self.all_:
                 users_extra[user] = N_per_user
             left_cores = left_cores - N_per_user*n_users
@@ -368,11 +368,11 @@ class UsersCollection(object):
             if (left_cores < 0):
                 return -3
             left_cores_original = left_cores
-            for user,info in users_extra.iteritems():
+            for user, info in users_extra.items():
                 try:
                     if (info[-1] == '%'):
                         N_per_user = float(info[:-1])
-                        N_per_user = int(N_per_user*left_cores_original/100)
+                        N_per_user = int(N_per_user * left_cores_original // 100)
                     else:
                         N_per_user = int(info)
                 except:
@@ -390,7 +390,7 @@ class UsersCollection(object):
                 if (left_cores == 0):
                     break
                 users_extra[user] += int(copysign(1, left_cores))
-                left_cores += copysign(1,-left_cores)
+                left_cores += copysign(1, -left_cores)
         # Finally put into the users variable
         nodes.N_min_cores = 0
         nodes.N_used_min_cores = 0

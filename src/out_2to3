@@ -1,0 +1,440 @@
+--- qpy_control_jobs.py	(original)
++++ qpy_control_jobs.py	(refactored)
+@@ -6,7 +6,7 @@
+ import threading
+ from datetime import datetime
+ from time import sleep
+-from Queue import Queue
++from queue import Queue
+ 
+ import qpy_system as qpysys
+ import qpy_constants as qpyconst
+--- qpy_job.py	(original)
++++ qpy_job.py	(refactored)
+@@ -591,7 +591,7 @@
+                             new_node_and_times = line.strip().split('---')
+                             new_node = new_node_and_times[0]
+                             if len(new_node_and_times) == 1:
+-                                new_times = ['None','None','None']
++                                new_times = ['None', 'None', 'None']
+                             else:
+                                 new_times = new_node_and_times[1:]
+                         elif i%4 == 3:
+--- qpy_master_interaction.py	(original)
++++ qpy_master_interaction.py	(refactored)
+@@ -170,7 +170,7 @@
+             new_job = Job(int(job_id), arguments, config, job_options_parser)
+             try:
+                 new_job.parse_options()
+-            except qpyParseError, e:
++            except qpyParseError as e:
+                 client_master.send('qpy: Job rejected due to its options:\n'
+                                    + e.message + '\n')
+             except:
+@@ -184,7 +184,7 @@
+                 if config.or_attr:
+                     if new_job.node_attr:
+                         new_job.node_attr = (['('] + config.or_attr +
+-                                             [')','or', '(']
++                                             [')', 'or', '(']
+                                              + new_job.node_attr + [')'])
+                     else:
+                         new_job.node_attr = config.or_attr
+--- qpy-master.py	(original)
++++ qpy-master.py	(refactored)
+@@ -19,7 +19,7 @@
+ 
+ if (not(os.path.isdir(qpysys.qpy_dir))):
+     os.makedirs(qpysys.qpy_dir)
+-os.chmod(qpysys.qpy_dir, 0700)
++os.chmod(qpysys.qpy_dir, 0o700)
+ 
+ if (not(os.path.isdir(qpysys.scripts_dir))):
+     os.makedirs(qpysys.scripts_dir)
+--- qpy-master_tests.py	(original)
++++ qpy-master_tests.py	(refactored)
+@@ -1,4 +1,4 @@
+-from unittest import TestCase,defaultTestLoader,TextTestRunner
++from unittest import TestCase, defaultTestLoader, TextTestRunner
+ 
+ 
+ #To test copy the tests (and imports) into  qpy-master and execute the following lines
+@@ -8,27 +8,27 @@
+ class TestGetPlural(TestCase):
+     """ class to test the get_plural function"""
+     def test_zero(self):
+-        inp1,inp2=("job", "jobs"), 0
++        inp1, inp2=("job", "jobs"), 0
+         out=("jobs", "No")
+-        self.assertEqual(qpyutil.get_plural(inp1,inp2),out)
++        self.assertEqual(qpyutil.get_plural(inp1, inp2), out)
+     def test_one(self):
+-        inp1,inp2=("job", "jobs"), 1
++        inp1, inp2=("job", "jobs"), 1
+         out=("job", "1")
+-        self.assertEqual(qpyutil.get_plural(inp1,inp2),out)
++        self.assertEqual(qpyutil.get_plural(inp1, inp2), out)
+     def test_many(self):
+-        inp1,inp2=("job", "jobs"), 16
++        inp1, inp2=("job", "jobs"), 16
+         out=("jobs", "16")
+-        self.assertEqual(qpyutil.get_plural(inp1,inp2),out)
++        self.assertEqual(qpyutil.get_plural(inp1, inp2), out)
+     def test_no(self):
+-        inp1,inp2=("job", "jobs"), []
++        inp1, inp2=("job", "jobs"), []
+         out=("jobs", "No")
+-        self.assertEqual(qpyutil.get_plural(inp1,inp2),out)
++        self.assertEqual(qpyutil.get_plural(inp1, inp2), out)
+     def test_single(self):
+-        inp1,inp2=("job", "jobs"), ["running"]
++        inp1, inp2=("job", "jobs"), ["running"]
+         out=("job", "running")
+-        self.assertEqual(qpyutil.get_plural(inp1,inp2),out)
++        self.assertEqual(qpyutil.get_plural(inp1, inp2), out)
+     def test_multiple(self):
+-        inp1,inp2=("job", "jobs"), ["queued", "running", "killed"]
++        inp1, inp2=("job", "jobs"), ["queued", "running", "killed"]
+         out=("jobs", "queued, running and killed")
+-        self.assertEqual(qpyutil.get_plural(inp1,inp2),out)
++        self.assertEqual(qpyutil.get_plural(inp1, inp2), out)
+ 
+--- qpy_multiuser_interaction.py	(original)
++++ qpy_multiuser_interaction.py	(refactored)
+@@ -46,7 +46,7 @@
+ 
+ def _format_users(users):
+     return "\n".join(_format_user(user, info)
+-                     for user, info in users.all_.iteritems())
++                     for user, info in users.all_.items())
+ 
+ def _format_node(node, info):
+     fields = [
+@@ -70,7 +70,7 @@
+ 
+ def _format_nodes(nodes):
+     return "\n".join(_format_node(node, info)
+-                     for node, info in nodes.iteritems())
++                     for node, info in nodes.items())
+ 
+ def _handle_reload_nodes(args, nodes):
+     """Handle a request to reload the nodes.
+@@ -80,11 +80,11 @@
+     assert len(()) == 0
+     status = nodes.load_nodes()
+     return status, {
+-        0  : 'Nodes loaded.',
+-        -1 : ('Nodes loading failed. '\
++        0: 'Nodes loaded.',
++        -1: ('Nodes loading failed. '\
+               'Problem when openning {0}.'\
+               .format(qpysys.nodes_file)),
+-        -2 : ('Nodes loading failed. '\
++        -2: ('Nodes loading failed. '\
+               'Check {0}.'.format(qpysys.nodes_file)),
+     }.get(status, 'Nodes loading failed.')
+ 
+@@ -95,8 +95,8 @@
+     """
+     assert len(()) ==0
+     status = users.distribute_cores(nodes)
+-    return status,{
+-        0 : 'Cores distributed.',
++    return status, {
++        0: 'Cores distributed.',
+         -1: ('Cores distribution failed. '\
+              'Problem when openning {0}.'\
+              .format(qpysys.cores_distribution_file)),
+@@ -143,7 +143,7 @@
+         for node in nodes.all_:
+             down=' (down)' if not(nodes.all_[node].is_up) else ''
+             len_node_row = (len(down) + len(node)
+-                            + sum(map(len,nodes.all_[node].attributes))
++                            + sum(map(len, nodes.all_[node].attributes))
+                             + len(nodes.all_[node].attributes) + 2)
+             if len_node_row > 28 or not(nodes.all_[node].attributes):
+                 attr = ''
+@@ -198,12 +198,12 @@
+                          and all(new_job == old_job
+                                  for new_job, old_job in zip(new_cur_jobs,
+                                                              users.all_[user].cur_jobs)))
+-            return ((0,'User exists')
++            return ((0, 'User exists')
+                     if same_list else
+                     (1, 'User exists but with a different job list.'))
+         else:
+             try:
+-                with open(qpysys.allowed_users_file,'r') as f:
++                with open(qpysys.allowed_users_file, 'r') as f:
+                     allowed_users =  list(line.strip() for line in f)
+             except:
+                 allowed_users = []
+@@ -212,11 +212,11 @@
+                 for job in new_cur_jobs:
+                     new_user.add_job(job, nodes)
+                 users.all_[user] = new_user
+-                return ((0,'User added')
++                return ((0, 'User added')
+                         if users.distribute_cores(nodes) == 0 else
+                         (0, 'User added. Cores distribution failed.'))
+             else:
+-                return 2,'Not allowed user'
++                return 2, 'Not allowed user'
+     finally:
+         for user in users.all_:
+             qpycomm.write_conn_files(qpysys.user_conn_file + user,
+@@ -237,7 +237,7 @@
+     assert isinstance(user, str)
+     assert isinstance(jobID, int)
+     assert isinstance(n_cores, int)
+-    assert isinstance(mem, float) or isinstance(mem,int)
++    assert isinstance(mem, float) or isinstance(mem, int)
+     assert isinstance(queue_size, int)
+     assert isinstance(node_attr, list)
+     try:
+@@ -253,8 +253,8 @@
+             return 0, status
+         else:
+             users.all_[user].n_queue = queue_size
+-            return (1,'No node with this requirement.') if status == 1 \
+-                else (2,'No free cores.')
++            return (1, 'No node with this requirement.') if status == 1 \
++                else (2, 'No free cores.')
+     except KeyError:
+         return -1, 'User does not exists.'
+     except Exception as ex:
+@@ -275,10 +275,10 @@
+     try:
+         status = users.all_[user].remove_job(jobID, nodes)
+         users.all_[user].n_queue = queue_size
+-        return status,{0:'Job removed.',
++        return status, {0:'Job removed.',
+                        1:'Job not found'}[status]
+     except KeyError:
+-        return -1,'User does not exists.'
++        return -1, 'User does not exists.'
+     except Exception as ex:
+         return -2, ('WARNING: An exception of type {0} occured - remove a job.\n'
+                     + 'Arguments:\n{1!r}\n'
+@@ -325,22 +325,22 @@
+         except:
+             logger.exception("Connection failed")
+         else:
+-            logger.info("Received request: %s arguments:%s",str(action_type), str(arguments))
++            logger.info("Received request: %s arguments:%s", str(action_type), str(arguments))
+         try:
+             if (action_type == qpyconst.MULTIUSER_NODES):
+-                status,msg = _handle_reload_nodes(arguments, nodes)
++                status, msg = _handle_reload_nodes(arguments, nodes)
+ 
+             elif (action_type == qpyconst.MULTIUSER_DISTRIBUTE):
+-                status,msg = _handle_redistribute_cores(arguments, users, nodes)
++                status, msg = _handle_redistribute_cores(arguments, users, nodes)
+ 
+             elif (action_type == qpyconst.MULTIUSER_SHOW_VARIABLES):
+-                status,msg = _handle_show_variables(arguments, users, nodes)
++                status, msg = _handle_show_variables(arguments, users, nodes)
+ 
+             elif (action_type == qpyconst.MULTIUSER_STATUS):
+-                status,msg = _handle_show_status(arguments, users, nodes)
++                status, msg = _handle_show_status(arguments, users, nodes)
+ 
+             elif (action_type == qpyconst.MULTIUSER_SAVE_MESSAGES):
+-                status,msg = _handle_save_messages(arguments, users, nodes)
++                status, msg = _handle_save_messages(arguments, users, nodes)
+ 
+             elif (action_type == qpyconst.MULTIUSER_FINISH):
+                 client.send( (0, 'Finishing qpy-multiuser.'))
+@@ -364,7 +364,7 @@
+                         + 'Arguments:\n{1!r}'
+                         + '\nContact the qpy-team.')
+             try:
+-                client.send((-10,template.format(type(ex).__name__, ex.args) ))
++                client.send((-10, template.format(type(ex).__name__, ex.args) ))
+             except Exception:
+                 logger.exception("An error occured while returning a message.")
+                 pass
+@@ -374,7 +374,7 @@
+                         + 'Arguments:\n{1!r}\n'
+                         + 'Contact the qpy-team. qpy-multiuser is shutting down.')
+             try:
+-                client.send((-10,template.format(type(ex).__name__, ex.args)))
++                client.send((-10, template.format(type(ex).__name__, ex.args)))
+             except Exception:
+                 logger.exception("An error occured while returning a message.")
+                 pass
+@@ -382,7 +382,7 @@
+                 break
+         else:
+             try:
+-                client.send((status,msg))
++                client.send((status, msg))
+             except:
+                 logger.exception("An error occured while returning a message.")
+                 continue
+--- qpy-multiuser.py	(original)
++++ qpy-multiuser.py	(refactored)
+@@ -18,7 +18,7 @@
+ 
+ if (not(os.path.isdir(qpysys.qpy_multiuser_dir))):
+     os.makedirs(qpysys.qpy_multiuser_dir)
+-os.chmod(qpysys.qpy_multiuser_dir, 0700)
++os.chmod(qpysys.qpy_multiuser_dir, 0o700)
+ 
+ logger = qpylog.configure_logger(qpysys.multiuser_log_file,
+                                  qpylog.logging.DEBUG)
+--- qpy_nodes_management.py	(original)
++++ qpy_nodes_management.py	(refactored)
+@@ -172,11 +172,11 @@
+                        except ValueError:
+                            pass
+                        else:
+-                           info.load = float(line_spl[load_index+3].replace(',',''))
++                           info.load = float(line_spl[load_index+3].replace(',', ''))
+                    if len(line_spl) > 2 and line_spl[0] == 'PID' and line_spl[1] == 'USER':
+                       start_count = 1  # start counting jobs from next line on
+                 else:
+-                   if float(line_spl[8].replace(',','.')) > 50:
++                   if float(line_spl[8].replace(',', '.')) > 50:
+                        n_jobs += 1
+                    else:
+                        break
+@@ -213,7 +213,7 @@
+                 info.free_mem_real = float(std_out[2].split()[3])
+             else:
+                 info.free_mem_real = float(std_out[1].split()[6])
+-            self.logger.info("node %s is up",self.name)
++            self.logger.info("node %s is up", self.name)
+         command = "df -BG $QPY_SCRATCH_ROOT"
+         this_action = "Finding free disk space"
+         try:
+@@ -239,10 +239,10 @@
+             self.logger.debug('on '+self.name+': finding this: '+ std_out)
+             std_out = std_out.split("\n")
+             if len(std_out)>1:
+-               info.total_disk = float(std_out[1].split()[1].replace('G',''))
+-               info.free_disk = float(std_out[1].split()[3].replace('G',''))
++               info.total_disk = float(std_out[1].split()[1].replace('G', ''))
++               info.free_disk = float(std_out[1].split()[3].replace('G', ''))
+             else:
+-               self.logger.error("parsing the df command failed for node: %s",self.name)
++               self.logger.error("parsing the df command failed for node: %s", self.name)
+                info.total_disk = 0.0
+                info.free_disk = 0.0
+ 
+@@ -267,9 +267,7 @@
+             return True
+         expression = (' '.join(node_attr)).replace('(', ' ( ').replace(')', ' ) ')
+         expression = expression.split()
+-        expression = map(lambda x:
+-                         x if x in keywords else str(x in self.attributes),
+-                         expression)
++        expression = [x if x in keywords else str(x in self.attributes) for x in expression]
+         try:
+             a = eval(' '.join(expression))
+         except:
+@@ -424,9 +422,9 @@
+             nodes_info = {}
+             try:
+                 for node in self.all_nodes.all_:
+-                    self.logger.info("checking %s",node)
++                    self.logger.info("checking %s", node)
+                     nodes_info[node] = self.all_nodes.all_[node].check()
+-                    self.logger.info("done with %s",node)
++                    self.logger.info("done with %s", node)
+                 with self.all_nodes.check_lock:
+                     for node in self.all_nodes.all_:
+                         self.all_nodes.N_outsiders += (nodes_info[node].n_outsiders
+--- qpy_parser.py	(original)
++++ qpy_parser.py	(refactored)
+@@ -79,9 +79,9 @@
+     elif (option == qpyconst.JOBTYPE_KILL
+           or option == qpyconst.JOBTYPE_CLEAN):
+         if option == qpyconst.JOBTYPE_KILL:
+-            status_bound = (0,2)
++            status_bound = (0, 2)
+         else:
+-            status_bound = (2,5)
++            status_bound = (2, 5)
+         arguments = []
+         for x in sys.argv[2:]:
+             try:
+@@ -371,7 +371,7 @@
+             for kv in line_split:
+                 if kv:
+                     try:
+-                        k, v = map(lambda x: x.strip(), kv.split('='))
++                        k, v = [x.strip() for x in kv.split('=')]
+                     except ValueError:
+                         raise qpyParseError('Invalid syntax for options inside script: ' + kv)
+                     try:
+--- qpy_useful_cosmetics.py	(original)
++++ qpy_useful_cosmetics.py	(refactored)
+@@ -98,9 +98,9 @@
+     res = []
+     for entry in x.split(',') :
+         range_ = [int(num) for num in entry.split('-')] # raises ValueError on 3-
+-        if len(range_) not in [1,2]:
++        if len(range_) not in [1, 2]:
+             raise IndexError("No multivalue ranges")
+-        res.extend(range(range_[0], range_[-1] + 1))
++        res.extend(list(range(range_[0], range_[-1] + 1)))
+     return res
+ 
+ def true_or_false(v):
+@@ -135,7 +135,7 @@
+     get_plural(("job","jobs"),0) => ("jobs", "No")
+     get_plural(("job","jobs"),["queued", "running", "killed"]) => ("jobs", "queued, running and killed")
+     """
+-    if (isinstance(stuff,list)):
++    if (isinstance(stuff, list)):
+         if (len(stuff)==0):
+             return (word_s[1], 'No')
+         elif (len(stuff)==1): 
+--- qpy_users_management.py	(original)
++++ qpy_users_management.py	(refactored)
+@@ -166,7 +166,7 @@
+             if use_others_resource:
+                 N_users_with_queue = 1
+                 N_extra = 0
+-                for user,info in users.all_.iteritems():
++                for user, info in users.all_.items():
+                     if user == self.name:
+                         continue
+                     if (info.n_queue > 0
+@@ -190,7 +190,7 @@
+             best_free = 0
+             with nodes.check_lock:
+                 if num_cores == 1:
+-                    for node, info in nodes.all_.iteritems():
++                    for node, info in nodes.all_.items():
+                         free = info.max_cores - info.n_outsiders - info.n_used_cores
+                         if (info.has_attributes(node_attr) and
+                             not(info.pref_multicores) and
+@@ -200,7 +200,7 @@
+                             best_node = node
+                             best_free = free
+                 if best_node is None:
+-                    for node, info in nodes.all_.iteritems():
++                    for node, info in nodes.all_.items():
+                         if (info.is_up
+                             and info.has_attributes(node_attr)
+                             and (info.max_cores
+@@ -368,7 +368,7 @@
+             if (left_cores < 0):
+                 return -3
+             left_cores_original = left_cores
+-            for user,info in users_extra.iteritems():
++            for user, info in users_extra.items():
+                 try:
+                     if (info[-1] == '%'):
+                         N_per_user = float(info[:-1])
+@@ -390,7 +390,7 @@
+                 if (left_cores == 0):
+                     break
+                 users_extra[user] += int(copysign(1, left_cores))
+-                left_cores += copysign(1,-left_cores)
++                left_cores += copysign(1, -left_cores)
+         # Finally put into the users variable
+         nodes.N_min_cores = 0
+         nodes.N_used_min_cores = 0

@@ -98,9 +98,9 @@ def string_to_int_list(x):
     res = []
     for entry in x.split(',') :
         range_ = [int(num) for num in entry.split('-')] # raises ValueError on 3-
-        if len(range_) not in [1,2]:
+        if len(range_) not in [1, 2]:
             raise IndexError("No multivalue ranges")
-        res.extend(range(range_[0], range_[-1] + 1))
+        res.extend(list(range(range_[0], range_[-1] + 1)))
     return res
 
 def true_or_false(v):
@@ -135,7 +135,7 @@ def get_plural(word_s, stuff):
     get_plural(("job","jobs"),0) => ("jobs", "No")
     get_plural(("job","jobs"),["queued", "running", "killed"]) => ("jobs", "queued, running and killed")
     """
-    if (isinstance(stuff,list)):
+    if (isinstance(stuff, list)):
         if (len(stuff)==0):
             return (word_s[1], 'No')
         elif (len(stuff)==1): 

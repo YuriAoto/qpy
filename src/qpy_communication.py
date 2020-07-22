@@ -15,7 +15,7 @@ try:
     import paramiko
     is_paramiko = True
     # Check version??
-except:
+except ImportError:
     is_paramiko = False
 
 import qpy_system as qpysys
@@ -32,7 +32,7 @@ def write_conn_files(f_name,
     f = open(f_name + '_port', 'w')
     f.write(str(port))
     f.close()
-    f = open(f_name + '_conn_key', 'w')
+    f = open(f_name + '_conn_key', 'wb')
     f.write(conn_key)
     f.close()
 
@@ -50,7 +50,7 @@ def read_conn_files(f_name):
     """Read the connection information from files."""
     with open(f_name + '_port', 'r') as f:
         port = int(f.read())
-    with open(f_name + '_conn_key', 'r') as f:
+    with open(f_name + '_conn_key', 'rb') as f:
         conn_key = f.read()
     return port, conn_key
 
@@ -89,6 +89,7 @@ def establish_Listener_connection(address,
     """
     if conn_key == None:
         random.seed()
+        ### TODO: use module secrets
         conn_key = os.urandom(30)
     if port == None:
         while True:
@@ -197,14 +198,16 @@ def node_exec(node,
     qpyKeyError if mode is unknown
     """
     if node == 'localhost':
-        if isinstance(command, str) and not localhost_popen_shell: # Just to make it work with localhost as node...
+        # Just to make it work with localhost as node:
+        if isinstance(command, str) and not localhost_popen_shell:
             command = command.split()
         if (get_outerr):
             ssh = subprocess.Popen(command, shell=localhost_popen_shell,
                                    stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE)
             std_outerr = ssh.communicate()
-            return(std_outerr)
+            return (std_outerr[0].decode('utf-8'),
+                    std_outerr[1].decode('utf-8'))
         else:
             ssh = subprocess.Popen(command, shell=localhost_popen_shell)
             return

@@ -591,7 +591,7 @@ class JobCollection(object):
                             new_node_and_times = line.strip().split('---')
                             new_node = new_node_and_times[0]
                             if len(new_node_and_times) == 1:
-                                new_times = ['None','None','None']
+                                new_times = ['None', 'None', 'None']
                             else:
                                 new_times = new_node_and_times[1:]
                         elif i%4 == 3:

@@ -19,6 +19,7 @@ for job_id in sys.argv:
     grand_PID = ''
     parents = {}
     for l in ps_out:
+        l = l.decode('utf-8')
         new_pid = l.split()
         parents[new_pid[1]] = new_pid[2]
         re_res = re.search('export QPY_JOB_ID=' + job_id + ';', l)

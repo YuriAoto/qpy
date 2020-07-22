@@ -18,7 +18,7 @@ from qpy_exceptions import *
 
 if (not(os.path.isdir(qpysys.qpy_multiuser_dir))):
     os.makedirs(qpysys.qpy_multiuser_dir)
-os.chmod(qpysys.qpy_multiuser_dir, 0700)
+os.chmod(qpysys.qpy_multiuser_dir, 0o700)
 
 logger = qpylog.configure_logger(qpysys.multiuser_log_file,
                                  qpylog.logging.DEBUG)

@@ -46,7 +46,7 @@ def _format_user(user, info):
 
 def _format_users(users):
     return "\n".join(_format_user(user, info)
-                     for user, info in users.all_.iteritems())
+                     for user, info in users.all_.items())
 
 def _format_node(node, info):
     fields = [
@@ -70,7 +70,7 @@ def _format_node(node, info):
 
 def _format_nodes(nodes):
     return "\n".join(_format_node(node, info)
-                     for node, info in nodes.iteritems())
+                     for node, info in nodes.items())
 
 def _handle_reload_nodes(args, nodes):
     """Handle a request to reload the nodes.
@@ -80,11 +80,11 @@ def _handle_reload_nodes(args, nodes):
     assert len(()) == 0
     status = nodes.load_nodes()
     return status, {
-        0  : 'Nodes loaded.',
-        -1 : ('Nodes loading failed. '\
+        0: 'Nodes loaded.',
+        -1: ('Nodes loading failed. '\
               'Problem when openning {0}.'\
               .format(qpysys.nodes_file)),
-        -2 : ('Nodes loading failed. '\
+        -2: ('Nodes loading failed. '\
               'Check {0}.'.format(qpysys.nodes_file)),
     }.get(status, 'Nodes loading failed.')
 
@@ -95,8 +95,8 @@ def _handle_redistribute_cores(args, users, nodes):
     """
     assert len(()) ==0
     status = users.distribute_cores(nodes)
-    return status,{
-        0 : 'Cores distributed.',
+    return status, {
+        0: 'Cores distributed.',
         -1: ('Cores distribution failed. '\
              'Problem when openning {0}.'\
              .format(qpysys.cores_distribution_file)),
@@ -143,7 +143,7 @@ def _handle_show_status(args, users, nodes):
         for node in nodes.all_:
             down=' (down)' if not(nodes.all_[node].is_up) else ''
             len_node_row = (len(down) + len(node)
-                            + sum(map(len,nodes.all_[node].attributes))
+                            + sum(map(len, nodes.all_[node].attributes))
                             + len(nodes.all_[node].attributes) + 2)
             if len_node_row > 28 or not(nodes.all_[node].attributes):
                 attr = ''
@@ -198,12 +198,12 @@ def _handle_sync_user_info(args, users, nodes):
                          and all(new_job == old_job
                                  for new_job, old_job in zip(new_cur_jobs,
                                                              users.all_[user].cur_jobs)))
-            return ((0,'User exists')
+            return ((0, 'User exists')
                     if same_list else
                     (1, 'User exists but with a different job list.'))
         else:
             try:
-                with open(qpysys.allowed_users_file,'r') as f:
+                with open(qpysys.allowed_users_file, 'r') as f:
                     allowed_users =  list(line.strip() for line in f)
             except:
                 allowed_users = []
@@ -212,11 +212,11 @@ def _handle_sync_user_info(args, users, nodes):
                 for job in new_cur_jobs:
                     new_user.add_job(job, nodes)
                 users.all_[user] = new_user
-                return ((0,'User added')
+                return ((0, 'User added')
                         if users.distribute_cores(nodes) == 0 else
                         (0, 'User added. Cores distribution failed.'))
             else:
-                return 2,'Not allowed user'
+                return 2, 'Not allowed user'
     finally:
         for user in users.all_:
             qpycomm.write_conn_files(qpysys.user_conn_file + user,
@@ -237,7 +237,7 @@ def _handle_add_job(args, users, nodes):
     assert isinstance(user, str)
     assert isinstance(jobID, int)
     assert isinstance(n_cores, int)
-    assert isinstance(mem, float) or isinstance(mem,int)
+    assert isinstance(mem, float) or isinstance(mem, int)
     assert isinstance(queue_size, int)
     assert isinstance(node_attr, list)
     try:
@@ -253,8 +253,8 @@ def _handle_add_job(args, users, nodes):
             return 0, status
         else:
             users.all_[user].n_queue = queue_size
-            return (1,'No node with this requirement.') if status == 1 \
-                else (2,'No free cores.')
+            return (1, 'No node with this requirement.') if status == 1 \
+                else (2, 'No free cores.')
     except KeyError:
         return -1, 'User does not exists.'
     except Exception as ex:
@@ -275,10 +275,10 @@ def _handle_remove_job(args, users, nodes):
     try:
         status = users.all_[user].remove_job(jobID, nodes)
         users.all_[user].n_queue = queue_size
-        return status,{0:'Job removed.',
+        return status, {0:'Job removed.',
                        1:'Job not found'}[status]
     except KeyError:
-        return -1,'User does not exists.'
+        return -1, 'User does not exists.'
     except Exception as ex:
         return -2, ('WARNING: An exception of type {0} occured - remove a job.\n'
                     + 'Arguments:\n{1!r}\n'
@@ -325,22 +325,22 @@ def handle_client(users, nodes, logger):
         except:
             logger.exception("Connection failed")
         else:
-            logger.info("Received request: %s arguments:%s",str(action_type), str(arguments))
+            logger.info("Received request: %s arguments:%s", str(action_type), str(arguments))
         try:
             if (action_type == qpyconst.MULTIUSER_NODES):
-                status,msg = _handle_reload_nodes(arguments, nodes)
+                status, msg = _handle_reload_nodes(arguments, nodes)
 
             elif (action_type == qpyconst.MULTIUSER_DISTRIBUTE):
-                status,msg = _handle_redistribute_cores(arguments, users, nodes)
+                status, msg = _handle_redistribute_cores(arguments, users, nodes)
 
             elif (action_type == qpyconst.MULTIUSER_SHOW_VARIABLES):
-                status,msg = _handle_show_variables(arguments, users, nodes)
+                status, msg = _handle_show_variables(arguments, users, nodes)
 
             elif (action_type == qpyconst.MULTIUSER_STATUS):
-                status,msg = _handle_show_status(arguments, users, nodes)
+                status, msg = _handle_show_status(arguments, users, nodes)
 
             elif (action_type == qpyconst.MULTIUSER_SAVE_MESSAGES):
-                status,msg = _handle_save_messages(arguments, users, nodes)
+                status, msg = _handle_save_messages(arguments, users, nodes)
 
             elif (action_type == qpyconst.MULTIUSER_FINISH):
                 client.send( (0, 'Finishing qpy-multiuser.'))
@@ -364,7 +364,7 @@ def handle_client(users, nodes, logger):
                         + 'Arguments:\n{1!r}'
                         + '\nContact the qpy-team.')
             try:
-                client.send((-10,template.format(type(ex).__name__, ex.args) ))
+                client.send((-10, template.format(type(ex).__name__, ex.args) ))
             except Exception:
                 logger.exception("An error occured while returning a message.")
                 pass
@@ -374,7 +374,7 @@ def handle_client(users, nodes, logger):
                         + 'Arguments:\n{1!r}\n'
                         + 'Contact the qpy-team. qpy-multiuser is shutting down.')
             try:
-                client.send((-10,template.format(type(ex).__name__, ex.args)))
+                client.send((-10, template.format(type(ex).__name__, ex.args)))
             except Exception:
                 logger.exception("An error occured while returning a message.")
                 pass
@@ -382,7 +382,7 @@ def handle_client(users, nodes, logger):
                 break
         else:
             try:
-                client.send((status,msg))
+                client.send((status, msg))
             except:
                 logger.exception("An error occured while returning a message.")
                 continue

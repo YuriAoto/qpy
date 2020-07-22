@@ -29,7 +29,7 @@ if qpy_instance == 'qpy' or qpy_instance == 'qpy-master.py':
     master_conn_file = qpy_dir + 'master_connection'
     master_log_file = qpy_dir + 'master.log'
     tutorial_file = source_dir + '../doc/tutorial'
-    qpy_master_command = 'python ' + source_dir + 'qpy-master.py'
+    qpy_master_command = 'python3 ' + source_dir + 'qpy-master.py'
 
 else:
     if test_run:
@@ -43,7 +43,7 @@ else:
     multiuser_conn_file = qpy_multiuser_dir + 'multiuser_connection'
     multiuser_log_file = qpy_multiuser_dir + 'multiuser.log'
     tutorial_file = source_dir + '../doc/adm_tutorial'
-    qpy_multiuser_command = ['python',
+    qpy_multiuser_command = ['python3',
                              source_dir + 'qpy-multiuser.py',
                              '>', '/dev/null',
                              '2>', '/dev/null']

@@ -79,9 +79,9 @@ def parse_qpy_cmd_line():
     elif (option == qpyconst.JOBTYPE_KILL
           or option == qpyconst.JOBTYPE_CLEAN):
         if option == qpyconst.JOBTYPE_KILL:
-            status_bound = (0,2)
+            status_bound = (0, 2)
         else:
-            status_bound = (2,5)
+            status_bound = (2, 5)
         arguments = []
         for x in sys.argv[2:]:
             try:
@@ -371,7 +371,7 @@ class JobOptParser(OptionParser):
             for kv in line_split:
                 if kv:
                     try:
-                        k, v = map(lambda x: x.strip(), kv.split('='))
+                        k, v = [x.strip() for x in kv.split('=')]
                     except ValueError:
                         raise qpyParseError('Invalid syntax for options inside script: ' + kv)
                     try:

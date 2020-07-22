@@ -170,7 +170,7 @@ def handle_qpy(jobs,
             new_job = Job(int(job_id), arguments, config, job_options_parser)
             try:
                 new_job.parse_options()
-            except qpyParseError, e:
+            except qpyParseError as e:
                 client_master.send('qpy: Job rejected due to its options:\n'
                                    + e.message + '\n')
             except:
@@ -184,7 +184,7 @@ def handle_qpy(jobs,
                 if config.or_attr:
                     if new_job.node_attr:
                         new_job.node_attr = (['('] + config.or_attr +
-                                             [')','or', '(']
+                                             [')', 'or', '(']
                                              + new_job.node_attr + [')'])
                     else:
                         new_job.node_attr = config.or_attr
