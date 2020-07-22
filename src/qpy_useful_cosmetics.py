@@ -6,7 +6,8 @@ from time import sleep
 import re
 
 import qpy_communication as qpycomm
-from qpy_exceptions import *
+from qpy_exceptions import qpyValueError
+
 
 def kill_master_instances(user, address, qpy_master_command):
     """Kill all qpy-master instances from this user.
@@ -21,15 +22,17 @@ def kill_master_instances(user, address, qpy_master_command):
                                   mode='popen')
     ps_stdout = ps_stdout[0].split('\n')
     for l in ps_stdout:
-        if re.search(qpy_master_command + '$', l) != None:
+        if re.search(qpy_master_command + '$', l) is not None:
             pid = l.split()[1]
             qpycomm.node_exec(address,
                               "kill " + pid,
                               get_outerr=False,
                               mode='popen')
-            sys.stdout.write('Killing older qpy-master instance: ' + pid + '\n')
+            sys.stdout.write('Killing older qpy-master instance: '
+                             + pid + '\n')
             killed_instances.append(pid)
     return ' '.join(killed_instances)
+
 
 def start_master_driver(user, address, qpy_master_command):
     """Start qpy-master.
@@ -47,6 +50,7 @@ def start_master_driver(user, address, qpy_master_command):
                       get_outerr=False,
                       mode='popen')
     exit()
+
 
 def get_all_children(x, parent_of):
     """Get all children and further generations
@@ -74,6 +78,7 @@ def get_all_children(x, parent_of):
     all_children.extend(cur_child)
     return all_children
 
+
 def string_to_int_list(x):
     """Parse a string to a list of int
     
@@ -89,19 +94,21 @@ def string_to_int_list(x):
     a list of integers.
     
     Raise:
-    IndexError  
+    IndexError
     ValueError  if string is not correctly formatted.
     
     TODO:
     Raise specific Exception?
     """
     res = []
-    for entry in x.split(',') :
-        range_ = [int(num) for num in entry.split('-')] # raises ValueError on 3-
+    for entry in x.split(','):
+        # raises ValueError on 3-
+        range_ = [int(num) for num in entry.split('-')]
         if len(range_) not in [1, 2]:
             raise IndexError("No multivalue ranges")
         res.extend(list(range(range_[0], range_[-1] + 1)))
     return res
+
 
 def true_or_false(v):
     """Return True or False, depending on the string v."""
@@ -111,6 +118,7 @@ def true_or_false(v):
         return False
     else:
         raise qpyValueError('Neither true nor false.')
+
 
 def get_plural(word_s, stuff):
     """Get the plural
@@ -133,26 +141,33 @@ def get_plural(word_s, stuff):
     
     Examples:
     get_plural(("job","jobs"),0) => ("jobs", "No")
-    get_plural(("job","jobs"),["queued", "running", "killed"]) => ("jobs", "queued, running and killed")
+    get_plural(("job","jobs"),
+               ["queued", "running", "killed"])
+                    => ("jobs", "queued, running and killed")
     """
     if (isinstance(stuff, list)):
-        if (len(stuff)==0):
+        if (len(stuff) == 0):
             return (word_s[1], 'No')
-        elif (len(stuff)==1): 
+        elif len(stuff) == 1:
             return (word_s[0], str(stuff[0]))
         elif (len(stuff) > 1):
-            ret=", ".join(stuff[:-1])+" and "+stuff[-1]
+            ret = ", ".join(stuff[:-1]) + " and " + stuff[-1]
             return (word_s[1], ret)
         else:
-            raise Exception("get_plural: negative list length? " + str(word_s) + str(stuff) + "\n Contact the qpy-team.")
+            raise Exception("get_plural: negative list length? "
+                            + str(word_s) + str(stuff)
+                            + "\n Contact the qpy-team.")
     elif (isinstance(stuff, int)):
-        if (stuff == 0 ):
-            return (word_s[1], 'No')
-        elif (stuff == 1):
-            return (word_s[0], str(stuff))
-        elif (stuff > 1):
-            return (word_s[1], str(stuff))
+        if stuff == 0:
+            return word_s[1], 'No'
+        elif stuff == 1:
+            return word_s[0], str(stuff)
+        elif stuff > 1:
+            return word_s[1], str(stuff)
         else:
-            raise Exception("get_plural: negative amount?" + str(word_s) + str(stuff) + "\n Contact the qpy-team.")
+            raise Exception("get_plural: negative amount? "
+                            + str(word_s) + str(stuff)
+                            + "\n Contact the qpy-team.")
     else:
-        raise Exception("get_plural:stuff neither int nor list?" + str(type(stuff)) + "\n Contact the qpy-team.")
+        raise Exception("get_plural:stuff neither int nor list? "
+                        + str(type(stuff)) + "\n Contact the qpy-team.")

@@ -15,7 +15,7 @@ import qpy_control_jobs as qpyctrl
 from qpy_configurations import Configurations
 from qpy_job import JobCollection
 from qpy_master_interaction import MultiuserHandler, handle_qpy
-from qpy_exceptions import *
+from qpy_exceptions import qpyError
 
 if (not(os.path.isdir(qpysys.qpy_dir))):
     os.makedirs(qpysys.qpy_dir)

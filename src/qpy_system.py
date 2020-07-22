@@ -5,7 +5,7 @@ import os
 import sys
 
 qpy_instance = sys.argv[0].split('/')[-1]
-source_dir = os.path.dirname(os.path.abspath( __file__)) + '/'
+source_dir = os.path.dirname(os.path.abspath(__file__)) + '/'
 test_run = os.path.isfile(source_dir + 'test_dir')
 home_dir = os.environ['HOME']
 sys_user = os.environ['USER']
@@ -15,7 +15,8 @@ if qpy_instance == 'qpy' or qpy_instance == 'qpy-master.py':
         try:
             user = os.environ['QPY_TEST_USER']
         except KeyError:
-            raise Exception('Please, set the environment variable QPY_TEST_USER.')
+            raise Exception(
+                'Please, set the environment variable QPY_TEST_USER.')
         qpy_dir = os.path.expanduser('~/.qpy-test_' + user + '/')
     else:
         user = os.environ['USER']
@@ -35,7 +36,7 @@ else:
     if test_run:
         qpy_multiuser_dir = os.path.expanduser('~/.qpy-multiuser-test/')
     else:
-        qpy_multiuser_dir = os.path.expanduser('~/.qpy-multiuser/')    
+        qpy_multiuser_dir = os.path.expanduser('~/.qpy-multiuser/')
     nodes_file = qpy_multiuser_dir + 'nodes'
     allowed_users_file = qpy_multiuser_dir + 'allowed_users'
     cores_distribution_file = qpy_multiuser_dir + 'distribution_rules'
@@ -47,4 +48,3 @@ else:
                              source_dir + 'qpy-multiuser.py',
                              '>', '/dev/null',
                              '2>', '/dev/null']
-

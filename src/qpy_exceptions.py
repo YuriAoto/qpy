@@ -2,6 +2,7 @@
 
 """
 
+
 class qpyError(Exception):
     """Main qpy Exception.
 
@@ -13,21 +14,27 @@ class qpyError(Exception):
     def __str__(self):
         return str(self.message)
 
+
 class qpyParseError(qpyError):
     pass
+
 
 class qpyHelpException(qpyError):
     pass
 
+
 class qpyKeyError(qpyError):
     pass
+
 
 class qpyValueError(qpyError, ValueError):
     pass
 
+
 class qpyConnectionError(qpyError):
     """Exceptions from SSH and multuprocessing connections."""
     pass
+
 
 class qpyUnknownError(qpyError):
     def __init__(self, msg, exc_info):

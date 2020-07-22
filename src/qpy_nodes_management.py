@@ -9,7 +9,8 @@ from qpy_parser import parse_node_info
 import qpy_system as qpysys
 import qpy_logging as qpylog
 import qpy_communication as qpycomm
-from qpy_exceptions import *
+from qpy_exceptions import qpyConnectionError
+
 
 class UsersNode(object):
     """A node from the point of view of a qpy user
@@ -40,7 +41,7 @@ class UsersNode(object):
         """Return object from string, as "<name>=<address>"; see __repr__."""
         try:
             name, address = string.split('=')
-        except:
+        except ValueError:
             name = address = string
         return cls(name, address)
 
@@ -57,9 +58,10 @@ class Node(object):
     is_up (bool)             If True, the node is up, accessible and running
                              If False, if means that ssh could not reach it
     n_used_cores (int)       Number of cores that are being used in the moment
-    pref_multicores (bool)   If True, it means that this core is preferred format
-                             multicores jobs
-    req_mem (float)          Total memory requested by the jobs that are running
+    pref_multicores (bool)   If True, it means that this core is preferred
+                             format multicores jobs
+    req_mem (float)          Total memory requested by the jobs that are
+                             running
     total_mem (float)        Total memory available in this node (obtained by
                              system's command free)
     free_mem_real (float)    Free memory on this node ((obtained by system's
@@ -70,7 +72,8 @@ class Node(object):
     attributes (list)        A list, with the attributes of this node
     load (float)             The current load of the node, according to top
     total_disk (float)       The total amount of available disk space on TMPDIR
-    free_disk (float)        The current free amount of available disk space on TMPDIR
+    free_disk (float)        The current free amount of available disk space
+                             on TMPDIR
     logger (Logger)          A logger
     """
     __slots__ = ('name',
@@ -89,6 +92,7 @@ class Node(object):
                  'total_disk',
                  'free_disk',
                  'logger')
+    
     def __init__(self, name, max_cores, logger):
         self.name = name
         self.address = name
@@ -132,7 +136,7 @@ class Node(object):
                            'free_disk'])
         info.is_up = True
 
-        command = "top -b -n1"# | sed -n '8,50p'"
+        command = "top -b -n1"  # | sed -n '8,50p'"
         this_action = "Checking load and untracked jobs"
         try:
             std_out, std_err = qpycomm.node_exec(self.address,
@@ -166,20 +170,23 @@ class Node(object):
                 line_spl = line.split()
                 # read load from header
                 if start_count == 0:
-                   if len(line_spl) > 9:
-                       try:
-                           load_index = line_spl.index('load')
-                       except ValueError:
-                           pass
-                       else:
-                           info.load = float(line_spl[load_index+3].replace(',', ''))
-                   if len(line_spl) > 2 and line_spl[0] == 'PID' and line_spl[1] == 'USER':
-                      start_count = 1  # start counting jobs from next line on
+                    if len(line_spl) > 9:
+                        try:
+                            load_index = line_spl.index('load')
+                        except ValueError:
+                            pass
+                        else:
+                            info.load = float(
+                                line_spl[load_index+3].replace(',', ''))
+                    if (len(line_spl) > 2
+                        and line_spl[0] == 'PID'
+                            and line_spl[1] == 'USER'):
+                        start_count = 1
                 else:
-                   if float(line_spl[8].replace(',', '.')) > 50:
-                       n_jobs += 1
-                   else:
-                       break
+                    if float(line_spl[8].replace(',', '.')) > 50:
+                        n_jobs += 1
+                    else:
+                        break
             info.n_outsiders = max(n_jobs - self.n_used_cores, 0)
 
         command = "free -g"
@@ -236,15 +243,16 @@ class Node(object):
             info.free_disk = 0.0
             info.total_disk = 0.0
         else:
-            self.logger.debug('on '+self.name+': finding this: '+ std_out)
+            self.logger.debug('on '+self.name+': finding this: ' + std_out)
             std_out = std_out.split("\n")
-            if len(std_out)>1:
-               info.total_disk = float(std_out[1].split()[1].replace('G', ''))
-               info.free_disk = float(std_out[1].split()[3].replace('G', ''))
+            if len(std_out) > 1:
+                info.total_disk = float(std_out[1].split()[1].replace('G', ''))
+                info.free_disk = float(std_out[1].split()[3].replace('G', ''))
             else:
-               self.logger.error("parsing the df command failed for node: %s", self.name)
-               info.total_disk = 0.0
-               info.free_disk = 0.0
+                self.logger.error("parsing the df command failed for node: %s",
+                                  self.name)
+                info.total_disk = 0.0
+                info.free_disk = 0.0
 
         return info
 
@@ -265,19 +273,24 @@ class Node(object):
         keywords = ['not', 'and', 'or', '(', ')']
         if len(node_attr) == 0:
             return True
-        expression = (' '.join(node_attr)).replace('(', ' ( ').replace(')', ' ) ')
+        expression = (' '.join(node_attr)).replace('(',
+                                                   ' ( ').replace(')',
+                                                                  ' ) ')
         expression = expression.split()
-        expression = [x if x in keywords else str(x in self.attributes) for x in expression]
+        expression = [x
+                      if x in keywords else
+                      str(x in self.attributes)
+                      for x in expression]
         try:
             a = eval(' '.join(expression))
         except:
             a = True
         self.logger.debug('In has_attributes: node_attr = '
-                            + str(node_attr))
+                          + str(node_attr))
         self.logger.debug('In has_attributes: expression = '
-                            + str(expression))
+                          + str(expression))
         self.logger.debug('In has_attributes: result (Node) = '
-                            + str(a) + ' ' + str(self.name))
+                          + str(a) + ' ' + str(self.name))
         return a
 
 
@@ -310,7 +323,7 @@ class NodesCollection(object):
         self.check_time = 300
         self.N_cores = 0
         self.N_min_cores = 0
-        self.N_used_cores  = 0
+        self.N_used_cores = 0
         self.N_used_min_cores = 0
         self.N_outsiders = 0
         self.logger = logger
@@ -345,7 +358,11 @@ class NodesCollection(object):
         nodes_for_multicores = []
         for line in f:
             try:
-                name, n_cores, address, multicore, attributes = parse_node_info(line)
+                (name,
+                 n_cores,
+                 address,
+                 multicore,
+                 attributes) = parse_node_info(line)
             except:
                 self.logger.exception('Exception when parsing node info:')
                 f.close()
@@ -427,16 +444,17 @@ class CheckNodes(threading.Thread):
                     self.logger.info("done with %s", node)
                 with self.all_nodes.check_lock:
                     for node in self.all_nodes.all_:
-                        self.all_nodes.N_outsiders += (nodes_info[node].n_outsiders
-                                                       - self.all_nodes.all_[node].n_outsiders)
-                        self.all_nodes.all_[node].is_up = nodes_info[node].is_up
-                        self.all_nodes.all_[node].n_outsiders = nodes_info[node].n_outsiders
-                        self.all_nodes.all_[node].total_mem = nodes_info[node].total_mem
-                        self.all_nodes.all_[node].free_mem_real = nodes_info[node].free_mem_real
-                        self.all_nodes.all_[node].load = nodes_info[node].load
-                        self.all_nodes.all_[node].total_disk = nodes_info[node].total_disk
-                        self.all_nodes.all_[node].free_disk = nodes_info[node].free_disk
+                        at_all_nodes = self.all_nodes.all_[node]
+                        this_node = nodes_info[node]
+                        self.all_nodes.N_outsiders += (
+                            this_node.n_outsiders - at_all_nodes.n_outsiders)
+                        at_all_nodes.is_up = this_node.is_up
+                        at_all_nodes.n_outsiders = this_node.n_outsiders
+                        at_all_nodes.total_mem = this_node.total_mem
+                        at_all_nodes.free_mem_real = this_node.free_mem_real
+                        at_all_nodes.load = this_node.load
+                        at_all_nodes.total_disk = this_node.total_disk
+                        at_all_nodes.free_disk = this_node.free_disk
             except:
                 self.logger.exception("Error in CHECK_NODES")
             self.finish.wait(self.all_nodes.check_time)
-

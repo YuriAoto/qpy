@@ -1,13 +1,12 @@
 """ qpy - User interface to the qpy-multiuser
 
 """
-from time import sleep
 import sys
 
 import qpy_system as qpysys
 import qpy_communication as qpycomm
 from qpy_parser import parse_qpy_multiuser_cmd_line
-from qpy_exceptions import *
+from qpy_exceptions import qpyConnectionError
 
 option, arguments, start_qpy_multiuser = parse_qpy_multiuser_cmd_line()
 if start_qpy_multiuser:
@@ -23,7 +22,7 @@ try:
                                         qpycomm.multiuser_port,
                                         qpycomm.multiuser_key,
                                         timeout=3.0)
-except Exception as ex:
+except qpyConnectionError:
     sys.exit('Time for connection exceeded.'
              + ' Are you sure that qpy-multiuser is running?')
 else:

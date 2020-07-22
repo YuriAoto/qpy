@@ -1,12 +1,11 @@
 """ qpy - Logging and messages
 
 """
+import sys
 import traceback
 import logging
 import logging.handlers
 
-import qpy_system as qpysys
-from qpy_exceptions import *
 
 def configure_logger(base_file,
                      level):
@@ -17,7 +16,8 @@ def configure_logger(base_file,
     level (int, str)    log level in the initialisation
     
     Behaviour:
-    note that the TimedRotatingFileHandler adds time info to the filenames e.g.:
+    note that the TimedRotatingFileHandler adds time info to
+    the filenames e.g.:
     mylog.log-> mylog.log.2017-12-...
     change every day at midnight; one week should be enough
     
@@ -29,20 +29,22 @@ def configure_logger(base_file,
     """
     the_logger = logging.getLogger()
     the_logger.setLevel(level)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     ch = logging.handlers.TimedRotatingFileHandler(
         filename=str(base_file),
         when='midnight',
         interval=1,
-        backupCount = 7,
+        backupCount=7,
         delay=False
     )
     ch.setFormatter(formatter)
     the_logger.addHandler(ch)
-    #ch2 = logging.StreamHandler(sys.stdout)
-    #ch2.setFormatter(formatter)
-    #the_ogger.addHandler(ch2)
+    # ch2 = logging.StreamHandler(sys.stdout)
+    # ch2.setFormatter(formatter)
+    # the_ogger.addHandler(ch2)
     return the_logger
+
 
 def traceback_exception(msg):
     """Return a string with 'msg' and the exception traceback."""
@@ -57,6 +59,7 @@ def traceback_exception(msg):
                                                              str(tb[2]),
                                                              tb[3])
     return tb_msg
+
 
 class Messages(object):
     """The messages for debbuging, generated at run time.
@@ -93,7 +96,7 @@ class Messages(object):
 
     def __len__(self):
         """Returns the number of messages."""
-        return len( self.messages)
+        return len(self.messages)
 
     def __repr__(self):
         """Retruns important informations about the messages."""

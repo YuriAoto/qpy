@@ -14,7 +14,6 @@ import qpy_logging as qpylog
 import qpy_nodes_management as qpynodes
 import qpy_users_management as qpyusers
 from qpy_multiuser_interaction import handle_client
-from qpy_exceptions import *
 
 if (not(os.path.isdir(qpysys.qpy_multiuser_dir))):
     os.makedirs(qpysys.qpy_multiuser_dir)

@@ -7,8 +7,8 @@ import qpy_system as qpysys
 import qpy_logging as qpylog
 import qpy_communication as qpycomm
 from qpy_job import MultiuserJob
-from qpy_exceptions import *
 import qpy_constants as qpyconst
+
 
 class User(object):
     """A user from the qpy-multiuser point of view.
@@ -86,9 +86,10 @@ class User(object):
                 nodes.all_[job.node].req_mem -= job.mem
                 nodes.N_used_cores -= job.n_cores
                 if (self.n_used_cores < self.min_cores):
-                    N_used_min_cores -= min(job.n_cores,
-                                            self.min_cores - self.n_used_cores)
-                self.cur_jobs.remove( job)
+                    nodes.N_used_min_cores -= min(job.n_cores,
+                                                  self.min_cores
+                                                  - self.n_used_cores)
+                self.cur_jobs.remove(job)
                 return 0
         return 1
 
@@ -109,8 +110,8 @@ class User(object):
             nodes.N_used_min_cores += job.n_cores
         elif (self.n_used_cores < self.min_cores + job.n_cores):
             nodes.N_used_min_cores += (job.n_cores
-                                                       + self.min_cores
-                                                       - self.n_used_cores)
+                                       + self.min_cores
+                                       - self.n_used_cores)
         return 0
 
     def request_node(self, jobID, num_cores, mem, node_attr, users, nodes):
@@ -152,8 +153,8 @@ class User(object):
         space_available = False
         
         users.logger.debug('In request_node. jobID, attribute: '
-                            + str(jobID)
-                            + str(node_attr) )
+                           + str(jobID)
+                           + str(node_attr))
         
         N_free_cores = ((nodes.N_cores - nodes.N_used_cores)
                         - (nodes.N_min_cores - nodes.N_used_min_cores))
@@ -171,8 +172,7 @@ class User(object):
                         continue
                     if (info.n_queue > 0
                         and (info.n_used_cores >=
-                             info.min_cores + info.extra_cores)
-                        ):
+                             info.min_cores + info.extra_cores)):
                         N_users_with_queue += 1
                     elif info.n_queue == 0:
                         N_extra += min(info.extra_cores + info.min_cores
@@ -181,22 +181,23 @@ class User(object):
                 N_extra_per_user = N_extra // N_users_with_queue
                 if (self.n_used_cores + num_cores <=
                     self.min_cores + self.extra_cores + N_extra_per_user
-                    and free_cores):
+                        and free_cores):
                     space_available = True
             else:
-                space_available = free_cores 
+                space_available = free_cores
         if space_available:
             best_node = None
             best_free = 0
             with nodes.check_lock:
                 if num_cores == 1:
                     for node, info in nodes.all_.items():
-                        free = info.max_cores - info.n_outsiders - info.n_used_cores
+                        free = (info.max_cores
+                                - info.n_outsiders - info.n_used_cores)
                         if (info.has_attributes(node_attr) and
                             not(info.pref_multicores) and
                             free > best_free and
                             (info.total_mem - info.req_mem) > mem and
-                            info.free_mem_real > mem):
+                                info.free_mem_real > mem):
                             best_node = node
                             best_free = free
                 if best_node is None:
@@ -210,12 +211,13 @@ class User(object):
                                  - info.req_mem > mem)):
                             best_node = node
                             break
-            if best_node == None:
+            if best_node is None:
                 return 1
             new_job = MultiuserJob(self.name, jobID, mem, num_cores, best_node)
             self.add_job(new_job, nodes)
             return best_node + '=' + nodes.all_[best_node].address
         return 2
+
 
 class UsersCollection(object):
     """
@@ -234,10 +236,12 @@ class UsersCollection(object):
 
         For each user given in the file of the global variable allowed_users,
         attempt to obtain the port and the key for the connection with their
-        qpy-master (from MULTIUSER_HANDLER) and request the current running jobs.
+        qpy-master (from MULTIUSER_HANDLER) and request the current running
+        jobs.
         It also redistributes the cores.
         
-        The file should contain just the username of the users, one in each line.
+        The file should contain just the username of the users, one in each
+        line.
         """
         allowed_users = []
         try:
@@ -245,7 +249,7 @@ class UsersCollection(object):
         except IOError:
             return
         for line in f:
-            allowed_users.append( line.strip())
+            allowed_users.append(line.strip())
         f.close()
         for user in allowed_users:
             address = qpycomm.read_address_file(qpysys.user_conn_file + user)
@@ -257,10 +261,11 @@ class UsersCollection(object):
             else:
                 new_user = User(user, address, port, conn_key)
                 try:
-                    cur_jobs = qpycomm.message_transfer((qpyconst.FROM_MULTI_CUR_JOBS, ()),
-                                                        new_user.address,
-                                                        new_user.port,
-                                                        new_user.conn_key, timeout=2.0)
+                    cur_jobs = qpycomm.message_transfer(
+                        (qpyconst.FROM_MULTI_CUR_JOBS, ()),
+                        new_user.address,
+                        new_user.port,
+                        new_user.conn_key, timeout=2.0)
                 except:
                     pass
                 else:
@@ -268,7 +273,6 @@ class UsersCollection(object):
                         new_user.add_job(job, nodes)
                     self.all_[user] = new_user
         self.distribute_cores(nodes)
-
 
     def distribute_cores(self, nodes):
         """Distribute the cores.
@@ -323,8 +327,8 @@ class UsersCollection(object):
         min_cores = 0
         users_min = {}
         users_extra = {}
-        if (len( line_spl) > 1):
-            if (line_spl[1] != 'minimum'):
+        if (len(line_spl) > 1):
+            if line_spl[1] != 'minimum':
                 return -2
             try:
                 min_cores = int(line_spl[2])
@@ -351,12 +355,12 @@ class UsersCollection(object):
             for line in f:
                 line_spl = line.split()
                 user = line_spl[0]
-                if not user in self.all_:
+                if user not in self.all_:
                     continue
-                value = line_spl[1].split('+') 
-                if (len( value) > 2 or len( value) == 0):
+                value = line_spl[1].split('+')
+                if len(value) > 2 or len(value) == 0:
                     return -2
-                if (len( value) == 2):
+                if len(value) == 2:
                     try:
                         min_cores = int(value[0])
                         left_cores += users_min[user] - min_cores
@@ -372,7 +376,8 @@ class UsersCollection(object):
                 try:
                     if (info[-1] == '%'):
                         N_per_user = float(info[:-1])
-                        N_per_user = int(N_per_user * left_cores_original // 100)
+                        N_per_user = int(N_per_user * left_cores_original
+                                         // 100)
                     else:
                         N_per_user = int(info)
                 except:
@@ -401,13 +406,13 @@ class UsersCollection(object):
                 self.all_[user].min_cores = 0
             nodes.N_min_cores += self.all_[user].min_cores
             nodes.N_used_min_cores += min(self.all_[user].min_cores,
-                                             self.all_[user].n_used_cores)
+                                          self.all_[user].n_used_cores)
             try:
                 self.all_[user].extra_cores = users_extra[user]
             except:
                 self.all_[user].extra_cores = 0
         for user in self.all_:
             self.all_[user].max_cores = (nodes.N_cores
-                                     - nodes.N_min_cores
-                                     + self.all_[user].min_cores)
+                                         - nodes.N_min_cores
+                                         + self.all_[user].min_cores)
         return 0

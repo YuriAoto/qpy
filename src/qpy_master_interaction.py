@@ -6,6 +6,7 @@ import sys
 import traceback
 import threading
 from shutil import copyfile
+import datetime
 
 import qpy_system as qpysys
 import qpy_constants as qpyconst
@@ -13,7 +14,8 @@ import qpy_useful_cosmetics as qpyutil
 import qpy_communication as qpycomm
 from qpy_parser import JobOptParser
 from qpy_job import JobId, Job
-from qpy_exceptions import *
+from qpy_exceptions import qpyParseError, qpyKeyError, qpyValueError
+
 
 class MultiuserHandler(threading.Thread):
     """Handle the messages sent from qpy-multiuser.
@@ -74,7 +76,7 @@ class MultiuserHandler(threading.Thread):
          )
         self.add_to_multiuser()
 
-    def run( self):
+    def run(self):
         """Wait messages from the client, see class documentation."""
         while True:
             client_master = self.Listener_master.accept()
@@ -90,7 +92,7 @@ class MultiuserHandler(threading.Thread):
                 self.Listener_master.close()
                 break
             else:
-                client_master.send('Unknown option: ' + str(job_type) + '\n')
+                client_master.send('Unknown option: ' + str(msg_type) + '\n')
 
     def add_to_multiuser(self):
         """Contact qpy-multiuser to tell connection details and jobs."""
@@ -107,18 +109,22 @@ class MultiuserHandler(threading.Thread):
                                                 qpycomm.multiuser_key)
         except:
             self.multiuser_alive.clear()
-            self.config.messages.add('MULTIUSER_HANDLER: Exception in message transfer: '
-                                     + repr(sys.exc_info()[0]) + ' '
-                                     + repr(sys.exc_info()[1]))
-            self.config.logger.error('Exception in MULTIUSER_HANDLER message transfer',
-                                     exc_info=True)
+            self.config.messages.add(
+                'MULTIUSER_HANDLER: Exception in message transfer: '
+                + repr(sys.exc_info()[0]) + ' '
+                + repr(sys.exc_info()[1]))
+            self.config.logger.error(
+                'Exception in MULTIUSER_HANDLER message transfer',
+                exc_info=True)
         else:
-            if msg_back[0] ==  2:
+            if msg_back[0] == 2:
                 self.multiuser_alive.clear()
             else:
                 self.multiuser_alive.set()
-            self.config.logger.info('MULTIUSER_HANDLER: Message from multiuser: '
-                                    + str(msg_back))
+            self.config.logger.info(
+                'MULTIUSER_HANDLER: Message from multiuser: '
+                + str(msg_back))
+
 
 def handle_qpy(jobs,
                sub_ctrl,
@@ -174,10 +180,11 @@ def handle_qpy(jobs,
                 client_master.send('qpy: Job rejected due to its options:\n'
                                    + e.message + '\n')
             except:
-                client_master.send('qpy: Job rejected:\n'
-                                   + 'Unexpected exception after parsing options:\n'
-                                   + traceback.format_exc() + '\n'
-                                   + 'Please, contact the qpy team.\n')
+                client_master.send(
+                    'qpy: Job rejected:\n'
+                    + 'Unexpected exception after parsing options:\n'
+                    + traceback.format_exc() + '\n'
+                    + 'Please, contact the qpy team.\n')
             else:
                 if config.default_attr and not new_job.node_attr:
                     new_job.node_attr = config.default_attr
@@ -198,11 +205,13 @@ def handle_qpy(jobs,
                 if (new_job.use_script_copy):
                     first_arg = new_job.info[0].split()[0]
                     script_name = new_job._expand_script_name(first_arg)
-                    if (script_name != None):
-                        copied_script_name = (qpysys.scripts_dir + 'job_script.'
-                                              + str( new_job.ID))
-                        copyfile( script_name, copied_script_name)
-                        new_job.cp_script_to_replace = (first_arg, copied_script_name)
+                    if (script_name is not None):
+                        copied_script_name = (
+                            qpysys.scripts_dir + 'job_script.'
+                            + str(new_job.ID))
+                        copyfile(script_name, copied_script_name)
+                        new_job.cp_script_to_replace = (first_arg,
+                                                        copied_script_name)
                 jobs.append(new_job, jobs.all)
                 jobs.append(new_job, jobs.queue)
                 jobs.Q_appendleft(new_job)
@@ -228,7 +237,7 @@ def handle_qpy(jobs,
             kill_r = ('all' in arguments) or ('running' in arguments)
             for st in ['all', 'queue', 'running']:
                 while (st in arguments):
-                    arguments.remove( st)
+                    arguments.remove(st)
             n_kill_q = 0
             to_remove = []
             for job in jobs.queue:
@@ -255,9 +264,10 @@ def handle_qpy(jobs,
             msg = ''
             if n_kill_q:
                 plural = qpyutil.get_plural(('job', 'jobs'), n_kill_q)
-                msg += plural[1] + ' ' + plural[0] + ' removed from the queue.\n'
+                msg += (plural[1] + ' '
+                        + plural[0] + ' removed from the queue.\n')
             if n_kill_r:
-                plural = qpyutil.get_plural( ('job', 'jobs'), n_kill_r)
+                plural = qpyutil.get_plural(('job', 'jobs'), n_kill_r)
                 msg += plural[1] + ' ' + plural[0] + ' will be killed.\n'
             if not msg:
                 msg = 'qpy: Nothing to do: required jobs not found.\n'
@@ -315,7 +325,8 @@ def handle_qpy(jobs,
             client_master.send(msg)
 
         # Show current configuration
-        # arguments: optionally, a pair to change the configuration: (<key>, <value>)
+        # arguments:
+        # optionally, a pair to change the configuration: (<key>, <value>)
         elif job_type == qpyconst.JOBTYPE_CONFIG:
             if arguments:
                 try:
@@ -342,7 +353,8 @@ def handle_qpy(jobs,
                         remove = False
                         if job.status > 1:
                             remove = arg_is_id and i == job.ID
-                            remove = remove or (arg_is_dir and i == job.info[1])
+                            remove = remove or (arg_is_dir
+                                                and i == job.info[1])
                             remove = remove or (not arg_is_id) and i == 'all'
                             remove = (remove or (not arg_is_id)
                                       and i == qpyconst.JOB_STATUS[job.status])
@@ -355,8 +367,10 @@ def handle_qpy(jobs,
                                     jobs.remove(job, jobs.undone)
                                 jobs.remove(job, jobs.all)
                                 n_jobs += 1
-                                if os.path.isfile(qpysys.notes_dir + 'notes.' + str(job.ID)):
-                                    os.remove(qpysys.notes_dir + 'notes.' + str(job.ID))
+                                if os.path.isfile(qpysys.notes_dir + 'notes.'
+                                                  + str(job.ID)):
+                                    os.remove(qpysys.notes_dir + 'notes.'
+                                              + str(job.ID))
                         if not remove:
                             ij += 1
             if n_jobs:
@@ -365,7 +379,7 @@ def handle_qpy(jobs,
                 msg = plural[1] + ' finished ' + plural[0] + ' removed.\n'
             else:
                 msg = 'qpy: Nothing to do: required jobs not found.\n'
-            client_master.send( msg)
+            client_master.send(msg)
 
         # Add and read notes
         # arguments = (jobID[, note])
@@ -377,12 +391,13 @@ def handle_qpy(jobs,
                     if n[0:6] == 'notes.':
                         msg += n[6:] + ' '
                 if msg:
-                    msg = 'You have notes for the following jobs:\n' + msg + '\n'
+                    msg = ('You have notes for the following jobs:\n'
+                           + msg + '\n')
                 else:
                     msg = 'You have no notes.\n'
             else:
                 notes_file = qpysys.notes_dir + 'notes.' + str(arguments[0])
-                if (os.path.isfile( notes_file)):
+                if (os.path.isfile(notes_file)):
                     f = open(notes_file, 'r')
                     notes = f.read()
                     f.close()

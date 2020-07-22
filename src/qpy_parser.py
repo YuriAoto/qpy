@@ -4,13 +4,13 @@
 import os
 import sys
 import subprocess
-from collections import namedtuple
 from optparse import OptionParser
 
 import qpy_system as qpysys
 import qpy_useful_cosmetics as qpyutil
 import qpy_constants as qpyconst
-from qpy_exceptions import *
+from qpy_exceptions import qpyParseError, qpyHelpException
+
 
 def parse_qpy_cmd_line():
     """Parse the command line of qpy."""
@@ -19,8 +19,8 @@ def parse_qpy_cmd_line():
     except:
         str_len = 0
         for opt in qpyconst.KEYWORDS:
-            if (str_len < len( opt)):
-                str_len = len( opt)
+            if (str_len < len(opt)):
+                str_len = len(opt)
         format_spc = '{0:' + str(str_len+1) + 's}'
         usage_msg = 'Usage: ' + sys.argv[0] + ' <option> [<arguments>].\n'
         usage_msg += 'Options:'
@@ -41,7 +41,9 @@ def parse_qpy_cmd_line():
             if next_is_attr:
                 i = i.replace(' ', '##')
             job += ' ' + i
-            next_is_attr = i == '-a' or i == '--node_attr' or i == '--attribute'
+            next_is_attr = (i == '-a'
+                            or i == '--node_attr'
+                            or i == '--attribute')
         arguments = [job, os.getcwd()]
 
     if option == qpyconst.JOBTYPE_CHECK:
@@ -62,18 +64,18 @@ def parse_qpy_cmd_line():
                     try:
                         new_jobids = qpyutil.string_to_int_list(x)
                     except:
-                        sys.exit( 'Unknown pattern for checking jobs: ' + x)
+                        sys.exit('Unknown pattern for checking jobs: ' + x)
                     if ('job_id' in arguments):
-                        arguments['job_id'].extend( new_jobids)
+                        arguments['job_id'].extend(new_jobids)
                     else:
                         arguments['job_id'] = new_jobids
 
     elif option == qpyconst.JOBTYPE_CONFIG:
         if (len(sys.argv) == 4):
             arguments = (sys.argv[2], sys.argv[3])
-        elif (len( sys.argv) > 4):
+        elif (len(sys.argv) > 4):
             arguments = (sys.argv[2], sys.argv[3:])
-        elif (len( sys.argv) == 3):
+        elif (len(sys.argv) == 3):
             arguments = (sys.argv[2], ())
 
     elif (option == qpyconst.JOBTYPE_KILL
@@ -86,11 +88,12 @@ def parse_qpy_cmd_line():
         for x in sys.argv[2:]:
             try:
                 new_range = qpyutil.string_to_int_list(x)
-                arguments.extend( new_range)
+                arguments.extend(new_range)
             except:
                 if (x == 'all'
-                    or x in qpyconst.JOB_STATUS[status_bound[0]:status_bound[1]]):
-                    arguments.append( x)
+                    or x in qpyconst.JOB_STATUS[status_bound[0]:
+                                                status_bound[1]]):
+                    arguments.append(x)
                 elif (os.path.isdir(x)):
                     arguments.append(os.path.abspath(x))
                 else:
@@ -98,7 +101,7 @@ def parse_qpy_cmd_line():
         arguments = list(set(arguments))
 
     elif option == qpyconst.JOBTYPE_CTRLQUEUE:
-        if len( sys.argv) < 3:
+        if len(sys.argv) < 3:
             sys.exit('Give the queue control type.')
         else:
             if sys.argv[2] == 'jump':
@@ -109,7 +112,7 @@ def parse_qpy_cmd_line():
                     except:
                         sys.exit('Range with wrong format: ' + x)
                 if not new_range:
-                        sys.exit('Give the jobs to change position.')
+                    sys.exit('Give the jobs to change position.')
                 try:
                     pos = int(sys.argv[-1])
                 except:
@@ -141,9 +144,9 @@ def parse_qpy_cmd_line():
             pattern = '--pattern "# ' + pattern + '"'
         elif pattern:
             pattern = '--pattern "' + pattern + '"'
-        command = 'less '  + pattern + ' ' + qpysys.tutorial_file
+        command = 'less ' + pattern + ' ' + qpysys.tutorial_file
         try:
-            subprocess.call(command, shell = True)
+            subprocess.call(command, shell=True)
         except:
             sys.exit('Error when loading the tutorial.')
         exit()
@@ -161,17 +164,17 @@ def parse_qpy_multiuser_cmd_line():
         for opt in qpyconst.MULTIUSER_KEYWORDS:
             if (qpyconst.MULTIUSER_KEYWORDS[opt][0] < 0):
                 continue
-            if (str_len < len( opt)):
-                str_len = len( opt)
-        format_spc = '{0:' + str( str_len+1) + 's}'
-        usage_msg =  'Usage: ' + sys.argv[0] +  ' <option> [<arguments>].\n'
+            if (str_len < len(opt)):
+                str_len = len(opt)
+        format_spc = '{0:' + str(str_len+1) + 's}'
+        usage_msg = 'Usage: ' + sys.argv[0] + ' <option> [<arguments>].\n'
         usage_msg += 'Options:'
         for opt in qpyconst.MULTIUSER_KEYWORDS:
             if (qpyconst.MULTIUSER_KEYWORDS[opt][0] < 0):
                 continue
-            usage_msg += ('\n  ' + format_spc.format( opt+':')
+            usage_msg += ('\n  ' + format_spc.format(opt + ':')
                           + ' ' + qpyconst.MULTIUSER_KEYWORDS[opt][1])
-        sys.exit( usage_msg)
+        sys.exit(usage_msg)
 
     arguments = ()
     if (option == qpyconst.MULTIUSER_USER):
@@ -198,7 +201,7 @@ def parse_qpy_multiuser_cmd_line():
 
     if (option == qpyconst.MULTIUSER_REMOVE_JOB):
         try:
-            arguments = [sys.argv[2], int( sys.argv[3]), int(sys.argv[4])]
+            arguments = [sys.argv[2], int(sys.argv[3]), int(sys.argv[4])]
         except:
             usage_msg = ('Usage: ' + sys.argv[0]
                          + ' __remove_job <user_name> <job_ID> <queue_size>.')
@@ -208,13 +211,13 @@ def parse_qpy_multiuser_cmd_line():
         try:
             arguments = [True if (sys.argv[2] == 'true') else False]
         except:
-            usage_msg = 'Usage: ' + sys.argv[0] +  ' [true,false].'
-            sys.exit( usage_msg)
+            usage_msg = 'Usage: ' + sys.argv[0] + ' [true,false].'
+            sys.exit(usage_msg)
 
     if (option == qpyconst.MULTIUSER_START):
         start_qpy_multiuser = True
 
-    elif (option == qpyconst.MULTIUSER_TUTORIAL):    
+    elif (option == qpyconst.MULTIUSER_TUTORIAL):
         pattern = ''
         for i in sys.argv[2:3]:
             pattern += i
@@ -228,9 +231,9 @@ def parse_qpy_multiuser_cmd_line():
 
         command = 'less ' + pattern + ' ' + qpysys.tutorial_file
         try:
-            subprocess.call(command, shell = True)
+            subprocess.call(command, shell=True)
         except:
-            sys.exit( 'Error when loading the tutorial.')
+            sys.exit('Error when loading the tutorial.')
         exit()
 
     return option, arguments, start_qpy_multiuser
@@ -256,12 +259,13 @@ def parse_node_info(L):
 
     return name, n_cores, address, multicore, attributes
 
+
 class JobOptParser(OptionParser):
     """A parser for the job options
     
     Behaviour:
     
-    A Job in qpy can be submitted with several options, 
+    A Job in qpy can be submitted with several options,
     and the purpose of this class is to handle these options.
     These options can be passed by command line:
     
@@ -325,12 +329,16 @@ class JobOptParser(OptionParser):
     """
     def exit(self, prog='', message=''):
         raise qpyParseError(message)
+    
     def error(self, message):
         raise qpyParseError(message)
+    
     def print_usage(self):
         pass
+    
     def print_version(self):
         pass
+    
     def print_help(self):
         raise qpyHelpException(self.format_help())
 
@@ -342,7 +350,8 @@ class JobOptParser(OptionParser):
                           help="set the number of cores", default="1")
         parser.add_option("-m", "--mem", "--memory", dest="memory",
                           help="set the memory in GB", default="5")
-        parser.add_option("-a", "--node_attr", "--attributes", dest="node_attr",
+        parser.add_option("-a", "--node_attr", "--attributes",
+                          dest="node_attr",
                           help="set the attributes for node", default='')
         parser.add_option("-c", "--copyScript", dest="cpScript",
                           help="script should be copied",
@@ -373,7 +382,8 @@ class JobOptParser(OptionParser):
                     try:
                         k, v = [x.strip() for x in kv.split('=')]
                     except ValueError:
-                        raise qpyParseError('Invalid syntax for options inside script: ' + kv)
+                        raise qpyParseError(
+                            'Invalid syntax for options inside script: ' + kv)
                     try:
                         if k in ['number of cores',
                                  'n_cores']:
@@ -387,7 +397,8 @@ class JobOptParser(OptionParser):
                         elif k in ['copy script',
                                    'cpScript',
                                    'cp_script']:
-                            options['use_script_copy'] = true_or_false(v)
+                            options['use_script_copy'] = (
+                                qpyutil.true_or_false(v))
                         else:
                             raise qpyParseError('Unknown script option: ' + k)
                     except ValueError:
@@ -421,7 +432,7 @@ class JobOptParser(OptionParser):
         command (str)     The command to be parsed
         options (dict)    The options to be set
         
-        Behaviour:        
+        Behaviour:
         Set the options found in the command and return the
         command free of these options.
         
@@ -439,15 +450,18 @@ class JobOptParser(OptionParser):
                 options['node_attr'] = parsed_opt.node_attr.split('##')
             else:
                 options['node_attr'] = []
-            if parsed_opt.cpScript == None and parsed_opt.orScript == None:
+            if parsed_opt.cpScript is None and parsed_opt.orScript is None:
                 pass
-            elif parsed_opt.cpScript != None and parsed_opt.orScript != None:
-                raise qpyParseError("Please, do not supply both cpScript and orScript")
-            elif parsed_opt.cpScript != None:
+            elif (parsed_opt.cpScript is not None
+                  and parsed_opt.orScript is not None):
+                raise qpyParseError(
+                    "Please, do not supply both cpScript and orScript")
+            elif parsed_opt.cpScript is not None:
                 options['use_script_copy'] = True
             else:
                 options['use_script_copy'] = False
         except ValueError:
-            raise qpyParseError("Please supply only numbers for memory or"
-                                + " number of cores, true or false for cpScript")
+            raise qpyParseError(
+                "Please supply only numbers for memory or"
+                + " number of cores, true or false for cpScript")
         return ' '.join(command)

@@ -9,7 +9,8 @@ import qpy_system as qpysys
 import qpy_logging as qpylog
 import qpy_constants as qpyconst
 import qpy_useful_cosmetics as qpyutil
-from qpy_exceptions import *
+from qpy_exceptions import qpyKeyError, qpyValueError
+
 
 class Configurations(object):
     """The current configuration of qpy.
@@ -88,10 +89,9 @@ class Configurations(object):
         self.sleep_time_check_run = 10
         self.source_these_files = []
         self.ssh_p_key_file = None
-        self.logger_level = 'debug' #'warning'
+        self.logger_level = 'debug'  # 'warning'
         self.logger = qpylog.configure_logger(qpysys.master_log_file,
                                               qpylog.logging.DEBUG)
-
         if os.path.isfile(self.config_file):
             f = open(self.config_file, 'r')
             for l in f:
@@ -110,7 +110,7 @@ class Configurations(object):
                 else:
                     val = l_spl[1:]
                 try:
-                    msg = self.set_key(key, val)
+                    self.set_key(key, val)
                 except (qpyKeyError, qpyValueError) as e:
                     self.messages.add('Reading config file: ' + str(e))
             f.close()
@@ -135,7 +135,8 @@ class Configurations(object):
         qpyKeyError
         qpyValueError
         """
-        if k == 'checkFMT' or k == 'job_fmt_pattern': # job_fmt_pattern: obsolete
+        # job_fmt_pattern: obsolete
+        if k == 'checkFMT' or k == 'job_fmt_pattern':
             if isinstance(v, list):
                 v = ' '.join(v)
             if v == 'default':
@@ -150,8 +151,9 @@ class Configurations(object):
         elif k == 'paused_jobs':
             try:
                 self.sub_paused = qpyutil.true_or_false(v)
-            except:
-                raise qpyValueError("Value for paused_jobs must be true or false.")
+            except qpyValueError:
+                raise qpyValueError(
+                    "Value for paused_jobs must be true or false.")
             else:
                 msg = "paused_jobs set to " + str(self.sub_paused) + '.'
 
@@ -188,11 +190,13 @@ class Configurations(object):
                 else:
                     msg = k + " unset."
 
-        elif k == 'copyScripts' or k == 'use_script_copy': # use_script_copy: obsolete
+        # use_script_copy: obsolete
+        elif k == 'copyScripts' or k == 'use_script_copy':
             try:
                 self.use_script_copy = qpyutil.true_or_false(v)
             except:
-                raise qpyValueError("Value for copyScripts must be true or false.")
+                raise qpyValueError(
+                    "Value for copyScripts must be true or false.")
             else:
                 msg = "copyScripts set to " + str(self.use_script_copy)
 
@@ -200,7 +204,8 @@ class Configurations(object):
             try:
                 self.messages.save = qpyutil.true_or_false(v)
             except:
-                raise qpyValueError("Value for saveMessages must be true or false.")
+                raise qpyValueError(
+                    "Value for saveMessages must be true or false.")
             else:
                 msg = "saveMessages set to " + str(self.messages.save)
 
@@ -208,7 +213,8 @@ class Configurations(object):
             try:
                 self.messages.max_len = int(v)
             except:
-                raise qpyValueError("Value for maxMessages must be an integer.")
+                raise qpyValueError(
+                    "Value for maxMessages must be an integer.")
             else:
                 msg = "maxMessages set to " + str(self.messages.max_len)
 
@@ -256,7 +262,7 @@ class Configurations(object):
 
         elif k == 'coloursScheme':
             for i in v:
-                if not i in qpyconst.POSSIBLE_COLOURS:
+                if i not in qpyconst.POSSIBLE_COLOURS:
                     raise qpyValueError('Unknown colour: ' + i)
             if len(v) != 5:
                 raise qpyValueError('Give five colours for coloursScheme.')
@@ -267,7 +273,8 @@ class Configurations(object):
             try:
                 self.sleep_time_sub_ctrl = float(v)
             except:
-                raise qpyValueError("Value for sleepTimeSubCtrl must be a float number.")
+                raise qpyValueError(
+                    "Value for sleepTimeSubCtrl must be a float number.")
             else:
                 msg = ("sleepTimeSubCtrl set to "
                        + str(self.sleep_time_sub_ctrl) + '.')
@@ -276,7 +283,8 @@ class Configurations(object):
             try:
                 self.sleep_time_check_run = float(v)
             except:
-                raise qpyValueError("Value for sleepTimeCheckRun must be a float number.")
+                raise qpyValueError(
+                    "Value for sleepTimeCheckRun must be a float number.")
             else:
                 msg = ("sleepTimeCheckRun set to " +
                        str(self.sleep_time_check_run) + '.')
@@ -292,7 +300,7 @@ class Configurations(object):
                        + str(self.source_these_files) + '.')
             else:
                 raise qpyValueError("sourceTheseFiles should receive a "
-                                       + "file name or a list of files.")
+                                    + "file name or a list of files.")
 
         else:
             raise qpyKeyError('Unknown key: ' + k)
@@ -302,24 +310,24 @@ class Configurations(object):
     def write_on_file(self):
         """Write the current configurations in the file."""
         f = open(self.config_file, 'w')
-        f.write('paused_jobs '  + str(self.sub_paused)      + '\n')
-        f.write('saveMessages ' + str(self.messages.save)   + '\n')
-        f.write('maxMessages '  + str(self.messages.max_len)+ '\n')
-        f.write('loggerLevel '  + str(self.logger_level)    + '\n')
-        f.write('defaultAttr '  + ' '.join(self.default_attr) + '\n')
-        f.write('orAttr '       + ' '.join(self.or_attr)    + '\n')
-        f.write('andAttr '      + ' '.join(self.and_attr)   + '\n')
-        f.write('checkFMT '     +repr(self.job_fmt_pattern) + '\n')
-        f.write('ssh_pKey '     + str(self.ssh_p_key_file)  + '\n')
-        f.write('copyScripts '  + str(self.use_script_copy) + '\n')
-        f.write('colour '       + str(self.use_colour)      + '\n')
+        f.write('paused_jobs ' + str(self.sub_paused) + '\n')
+        f.write('saveMessages ' + str(self.messages.save) + '\n')
+        f.write('maxMessages ' + str(self.messages.max_len) + '\n')
+        f.write('loggerLevel ' + str(self.logger_level) + '\n')
+        f.write('defaultAttr ' + ' '.join(self.default_attr) + '\n')
+        f.write('orAttr ' + ' '.join(self.or_attr) + '\n')
+        f.write('andAttr ' + ' '.join(self.and_attr) + '\n')
+        f.write('checkFMT ' + repr(self.job_fmt_pattern) + '\n')
+        f.write('ssh_pKey ' + str(self.ssh_p_key_file) + '\n')
+        f.write('copyScripts ' + str(self.use_script_copy) + '\n')
+        f.write('colour ' + str(self.use_colour) + '\n')
         f.write('coloursScheme '
-                 + str(self.colour_scheme[0]) + ' '
-                 + str(self.colour_scheme[1]) + ' '
-                 + str(self.colour_scheme[2]) + ' '
-                 + str(self.colour_scheme[3]) + ' '
-                 + str(self.colour_scheme[4]) + '\n')
-        f.write('sleepTimeSubCtrl '  + str(self.sleep_time_sub_ctrl)  + '\n')
+                + str(self.colour_scheme[0]) + ' '
+                + str(self.colour_scheme[1]) + ' '
+                + str(self.colour_scheme[2]) + ' '
+                + str(self.colour_scheme[3]) + ' '
+                + str(self.colour_scheme[4]) + '\n')
+        f.write('sleepTimeSubCtrl ' + str(self.sleep_time_sub_ctrl) + '\n')
         f.write('sleepTimeCheckRun ' + str(self.sleep_time_check_run) + '\n')
         f.write('sourceTheseFiles ')
         for i in self.source_these_files:

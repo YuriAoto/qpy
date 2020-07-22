@@ -17,14 +17,12 @@ import sys
 import re
 
 import qpy_system as qpysys
-import qpy_constants as qpyconst
 try:
     import qpy_communication as qpycomm
 except AssertionError as e:
     sys.exit(str(e) + "\nContact the system administrator.")
 import qpy_useful_cosmetics as qpyutil
 from qpy_parser import parse_qpy_cmd_line
-from qpy_exceptions import *
 
 option, arguments, start_qpy_master = parse_qpy_cmd_line()
 
@@ -44,14 +42,14 @@ try:
                                           address,
                                           port,
                                           conn_key,
-                                          timeout = 3.0)
+                                          timeout=3.0)
 except:
     if start_qpy_master:
         os.remove(qpysys.master_conn_file + '_port')
         os.remove(qpysys.master_conn_file + '_conn_key')
         qpyutil.start_master_driver(qpysys.sys_user,
-                            address,
-                            qpysys.qpy_master_command)
+                                    address,
+                                    qpysys.qpy_master_command)
     else:
         sys.exit('qpy: Time for connection exceeded.'
                  + ' Are you sure that qpy-master is running?')
@@ -64,5 +62,7 @@ if error:
 else:
     sys.stdout.write(master_msg)
 if start_qpy_master:
-    qpyutil.start_master_driver(qpysys.sys_user, address, qpysys.qpy_master_command)
+    qpyutil.start_master_driver(qpysys.sys_user,
+                                address,
+                                qpysys.qpy_master_command)
 exit(int(error))

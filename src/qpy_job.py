@@ -15,7 +15,8 @@ import qpy_system as qpysys
 import qpy_constants as qpyconst
 import qpy_communication as qpycomm
 import qpy_nodes_management as qpynodes
-from qpy_exceptions import *
+from qpy_exceptions import qpyParseError
+
 
 class JobId(object):
     """The job ID.
@@ -77,6 +78,7 @@ class JobId(object):
         """The current ID as a string."""
         return str(self.current)
 
+
 class MultiuserJob(object):
     """Class to represent a running job
     
@@ -119,7 +121,7 @@ class MultiuserJob(object):
 
     def __eq__(self, other):
         """Check if self equals other."""
-        return (    self.user == other.user
+        return (self.user == other.user
                 and self.ID == other.ID
                 and self.n_cores == other.n_cores
                 and self.mem == other.mem
@@ -127,9 +129,10 @@ class MultiuserJob(object):
 
     def __str__(self):
         """String representation."""
-        return (str(self.ID)+ ": node = " + self.node
+        return (str(self.ID) + ": node = " + self.node
                 + ", n_cores = " + str(self.n_cores)
                 + ", mem = " + str(self.mem))
+
 
 class Job(object):
     """A job submitted by the user.
@@ -157,9 +160,9 @@ class Job(object):
                             (used in conjunction with use_script_copy)
     re_run (bool)           If True, it means that this job started to run in
                             a previous instance of qpy-master
-    opt_parser (JobParser)  A parser for the job options. It might be None, if is
-                            a job that has been restarted, and thus there is no
-                            need for a parse
+    opt_parser (JobParser)  A parser for the job options. It might be None,
+                            if is a job that has been restarted, and thus
+                            there is no need for a parse
     queue_time (datetime)   When the job was put in queue (that is, submited
                             by the user)
     start_time (datetime)   When the job started to run
@@ -187,13 +190,13 @@ class Job(object):
                  "end_time",
                  "run_duration")
 
-    def __init__(self, jobID, job_info, config, options_parser = None):
+    def __init__(self, jobID, job_info, config, options_parser=None):
         """Initiate the class.
         
         Arguments:
         jobID (int)                 The job identifier
-        job_info (list)             A list of strings with the command (in [0]) and
-                                    the calling directory (in [1])
+        job_info (list)             A list of strings with the command
+                                    (in [0]) and the calling directory (in [1])
         config (Configurations)     The qpy configurations
         """
         self.ID = jobID
@@ -231,7 +234,7 @@ class Job(object):
                 return datetime.today() - self.start_time
             except:
                 return None
-        if (self.run_duration != None):
+        if (self.run_duration is not None):
             return self.run_duration
         try:
             self.run_duration = self.end_time - self.start_time
@@ -242,15 +245,15 @@ class Job(object):
     def __str__(self):
         """Return a formatted string with main information about the job."""
         job_str = (str(self.ID) + ' '
-                   + str(self.status)+ ' '
+                   + str(self.status) + ' '
                    + str(self.n_cores) + ' '
                    + str(self.mem) + ' '
                    + str(self.use_script_copy) + ' ')
-        if (self.cp_script_to_replace != None):
+        if (self.cp_script_to_replace is not None):
             job_str += (self.cp_script_to_replace[0] + ' '
                         + self.cp_script_to_replace[1])
         job_str += '\n'
-        if (self.node == None):
+        if (self.node is None):
             job_str += 'None'
         else:
             job_str += repr(self.node)
@@ -341,14 +344,17 @@ class Job(object):
         command.append('export QPY_NODE={0}'.format(self.node))
         command.append('export QPY_N_CORES={0}'.format(self.n_cores))
         command.append('export QPY_MEM={0}'.format(self.mem))
-        command.append('ulimit -Sv {0}'.format(int(max(self.mem*1.5, 10)*1048576)))
+        command.append('ulimit -Sv {0}'.format(
+            int(max(self.mem * 1.5, 10) * 1048576)))
         for sf in config.source_these_files:
             command.append('source {0}'.format(sf))
         command.append('cd {0}'.format(self.info[1]))
         try:
-            command.append(self.info[0].replace(self.cp_script_to_replace[0],
-                                                'sh ' + self.cp_script_to_replace[1],
-                                                1))
+            command.append(
+                self.info[0].replace(self.cp_script_to_replace[0],
+                                     'sh '
+                                     + self.cp_script_to_replace[1],
+                                     1))
         except:
             command.append(self.info[0])
         command = '; '.join(command)
@@ -358,10 +364,11 @@ class Job(object):
                               command,
                               get_outerr=False,
                               pKey_file=config.ssh_p_key_file,
-                              localhost_popen_shell=(self.node.address == 'localhost'))
+                              localhost_popen_shell=(
+                                  self.node.address == 'localhost'))
         except:
             config.logger.error("Exception in run", exc_info=True)
-            raise Exception( "Exception in run: " + str(sys.exc_info()[1]))
+            raise Exception("Exception in run: " + str(sys.exc_info()[1]))
  
         self.start_time = datetime.today()
         self.status = qpyconst.JOB_ST_RUNNING
@@ -395,13 +402,13 @@ class Job(object):
         Make it compatible to other systems.
         """
         if file_name[0] == '/':
-            #assuming its the absolute Path
+            # assuming its the absolute Path
             script_name = file_name
         elif file_name[0] == '~':
-            #relative to home directory
+            # relative to home directory
             script_name = os.getenv("HOME") + file_name[1:]
         else:
-            #in or relative to working directory
+            # in or relative to working directory
             script_name = self.info[1] + '/' + file_name
         script_list = glob.glob(script_name)
         if len(script_list) == 1:
@@ -446,6 +453,7 @@ class Job(object):
             elif k == 'dir':
                 req = req or self.info[1] in pattern[k]
         return req
+
 
 class JobCollection(object):
     """Store information about the jobs.
@@ -535,12 +543,13 @@ class JobCollection(object):
         with self.lock:
             for job in self.all:
                 if (job.asked(pattern)):
-                    asked_jobs.append( job)
+                    asked_jobs.append(job)
         req_jobs = ''
         for job in asked_jobs:
             j_str = job.fmt(config.job_fmt_pattern)
             if (config.use_colour):
-                j_str = termcolour.colored(j_str, config.colour_scheme[job.status])
+                j_str = termcolour.colored(j_str,
+                                           config.colour_scheme[job.status])
             req_jobs += j_str
         return req_jobs
 
@@ -572,57 +581,69 @@ class JobCollection(object):
                     i = 0
                     for line in f:
                         i += 1
-                        if i%4 == 1:
+                        if i % 4 == 1:
                             line_spl = line.split()
                             new_id = line_spl[0]
                             new_status = line_spl[1]
                             new_n_cores = line_spl[2]
                             new_mem = line_spl[3]
-                            if len(line_spl) == 4: # old way. Remove as soon as everybody has new version working
+                            # old way.
+                            # Remove as soon as everybody has new version working
+                            if len(line_spl) == 4:
                                 new_use_script_copy = False
                                 new_cp_script_to_replace = None
                             else:
-                                new_use_script_copy = True if (line_spl[4] == 'true') else False
+                                new_use_script_copy = (
+                                    True
+                                    if (line_spl[4] == 'true') else
+                                    False)
                                 if len(line_spl) == 5:
                                     new_cp_script_to_replace = None
                                 else:
-                                    new_cp_script_to_replace = (line_spl[5], line_spl[6])
-                        elif i%4 == 2:
+                                    new_cp_script_to_replace = (line_spl[5],
+                                                                line_spl[6])
+                        elif i % 4 == 2:
                             new_node_and_times = line.strip().split('---')
                             new_node = new_node_and_times[0]
                             if len(new_node_and_times) == 1:
                                 new_times = ['None', 'None', 'None']
                             else:
                                 new_times = new_node_and_times[1:]
-                        elif i%4 == 3:
+                        elif i % 4 == 3:
                             new_command = line.strip()
                         else:
                             lspl = line.split()
                             new_wd = lspl[0]
                             new_node_attr = [] if len(lspl) == 1 else lspl[1:]
-                            new_job = Job(int(new_id), [new_command, new_wd], self.config)
+                            new_job = Job(int(new_id),
+                                          [new_command, new_wd],
+                                          self.config)
                             new_job.n_cores = int(new_n_cores)
                             new_job.mem = float(new_mem)
                             if new_times[0] == 'None':
                                 new_job.queue_time = None
                             else:
-                                new_job.queue_time = datetime.strptime(new_times[0],
-                                                                       "%Y-%m-%d %H:%M:%S.%f")
+                                new_job.queue_time = datetime.strptime(
+                                    new_times[0],
+                                    "%Y-%m-%d %H:%M:%S.%f")
                             if new_times[1] == 'None':
                                 new_job.start_time = None
                             else:
-                                new_job.start_time = datetime.strptime(new_times[1],
-                                                                       "%Y-%m-%d %H:%M:%S.%f")
+                                new_job.start_time = datetime.strptime(
+                                    new_times[1],
+                                    "%Y-%m-%d %H:%M:%S.%f")
                             if new_times[2] == 'None':
                                 new_job.end_time = None
                             else:
-                                new_job.end_time = datetime.strptime(new_times[2],
-                                                                     "%Y-%m-%d %H:%M:%S.%f")
+                                new_job.end_time = datetime.strptime(
+                                    new_times[2],
+                                    "%Y-%m-%d %H:%M:%S.%f")
                                 new_job.run_duration_()
                             if new_node == 'None':
                                 new_job.node = None
                             else:
-                                new_job.node = qpynodes.UsersNode.from_string(new_node)
+                                new_job.node = qpynodes.UsersNode.from_string(
+                                    new_node)
                             new_job.status = int(new_status)
                             new_job.node_attr = new_node_attr
                             self.all.append(new_job)
@@ -638,7 +659,6 @@ class JobCollection(object):
                                 self.killed.append(new_job)
                             elif new_job.status == qpyconst.JOB_ST_UNDONE:
                                 self.undone.append(new_job)
-
 
     def jump_Q(self, job_list, pos):
         """Reorganize the queue.
@@ -671,19 +691,24 @@ class JobCollection(object):
                 if j.ID in job_list:
                     jobs_to_jump.append(j)
             for j in jobs_to_jump:
-                self.Q.remove( j)
+                self.Q.remove(j)
             if not(jobs_to_jump):
-                return 'List does not have jobs in queue: queue not reordered.\n'
+                return ('List does not have jobs in queue:'
+                        + ' queue not reordered.\n')
             jobs_in_front = []
             lenQ = len(self.Q)
             for i in range(0, lenQ):
                 if self.Q[0].ID == pos:
                     break
                 jobs_in_front.append(self.Q.popleft())
-            first_remain_Q = self.Q[0] if len( self.Q) > 0 else None
-            last_remain_Q = self.Q[-1] if len( self.Q) > 0 else None
-            first_in_front = jobs_in_front[0] if len(jobs_in_front) > 0 else None
-            last_in_front = jobs_in_front[-1] if len(jobs_in_front) > 0 else None
+            first_remain_Q = self.Q[0] if len(self.Q) > 0 else None
+            # last_remain_Q = self.Q[-1] if len(self.Q) > 0 else None
+            first_in_front = (jobs_in_front[0]
+                              if len(jobs_in_front) > 0 else
+                              None)
+            last_in_front = (jobs_in_front[-1]
+                             if len(jobs_in_front) > 0 else
+                             None)
             if pos == -1:
                 for j in jobs_in_front[::-1]:
                     self.Q.appendleft(j)
@@ -693,9 +718,10 @@ class JobCollection(object):
                 for j in jobs_in_front[::-1]:
                     self.Q.appendleft(j)
             # reorder self.queue and self.all if needed
-            if last_in_front == None and first_remain_Q == None:
-                return 'Queue is completely contained in list: queue not reordered.\n'
-            if last_in_front != None or first_remain_Q != None:
+            if last_in_front is None and first_remain_Q is None:
+                return ('Queue is completely contained in list:'
+                        + ' queue not reordered.\n')
+            if last_in_front is not None or first_remain_Q is not None:
                 for j in jobs_to_jump:
                     self.all.remove(j)
                     self.queue.remove(j)

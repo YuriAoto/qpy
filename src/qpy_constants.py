@@ -17,8 +17,8 @@ JOBTYPE_SUB       = 1
 JOBTYPE_CHECK     = 2
 JOBTYPE_KILL      = 3
 JOBTYPE_FINISH    = 4
-JOBTYPE_NODES     = 5 # Obsolete
-JOBTYPE_MAXJOBS   = 6 # Obsolete
+JOBTYPE_NODES     = 5  # Obsolete
+JOBTYPE_MAXJOBS   = 6  # Obsolete
 JOBTYPE_CONFIG    = 7
 JOBTYPE_CLEAN     = 8
 JOBTYPE_TUTORIAL  = 9
@@ -36,11 +36,11 @@ JOB_ST_DONE    = 2
 JOB_ST_KILLED  = 3
 JOB_ST_UNDONE  = 4
 
-JOB_STATUS = ['queue',   # 0
-              'running', # 1
-              'done',    # 2
-              'killed',  # 3
-              'undone']  # 4
+JOB_STATUS = ['queue',    # 0
+              'running',  # 1
+              'done',     # 2
+              'killed',   # 3
+              'undone']   # 4
 
 POSSIBLE_COLOURS = ['yellow',
                     'blue',

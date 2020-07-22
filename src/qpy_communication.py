@@ -19,7 +19,8 @@ except ImportError:
     is_paramiko = False
 
 import qpy_system as qpysys
-from qpy_exceptions import *
+from qpy_exceptions import qpyUnknownError, qpyKeyError, qpyConnectionError
+
 
 def write_conn_files(f_name,
                      address,
@@ -36,6 +37,7 @@ def write_conn_files(f_name,
     f.write(conn_key)
     f.close()
 
+
 def read_address_file(f_name):
     """Read the connection address (hostname) from file."""
     try:
@@ -46,6 +48,7 @@ def read_address_file(f_name):
         address = 'localhost'
     return address
 
+
 def read_conn_files(f_name):
     """Read the connection information from files."""
     with open(f_name + '_port', 'r') as f:
@@ -53,6 +56,7 @@ def read_conn_files(f_name):
     with open(f_name + '_conn_key', 'rb') as f:
         conn_key = f.read()
     return port, conn_key
+
 
 def establish_Listener_connection(address,
                                   port_min,
@@ -87,11 +91,11 @@ def establish_Listener_connection(address,
     See also:
     multiprocessing.connect
     """
-    if conn_key == None:
+    if conn_key is None:
         random.seed()
-        ### TODO: use module secrets
+        # TODO: use module secrets
         conn_key = os.urandom(30)
-    if port == None:
+    if port is None:
         while True:
             port = random.randint(port_min, port_max)
             try:
@@ -101,19 +105,22 @@ def establish_Listener_connection(address,
             except socketError:
                 pass
             except:
-                raise qpyUnknownError("Unexpected exception after connection.Listener",
-                                     sys.exc_info())
+                raise qpyUnknownError(
+                    "Unexpected exception after connection.Listener",
+                    sys.exc_info())
     else:
         try:
             List_master = connection.Listener((address, port),
                                               authkey=conn_key)
-        except socketError as e:
+        except socketError:
             raise qpyConnectionError('Error when creating listener: '
                                      + str(sys.exc_info()[1]))
         except:
-            raise qpyUnknownError("Unexpected exception after connection.Listener",
-                                 sys.exc_info())
+            raise qpyUnknownError(
+                "Unexpected exception after connection.Listener",
+                sys.exc_info())
     return List_master, port, conn_key
+
 
 def message_transfer(msg,
                      address,
@@ -134,7 +141,7 @@ def message_transfer(msg,
     Behaviour:
     This function sends a message to a Listener at (address, port),
     wait for a message back from the Listener and returns it.
-    If the Listener takes too long to accept the connection, 
+    If the Listener takes too long to accept the connection,
     an exception is raised.
     
     Returns:
@@ -152,16 +159,18 @@ def message_transfer(msg,
     try:
         conn = connection.Client((address, port), authkey=key)
     except AuthenticationError:
-        raise qpyConnectionError("Connection failed due to Authentication Error.")
+        raise qpyConnectionError(
+            "Connection failed due to Authentication Error.")
     except TimeoutError:
         raise qpyConnectionError("Connection failed due to Timeout Error.")
     except:
         raise qpyUnknownError("Unexpected exception after connection.Client",
-                             sys.exc_info())
+                              sys.exc_info())
     conn.send(msg)
     back_msg = conn.recv()
     conn.close()
     return back_msg
+
 
 def node_exec(node,
               command,
@@ -223,14 +232,16 @@ def node_exec(node,
         try:
             ssh.connect(node, pkey=k)
         except paramiko.BadHostKeyException:
-            raise qpyConnectionError("SSH error: server's host key could not be verified")
+            raise qpyConnectionError(
+                "SSH error: server's host key could not be verified")
         except paramiko.AuthenticationException:
             raise qpyConnectionError("SSH error: authentication failed")
         except socketError:
-            raise qpyConnectionError("socket error: The node is probably unreachable")
+            raise qpyConnectionError(
+                "socket error: The node is probably unreachable")
         except:
             raise qpyUnknownError("Unexpected exception after ssh.connect",
-                                 sys.exc_info())
+                                  sys.exc_info())
         if get_outerr:
             stdin, stdout, stderr = ssh.exec_command(command)
             out = stdout.read()
@@ -259,6 +270,7 @@ def node_exec(node,
             return
     else:
         raise qpyKeyError("Unknown mode for node_exec.")
+
 
 multiuser_address = read_address_file(qpysys.multiuser_conn_file)
 try:
