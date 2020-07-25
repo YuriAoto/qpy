@@ -15,7 +15,7 @@ import qpy_system as qpysys
 import qpy_constants as qpyconst
 import qpy_communication as qpycomm
 import qpy_nodes_management as qpynodes
-from qpy_exceptions import qpyParseError
+from qpy_parser import ParseError
 
 
 class JobId(object):
@@ -416,7 +416,7 @@ class Job(object):
         elif len(script_list) == 0:
             return
         else:
-            raise qpyParseError('Nonexitstent or ambigous script name')
+            raise ParseError('Nonexitstent or ambigous script name')
 
     def parse_options(self):
         """Parse the input and the submission script for options."""

@@ -8,6 +8,11 @@ import qpy_logging as qpylog
 import qpy_communication as qpycomm
 from qpy_job import MultiuserJob
 import qpy_constants as qpyconst
+from qpy_parser import ParseError
+
+
+class NoNodeAvailableError(Exception):
+    pass
 
 
 class User(object):
@@ -75,23 +80,28 @@ class User(object):
         """Remove a job from the user and from the nodes.
         
         Arguments:
-        jobID     The ID number of the job
+        jobID (int)      The ID number of the job
+        nodes            The qpynodes.NodesCollection
         
-        Return 0 if success or 1 if the job was not found
+        Return:
+        None
+        
+        Raise:
+        0 if success or 1 if the job was not found
         """
         for job in self.cur_jobs:
-            if (job.ID == jobID):
+            if job.ID == jobID:
                 self.n_used_cores -= job.n_cores
                 nodes.all_[job.node].n_used_cores -= job.n_cores
                 nodes.all_[job.node].req_mem -= job.mem
                 nodes.N_used_cores -= job.n_cores
-                if (self.n_used_cores < self.min_cores):
+                if self.n_used_cores < self.min_cores:
                     nodes.N_used_min_cores -= min(job.n_cores,
                                                   self.min_cores
                                                   - self.n_used_cores)
                 self.cur_jobs.remove(job)
-                return 0
-        return 1
+                return
+        raise ValueError('job not found!')
 
     def add_job(self, job, nodes):
         """Add a new job to a specific node.
@@ -99,20 +109,20 @@ class User(object):
         Arguments:
         job     The job, as an instance of MultiuserJob
         
-        Return 0
+        Return:
+        None
         """
         self.cur_jobs.append(job)
         self.n_used_cores += job.n_cores
         nodes.all_[job.node].n_used_cores += job.n_cores
         nodes.all_[job.node].req_mem += job.mem
         nodes.N_used_cores += job.n_cores
-        if (self.n_used_cores < self.min_cores):
+        if self.n_used_cores < self.min_cores:
             nodes.N_used_min_cores += job.n_cores
-        elif (self.n_used_cores < self.min_cores + job.n_cores):
+        elif self.n_used_cores < self.min_cores + job.n_cores:
             nodes.N_used_min_cores += (job.n_cores
                                        + self.min_cores
                                        - self.n_used_cores)
-        return 0
 
     def request_node(self, jobID, num_cores, mem, node_attr, users, nodes):
         """Tries to give a space to the user
@@ -149,6 +159,13 @@ class User(object):
         and several users have jobs in their queues, the mumber
         of used cores by each user should stay around
         min_cores + extra cores
+        
+        Return:
+        a string with the node that can be allocated to the user
+        
+        Raise:
+        NoNodeAvailableError
+        
         """
         space_available = False
         
@@ -212,11 +229,11 @@ class User(object):
                             best_node = node
                             break
             if best_node is None:
-                return 1
+                raise NoNodeAvailableError('No node with this requirement.')
             new_job = MultiuserJob(self.name, jobID, mem, num_cores, best_node)
             self.add_job(new_job, nodes)
             return best_node + '=' + nodes.all_[best_node].address
-        return 2
+        raise NoNodeAvailableError('No free cores.')
 
 
 class UsersCollection(object):
@@ -312,15 +329,13 @@ class UsersCollection(object):
         See file examples/distribution_rules for some examples.
         
         Return:
-        0    success
-        -1   if file not found
-        -2   for any syntax error in the file
-        -3   if exceed the number of cores
+        None
+        
+        Raise:
+        ParseError                 for any syntax error in the file
+        NoNodeAvailableError       if exceed the number of cores
         """
-        try:
-            f = open(qpysys.cores_distribution_file, 'r')
-        except:
-            return -1
+        f = open(qpysys.cores_distribution_file, 'r')
         line = f.readline()
         line_spl = line.split()
         dist_type = line_spl[0]
@@ -329,18 +344,19 @@ class UsersCollection(object):
         users_extra = {}
         if (len(line_spl) > 1):
             if line_spl[1] != 'minimum':
-                return -2
+                raise ParseError('Not equal "minimum"')
             try:
                 min_cores = int(line_spl[2])
             except:
-                return -2
+                raise ParseError('Error to read min_cores')
         # General minimum cores
         left_cores = nodes.N_cores
         for user in self.all_:
             users_min[user] = min_cores
             left_cores -= min_cores
         if (left_cores < 0):
-            return -3
+            raise NoNodeAvailableError(
+                'Requirement exceeds the number of cores')
         # Even distribution
         if (dist_type == 'even'):
             n_users = len(self.all_)
@@ -359,7 +375,7 @@ class UsersCollection(object):
                     continue
                 value = line_spl[1].split('+')
                 if len(value) > 2 or len(value) == 0:
-                    return -2
+                    raise ParseError('len(value) not correct')
                 if len(value) == 2:
                     try:
                         min_cores = int(value[0])
@@ -367,10 +383,11 @@ class UsersCollection(object):
                         users_min[user] = min_cores
                         value.pop(0)
                     except:
-                        return -2
+                        raise ParseError('len(value) not correct')
                 users_extra[user] = value[0]
             if (left_cores < 0):
-                return -3
+                raise NoNodeAvailableError(
+                    'Requirement exceeds the number of cores')
             left_cores_original = left_cores
             for user, info in users_extra.items():
                 try:
@@ -381,13 +398,13 @@ class UsersCollection(object):
                     else:
                         N_per_user = int(info)
                 except:
-                    return -2
+                    raise ParseError('len(value) not correct')
                 add_cores = N_per_user
                 left_cores -= add_cores
                 users_extra[user] = add_cores
         # Unknown type of distribution
         else:
-            return -2
+            raise ParseError('Unknown type of distribution: ' + dist_type)
         f.close()
         # Equally share left cores
         while (left_cores != 0):

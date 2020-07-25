@@ -15,10 +15,6 @@ class qpyError(Exception):
         return str(self.message)
 
 
-class qpyParseError(qpyError):
-    pass
-
-
 class qpyHelpException(qpyError):
     pass
 

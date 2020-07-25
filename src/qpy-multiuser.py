@@ -19,18 +19,25 @@ if (not(os.path.isdir(qpysys.qpy_multiuser_dir))):
     os.makedirs(qpysys.qpy_multiuser_dir)
 os.chmod(qpysys.qpy_multiuser_dir, 0o700)
 
-logger = qpylog.configure_logger(qpysys.multiuser_log_file,
-                                 qpylog.logging.DEBUG)
-logger.info('Starting main thread of qpy-multiuser')
-nodes = qpynodes.NodesCollection(logger)
-nodes.load_nodes()
-users = qpyusers.UsersCollection(logger)
-users.load_users(nodes)
-check_nodes = qpynodes.CheckNodes(nodes, logger)
-check_nodes.start()
 try:
-    handle_client(users, nodes, logger)
+    logger = qpylog.configure_logger(qpysys.multiuser_log_file,
+                                     qpylog.logging.DEBUG)
+    logger.info('Starting main thread of qpy-multiuser')
+    nodes = qpynodes.NodesCollection(logger)
+    nodes.load_nodes()
+    users = qpyusers.UsersCollection(logger)
+    users.load_users(nodes)
+    check_nodes = qpynodes.CheckNodes(nodes, logger)
+    check_nodes.start()
 except:
-    qpylog.logging.exception("Exception at handle_client")
+    qpylog.logging.exception('Exception before handle_client')
+else:
+    try:
+        handle_client(users, nodes, logger)
+    except qpyConnectionError:
+        logger.exception("Error when establishing connection. "
+                         + "Is there already a qpy-multiuser instance?")
+    except BaseException:
+        qpylog.logging.exception('Exception at handle_client')
 logger.info('Finishing main thread of qpy-multiuser')
 check_nodes.finish.set()

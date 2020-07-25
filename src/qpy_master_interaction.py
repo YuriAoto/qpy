@@ -12,9 +12,9 @@ import qpy_system as qpysys
 import qpy_constants as qpyconst
 import qpy_useful_cosmetics as qpyutil
 import qpy_communication as qpycomm
-from qpy_parser import JobOptParser
+from qpy_parser import JobOptParser, ParseError
 from qpy_job import JobId, Job
-from qpy_exceptions import qpyParseError, qpyKeyError, qpyValueError
+from qpy_exceptions import qpyKeyError, qpyValueError
 
 
 class MultiuserHandler(threading.Thread):
@@ -176,7 +176,7 @@ def handle_qpy(jobs,
             new_job = Job(int(job_id), arguments, config, job_options_parser)
             try:
                 new_job.parse_options()
-            except qpyParseError as e:
+            except ParseError as e:
                 client_master.send('qpy: Job rejected due to its options:\n'
                                    + e.message + '\n')
             except:

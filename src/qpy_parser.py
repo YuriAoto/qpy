@@ -9,7 +9,11 @@ from optparse import OptionParser
 import qpy_system as qpysys
 import qpy_useful_cosmetics as qpyutil
 import qpy_constants as qpyconst
-from qpy_exceptions import qpyParseError, qpyHelpException
+from qpy_exceptions import qpyHelpException
+
+
+class ParseError(Exception):
+    pass
 
 
 def parse_qpy_cmd_line():
@@ -240,7 +244,11 @@ def parse_qpy_multiuser_cmd_line():
 
 
 def parse_node_info(L):
-    """A parser for the line in nodes_file"""
+    """A parser for the line in nodes_file
+    
+    Should raise ParseError if any problem in reading line
+    
+    """
     lspl = L.split()
     name = lspl.pop(0)
     address = name
@@ -328,10 +336,10 @@ class JobOptParser(OptionParser):
     replace it by argparse
     """
     def exit(self, prog='', message=''):
-        raise qpyParseError(message)
+        raise ParseError(message)
     
     def error(self, message):
-        raise qpyParseError(message)
+        raise ParseError(message)
     
     def print_usage(self):
         pass
@@ -373,7 +381,7 @@ class JobOptParser(OptionParser):
         If the line sets some qpy option, put it in options
         
         Raise:
-        qpyParseError   In case there is an error in the syntax
+        ParseError   In case there is an error in the syntax
         """
         if line[0:5] == '#QPY ':
             line_split = line[5:].split(';')
@@ -382,7 +390,7 @@ class JobOptParser(OptionParser):
                     try:
                         k, v = [x.strip() for x in kv.split('=')]
                     except ValueError:
-                        raise qpyParseError(
+                        raise ParseError(
                             'Invalid syntax for options inside script: ' + kv)
                     try:
                         if k in ['number of cores',
@@ -400,9 +408,9 @@ class JobOptParser(OptionParser):
                             options['use_script_copy'] = (
                                 qpyutil.true_or_false(v))
                         else:
-                            raise qpyParseError('Unknown script option: ' + k)
+                            raise ParseError('Unknown script option: ' + k)
                     except ValueError:
-                        raise qpyParseError(
+                        raise ParseError(
                             "Invalid value for {0}: {1}.".format(k, v))
 
     def parse_file(self, file_name, options):
@@ -413,7 +421,7 @@ class JobOptParser(OptionParser):
         options (dict)      A dictionary with the options that can be set
         
         Raise:
-        qpyParseError   In case there is an error in the syntax
+        ParseError   In case there is an error in the syntax
         
         See also:
         _scanline
@@ -440,7 +448,7 @@ class JobOptParser(OptionParser):
         The command, without the parsed options.
         
         Raise:
-        qpyParseError    if the parse was not successful
+        ParseError    if the parse was not successful
         """
         try:
             parsed_opt, command = self.parse_args(command.split())
@@ -454,14 +462,14 @@ class JobOptParser(OptionParser):
                 pass
             elif (parsed_opt.cpScript is not None
                   and parsed_opt.orScript is not None):
-                raise qpyParseError(
+                raise ParseError(
                     "Please, do not supply both cpScript and orScript")
             elif parsed_opt.cpScript is not None:
                 options['use_script_copy'] = True
             else:
                 options['use_script_copy'] = False
         except ValueError:
-            raise qpyParseError(
+            raise ParseError(
                 "Please supply only numbers for memory or"
                 + " number of cores, true or false for cpScript")
         return ' '.join(command)

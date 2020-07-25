@@ -346,34 +346,29 @@ class NodesCollection(object):
         preferred for multicores jobs. The attributes are strings that
         can be used to select or avoid particular nodes by the user,
         see USER.request_node.
+        
+        Raise:
+        OSError        For problems when accessing the file
+        ParseError     If there is a problmen when parsing file
         """
-        try:
-            f = open(qpysys.nodes_file, 'r')
-        except:
-            return -1
-        nodes_in_file = []
-        cores_in_file = []
-        addresses_in_file = []
-        attr_in_file = []
-        nodes_for_multicores = []
-        for line in f:
-            try:
+        with open(qpysys.nodes_file, 'r') as f:
+            nodes_in_file = []
+            cores_in_file = []
+            addresses_in_file = []
+            attr_in_file = []
+            nodes_for_multicores = []
+            for line in f:
                 (name,
                  n_cores,
                  address,
                  multicore,
                  attributes) = parse_node_info(line)
-            except:
-                self.logger.exception('Exception when parsing node info:')
-                f.close()
-                return -2
-            nodes_in_file.append(name)
-            addresses_in_file.append(address)
-            cores_in_file.append(n_cores)
-            if multicore:
-                nodes_for_multicores.append(name)
-            attr_in_file.append(attributes)
-        f.close()
+                nodes_in_file.append(name)
+                addresses_in_file.append(address)
+                cores_in_file.append(n_cores)
+                if multicore:
+                    nodes_for_multicores.append(name)
+                attr_in_file.append(attributes)
         # Put messages
         for i in range(len(nodes_in_file)):
             n = nodes_in_file[i]
@@ -405,7 +400,6 @@ class NodesCollection(object):
         for n in nodes_to_remove:
             self.N_cores -= self.all_[n].max_cores
             self.all_.pop(n)
-        return 0
 
     
 class CheckNodes(threading.Thread):
