@@ -251,6 +251,7 @@ class Submission(threading.Thread):
         jobs_modification = False
         if not self.muHandler.multiuser_alive.is_set():
             self.skip_job_sub = 30
+        i_next_job = -1
             
         while not self.finish.is_set():
 
@@ -263,12 +264,13 @@ class Submission(threading.Thread):
             if self.submit_jobs and self.skip_job_sub == 0:
 
                 if len(self.jobs.Q) != 0:
-                    next_jobID = self.jobs.Q[-1].ID
-                    next_Ncores = self.jobs.Q[-1].n_cores
-                    next_mem = self.jobs.Q[-1].mem
-                    next_node_attr = self.jobs.Q[-1].node_attr
-                    avail_node = None
-
+                    i_next_job = (i_next_job
+                                  if abs(i_next_job) <= len(self.jobs.Q) else
+                                  -1)
+                    next_jobID = self.jobs.Q[i_next_job].ID
+                    next_Ncores = self.jobs.Q[i_next_job].n_cores
+                    next_mem = self.jobs.Q[i_next_job].mem
+                    next_node_attr = self.jobs.Q[i_next_job].node_attr
                     try:
                         msg_back = qpycomm.message_transfer(
                             (qpyconst.MULTIUSER_REQ_CORE,
@@ -292,20 +294,18 @@ class Submission(threading.Thread):
                             exc_info=True)
                         self.skip_job_sub = 30
                     else:
+                        status, allocated_node = msg_back
                         self.muHandler.multiuser_alive.set()
                         self.config.messages.add(
                             'SUB_CTRL: Message from multiuser: '
                             + str(msg_back))
-                        if msg_back[0] == 0:
+                        if status == 0:
                             avail_node = qpynodes.UsersNode.from_string(
-                                msg_back[1])
-                        else:
-                            self.skip_job_sub = 30
-                        if avail_node is not None:
+                                allocated_node)
                             self.config.messages.add(
                                 "SUB_CTRL: submitting job in "
                                 + repr(avail_node))
-                            job = self.jobs.Q_pop()
+                            job = self.jobs.Q_pop(i_next_job)
                             job.node = avail_node
                             try:
                                 job.run(self.config)
@@ -327,6 +327,12 @@ class Submission(threading.Thread):
                                              self.jobs.queue,
                                              self.jobs.running)
                                 jobs_modification = True
+                        elif status == 1 and abs(i_next_job) < len(self.jobs.Q):
+                            i_next_job -= 1
+                        else:
+                            i_next_job = -1
+                            self.skip_job_sub = 30
+
                 if jobs_modification:
                     self.jobs.write_all_jobs()
                     jobs_modification = False

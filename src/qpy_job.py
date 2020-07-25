@@ -498,10 +498,14 @@ class JobCollection(object):
         self.lock = threading.RLock()
         self.initialize_old_jobs()
 
-    def Q_pop(self):
+    def Q_pop(self, i=-1):
         """Pop job of Q, and return it."""
         with self.lock:
-            job = self.Q.pop()
+            if i == -1:
+                job = self.Q.pop()
+            else:
+                job = self.Q[i]
+                del self.Q[i]
         return job
 
     def Q_appendleft(self, job):
