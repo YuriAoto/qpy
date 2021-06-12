@@ -13,6 +13,7 @@ import qpy_system as qpysys
 import qpy_logging as qpylog
 import qpy_nodes_management as qpynodes
 import qpy_users_management as qpyusers
+from qpy_exceptions import qpyConnectionError
 from qpy_multiuser_interaction import handle_client
 
 if (not(os.path.isdir(qpysys.qpy_multiuser_dir))):
@@ -25,8 +26,11 @@ try:
     logger.info('Starting main thread of qpy-multiuser')
     nodes = qpynodes.NodesCollection(logger)
     nodes.load_nodes()
+    logger.info('nodes loaded')
     users = qpyusers.UsersCollection(logger)
+    logger.info('users will be loaded')
     users.load_users(nodes)
+    logger.info('users loaded')
     check_nodes = qpynodes.CheckNodes(nodes, logger)
     check_nodes.start()
 except:

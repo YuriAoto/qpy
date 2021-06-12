@@ -277,13 +277,17 @@ class UsersCollection(object):
                 pass
             else:
                 new_user = User(user, address, port, conn_key)
+                self.logger.info('adding new user %s', user)
                 try:
+                    self.logger.info('requesting jobs from %s', user)
                     cur_jobs = qpycomm.message_transfer(
                         (qpyconst.FROM_MULTI_CUR_JOBS, ()),
                         new_user.address,
                         new_user.port,
                         new_user.conn_key, timeout=2.0)
-                except:
+                    self.logger.info('Jobs obtained!')
+                except Exception as e:
+                    self.logger.info('Exception passed: %s', e)
                     pass
                 else:
                     for job in cur_jobs:

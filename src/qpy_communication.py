@@ -158,6 +158,8 @@ def message_transfer(msg,
     connection._init_timeout = my_init_timeout
     try:
         conn = connection.Client((address, port), authkey=key)
+    except ConnectionRefusedError:
+        raise qpyConnectionError("Connection refused.")
     except AuthenticationError:
         raise qpyConnectionError(
             "Connection failed due to Authentication Error.")
@@ -250,7 +252,7 @@ def node_exec(node,
             stdout.close()
             stderr.close()
             ssh.close()
-            return out, err
+            return out.decode('utf-8'), err.decode('utf-8')
         else:
             ssh.exec_command(command)
             time.sleep(1.)
@@ -269,7 +271,7 @@ def node_exec(node,
             ssh = subprocess.Popen(['ssh', node] + command, shell=False)
             return
     else:
-        raise qpyKeyError("Unknown mode for node_exec.")
+        raise qpyKeyError(f"Unknown mode for node_exec: {mode}; is_paramiko={is_paramiko}")
 
 
 multiuser_address = read_address_file(qpysys.multiuser_conn_file)

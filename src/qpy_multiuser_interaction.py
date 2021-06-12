@@ -5,7 +5,6 @@ import qpy_system as qpysys
 import qpy_constants as qpyconst
 import qpy_communication as qpycomm
 import qpy_users_management as qpyusers
-from qpy_exceptions import qpyConnectionError
 from qpy_parser import ParseError
 
 
@@ -371,7 +370,7 @@ def handle_client(users, nodes, logger):
 
             elif (action_type == qpyconst.MULTIUSER_FINISH):
                 client.send((0, 'Finishing qpy-multiuser.'))
-                client.close()
+                conn.close()
                 break
 
             elif (action_type == qpyconst.MULTIUSER_USER):
