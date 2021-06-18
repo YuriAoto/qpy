@@ -25,7 +25,7 @@ try:
                                      qpylog.logging.DEBUG)
     logger.info('Starting main thread of qpy-multiuser')
     nodes = qpynodes.NodesCollection(logger)
-    nodes.load_nodes()
+    nodes.load_from_file(qpysys.nodes_file)
     logger.info('nodes loaded')
     users = qpyusers.UsersCollection(logger)
     logger.info('users will be loaded')

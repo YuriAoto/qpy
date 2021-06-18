@@ -15,8 +15,8 @@ if [[ -f nodes ]]
 then
     cp nodes ${QPY_MU_DIR}/nodes
 else
-    echo 'node1 6 address=localhost' > ${QPY_MU_DIR}/nodes
-    echo 'node2 6 address=localhost' >> ${QPY_MU_DIR}/nodes
+    echo 'node1 cores=10 address=localhost' > ${QPY_MU_DIR}/nodes
+    echo 'node2 cores=10 address=localhost' >> ${QPY_MU_DIR}/nodes
 fi
 echo 'even' > ${QPY_MU_DIR}/distribution_rules
 

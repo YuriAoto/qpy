@@ -8,92 +8,6 @@ import qpy_users_management as qpyusers
 from qpy_parser import ParseError
 
 
-_sep1 = '-'*88 + '\n'
-_sep2 = '='*88 + '\n'
-_headerN = ('                                   cores'
-            + '                    memory (GB)'
-            + '       disk (GB)\n')
-_headerN += ('node                            '
-             + 'used  total   load'
-             + '     used     req   total  used total\n')
-_headerU = ('user                          '
-            + 'using cores        queue size\n' + _sep1)
-_format_spec = ('{0:30s} {1:>5d} {2:>5d} {3:>7.1f}'
-                + '  '
-                + '{4:>7.1f} {5:>7.1f} {6:>7.1f} {7:5.0f} {8:5.0f}\n')
-
-
-def _format_general_variables(nodes):
-    variables = [
-        ('N_cores', nodes.N_cores),
-        ('N_min_cores', nodes.N_min_cores),
-        ('N_used_cores', nodes.N_used_cores),
-        ('N_used_min_cores', nodes.N_used_min_cores),
-        ('N_outsiders', nodes.N_outsiders),
-        ]
-    format_spec = '{0: <16} = {1}'
-    return '\n'.join(format_spec.format(*pair) for pair in variables)
-
-
-def _format_jobs(jobs):
-    format_spec = '          {0}'
-    return '\n'.join(format_spec.format(job)for job in jobs)
-
-
-def _format_messages(messages):
-    return '  Last messages:\n' + str(messages) + '----------'
-
-
-def _format_user(user, info):
-    fields = [
-        ('min_cores', info.min_cores),
-        ('extra_cores', info.extra_cores),
-        ('max_cores', info.max_cores),
-        ('n_used_cores', info.n_used_cores),
-        ('n_queue', info.n_queue),
-    ]
-    format_spec = '  {0: <12} = {1}'
-    infos = '\n'.join(format_spec.format(*pair) for pair in fields)
-    current_jobs = _format_jobs(info.cur_jobs)
-    messages = ('\n' + _format_messages(info.messages)
-                if len(info.messages) > 0 else
-                '')
-    return '\n'.join([user,
-                     infos,
-                     current_jobs]) + messages
-
-
-def _format_users(users):
-    return "\n".join(_format_user(user, info)
-                     for user, info in users.all_.items())
-
-
-def _format_node(node, info):
-    fields = [
-        ('max_cores', info.max_cores),
-        ('n_used_cores', info.n_used_cores),
-        ('n_outsiders', info.n_outsiders),
-        ('total_mem', info.total_mem),
-        ('req_mem', info.req_mem),
-        ('attributes', info.attributes),
-        ('free_mem_real', info.free_mem_real),
-        ('pref_multicores', info.pref_multicores),
-        ('is_up', info.is_up),
-    ]
-    format_spec = '  {0: <15} = {1}'
-    infos = '\n'.join(format_spec.format(*pair)
-                      for pair in fields)
-    messages = ("\n" + _format_messages(info.messages)
-                if len(info.messages) > 0 else
-                '')
-    return infos + messages
-
-
-def _format_nodes(nodes):
-    return "\n".join(_format_node(node, info)
-                     for node, info in nodes.items())
-
-
 def _handle_reload_nodes(args, nodes):
     """Handle a request to reload the nodes.
     
@@ -101,7 +15,7 @@ def _handle_reload_nodes(args, nodes):
     """
     assert len(args) == 0
     try:
-        nodes.load_nodes()
+        nodes.load_from_file(qpysys.nodes_file)
     except OSError as exc:
         return -1, 'Nodes loading failed: {0}.'.format(str(exc))
     except ParseError as exc:
@@ -135,11 +49,7 @@ def _handle_show_variables(args, users, nodes):
     """
     assert len(args) == 0
     with nodes.check_lock:
-        return 0, "{general}\n{theusers}\n{thenodes}\n".format(
-            general=_format_general_variables(nodes),
-            theusers=_format_users(users),
-            thenodes=_format_nodes(nodes.all_)
-        )
+        return 0, f"{nodes!r}\n\n{users!r}\n"
 
 
 def _handle_show_status(args, users, nodes):
@@ -149,45 +59,7 @@ def _handle_show_status(args, users, nodes):
     
     TODO: Can args be (user_name)?
     """
-    msgU = ''
-    format_spec = '{0:32s} {1:<5d}' + ' '*13 + '{2:<5d}\n'
-    for user in sorted(users.all_):
-        msgU += format_spec.format(user,
-                                   users.all_[user].n_used_cores,
-                                   users.all_[user].n_queue)
-    msgU = _headerU + msgU + _sep2 if msgU else 'No users.\n'
-    msgN = ''
-    with nodes.check_lock:
-        for node in nodes.all_:
-            down = ' (down)' if not(nodes.all_[node].is_up) else ''
-            len_node_row = (len(down) + len(node)
-                            + sum(map(len, nodes.all_[node].attributes))
-                            + len(nodes.all_[node].attributes) + 2)
-            if len_node_row > 28 or not(nodes.all_[node].attributes):
-                attr = ''
-            else:
-                attr = ' [' + ','.join(nodes.all_[node].attributes) + ']'
-            msgN += _format_spec.format(node + attr + down,
-                                        nodes.all_[node].n_used_cores
-                                        + nodes.all_[node].n_outsiders,
-                                        nodes.all_[node].max_cores,
-                                        nodes.all_[node].load,
-                                        nodes.all_[node].total_mem
-                                        - nodes.all_[node].free_mem_real,
-                                        nodes.all_[node].req_mem,
-                                        nodes.all_[node].total_mem,
-                                        nodes.all_[node].total_disk
-                                        - nodes.all_[node].free_disk,
-                                        nodes.all_[node].total_disk)
-            if len_node_row > 28 and nodes.all_[node].attributes:
-                msgN += '    [' + ','.join(nodes.all_[node].attributes) + ']\n'
-    msgN = _headerN + _sep1 + msgN + _sep2 if msgN else 'No nodes.\n'
-    status = 0
-    msg_used_cores = (
-        'There are {0} out of a total of {1} cores being used.\n'
-        .format(nodes.N_used_cores + nodes.N_outsiders,
-                nodes.N_cores))
-    return status, msgU + msgN + msg_used_cores
+    return 0, f"{users}\n{nodes}\n"
 
 
 def _handle_save_messages(args, users, nodes):
@@ -198,8 +70,8 @@ def _handle_save_messages(args, users, nodes):
     assert len(args) == 1
     for user in users.all_:
         users.all_[user].messages.save = args[0]
-    for node in nodes.all_:
-        nodes.all_[node].messages.save = args[0]
+    for node in nodes:
+        node.messages.save = args[0]
     return 0, 'Save messages set to {0}.\n'.format(args[0])
 
 

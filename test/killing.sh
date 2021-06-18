@@ -15,7 +15,7 @@ if [[ -f nodes ]]
 then
     cp nodes ${QPY_MU_DIR}/nodes
 else
-    echo 'localhost 5' > ${QPY_MU_DIR}/nodes
+    echo 'localhost cores=10' > ${QPY_MU_DIR}/nodes
 fi
 echo 'even' > ${QPY_MU_DIR}/distribution_rules
 
