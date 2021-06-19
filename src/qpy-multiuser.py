@@ -27,7 +27,7 @@ try:
     nodes = qpynodes.NodesCollection(logger)
     nodes.load_from_file(qpysys.nodes_file)
     logger.info('nodes loaded')
-    users = qpyusers.UsersCollection(logger)
+    users = qpyusers.UsersCollection()
     logger.info('users will be loaded')
     users.load_users(nodes)
     logger.info('users loaded')

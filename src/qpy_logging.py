@@ -8,7 +8,9 @@ import logging.handlers
 
 
 def configure_logger(base_file,
-                     level):
+                     level=logging.WARNING,
+                     logger_name=None
+):
     """Set up a logger
     
     Arguments:
@@ -27,10 +29,10 @@ def configure_logger(base_file,
     See also:
     logging
     """
-    the_logger = logging.getLogger()
+    the_logger = logging.getLogger(logger_name)
     the_logger.setLevel(level)
     formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        '%(asctime)s - %(levelname)s - %(name)s - %(funcName)s: %(message)s')
     ch = logging.handlers.TimedRotatingFileHandler(
         filename=str(base_file),
         when='midnight',

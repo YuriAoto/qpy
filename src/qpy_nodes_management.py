@@ -490,42 +490,57 @@ class Node:
                             self.name, msg)
         return info
 
-    def has_attributes(self, node_attr):
+    def has_attributes(self, req_attr):
         """Check if the node satisfy the attributes requirement
         
-        Arguments:
-        node_attr (list)   A logical expression about attributes
-        
         Return True if the node has the attributes described by
-        the list node_attr. It should be a list of strings, such
+        the list req_attr. It should be a list of strings, such
         that after joining each entry with space and replacing the
         attributes by True or False, a valid python logical expression
         is obtained.
         
-        Return True if is not a valid expression.
+        Arguments:
+        ----------
+        req_attr (list)
+            A logical expression about attributes
+        
+        Return:
+        -------
+        The final evaluation of the expression.
+        If is not a valid expression, returns True!
+        
+        TODO:
+        -----
+        Perhaps raise an Exception if the expression is not valid,
+        and the caller decide if the job is used??
         """
         keywords = ['not', 'and', 'or', '(', ')']
-        if len(node_attr) == 0:
+        if len(req_attr) == 0:
             return True
-        expression = (' '.join(node_attr)).replace('(',
-                                                   ' ( ').replace(')',
-                                                                  ' ) ')
+        expression = (' '.join(req_attr)).replace('(',
+                                                  ' ( ').replace(')',
+                                                                 ' ) ')
         expression = expression.split()
         expression = [x
                       if x in keywords else
                       str(x in self.attributes)
                       for x in expression]
         try:
-            a = eval(' '.join(expression))
+            res = eval(' '.join(expression))
         except:
-            a = True
-        self.logger.debug('In has_attributes: node_attr = '
-                          + str(node_attr))
-        self.logger.debug('In has_attributes: expression = '
-                          + str(expression))
-        self.logger.debug('In has_attributes: result (Node) = '
-                          + str(a) + ' ' + str(self.name))
-        return a
+            res = True
+        self.logger.debug('In has_attributes:\n'
+                          'node = %s\n'
+                          'nodes attributes = %s\n'
+                          'original expression = %s\n'
+                          'evaluated expression = %s\n'
+                          'result = %s',
+                          self.name,
+                          self.attributes,
+                          req_attr,
+                          expression,
+                          res)
+        return res
 
     def free_resource(self, n_cores, mem):
         """Free n_cores of cores and mem of memory"""

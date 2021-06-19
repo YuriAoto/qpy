@@ -2,6 +2,7 @@
 
 """
 from math import copysign
+import logging
 
 import qpy_system as qpysys
 import qpy_logging as qpylog
@@ -14,6 +15,15 @@ from qpy_parser import ParseError
 class NoNodeAvailableError(Exception):
     pass
 
+
+def get_allowed_users():
+    """Return a list of all allowed users."""
+    try:
+        with open(qpysys.allowed_users_file, 'r') as f:
+            x = list(line.strip() for line in f)
+    except:
+        x = []
+    return x
 
 class User(object):
     """A user from the qpy-multiuser point of view.
@@ -50,6 +60,7 @@ class User(object):
         'n_used_cores',
         'n_queue',
         'cur_jobs',
+        'logger',
         'messages')
 
     def __init__(self, name, address, port, conn_key):
@@ -72,6 +83,10 @@ class User(object):
         self.n_used_cores = 0
         self.n_queue = 0
         self.cur_jobs = []
+        
+        self.logger = qpylog.configure_logger(qpysys.multiuser_log_file,
+                                              level=logging.DEBUG,
+                                              logger_name=f'user:{name}')
         
         self.messages = qpylog.Messages()
         self.messages.save = True
@@ -201,14 +216,29 @@ class User(object):
         
         """
         space_available = False
-        
-        users.logger.debug('In request_node. jobID, attribute: '
-                           + str(jobID)
-                           + str(node_attr))
-        
         n_free_cores = ((nodes.n_cores - nodes.n_used_cores)
                         - (nodes.n_min_cores - nodes.n_used_min_cores))
         free_cores = n_free_cores >= num_cores
+        self.logger.debug('Requested resource info:\n'
+                          '  jobID = %s\n'
+                          '  requested cores = %d\n'
+                          '  requested memory = %.2f\n'
+                          '  attribute = %s\n'
+                          'Nodes info:\n'
+                          '  n_cores = %d\n'
+                          '  n_used_cores = %d\n'
+                          '  n_min_cores = %d\n'
+                          '  n_used_min_cores = %d\n'
+                          '  n_free_cores = %d\n',
+                          jobID,
+                          num_cores,
+                          mem,
+                          node_attr,
+                          nodes.n_cores,
+                          nodes.n_used_cores,
+                          nodes.n_min_cores,
+                          nodes.n_used_min_cores,
+                          n_free_cores)
         if self.n_used_cores + num_cores <= self.min_cores:
             space_available = True
         else:
@@ -217,7 +247,7 @@ class User(object):
             if use_others_resource:
                 n_users_with_queue = 1
                 n_extra = 0
-                for user, info in users.all_.items():
+                for user, info in users.items():
                     if user == self.name:
                         continue
                     if (info.n_queue > 0
@@ -235,6 +265,8 @@ class User(object):
                     space_available = True
             else:
                 space_available = free_cores
+        self.logger.debug('Space available? %s',
+                          space_available)
         if space_available:
             best_node = None
             best_free_cores = 0
@@ -259,14 +291,16 @@ class User(object):
                             best_node = node
                             break
             if best_node is None:
+                self.logger.debug("No node with the requirement.")
                 raise NoNodeAvailableError('No node with this requirement.')
+            self.logger.debug('Best node: %s', best_node.name)
             self.add_job(MultiuserJob(self.name,
                                       jobID,
                                       mem,
                                       num_cores,
-                                      node.name),
+                                      best_node.name),
                          nodes)
-            return node.name + '=' + node.address
+            return best_node.name + '=' + node.address
         raise NoNodeAvailableError('No free cores.')
 
 
@@ -275,12 +309,14 @@ class UsersCollection:
     
     
     """
-    __slots__ = ('all_', 'logger')
+    __slots__ = ('_the_users', 'logger')
 
-    def __init__(self, logger):
+    def __init__(self):
         """ Initialise the class"""
-        self.all_ = {}
-        self.logger = logger
+        self._the_users = {}
+        self.logger = qpylog.configure_logger(qpysys.multiuser_log_file,
+                                              level=logging.DEBUG,
+                                              logger_name=f'users')
 
     def __str__(self):
         """String version of a group os users"""
@@ -288,14 +324,80 @@ class UsersCollection:
         sep2 = '='*88
         header = (
             'user                          using cores        queue size\n')
-        x = (header + sep1 + '\n'
-             + '\n'.join(list(map(str, self.all_.values()))) + '\n' + sep2
-             if self.all_ else
-             'No users.')
+        x = ('No users.'
+             if len(self) == 0 else
+             header + sep1 + '\n'
+             + '\n'.join(list(map(str, self))) + '\n' + sep2)
         return x
 
     def __repr__(self):
-        return 'Users:\n------\n\n' + '\n'.join(repr(info) for user, info in self.all_.items())
+        return 'Users:\n------\n\n' + '\n'.join(repr(user) for user in self)
+
+    def __len__(self):
+        return len(self._the_users)
+
+    def __getitem__(self, k):
+        return self._the_users[k]
+
+    def __contains__(self, x):
+        return x in self._the_users
+
+    def __iter__(self):
+        return iter(self._the_users.values())
+    
+    def names(self):
+        return iter(self._the_users)
+    
+    def items(self):
+        return iter(self._the_users.iter())
+
+    def add_user(self, username, nodes,
+                 address=None,
+                 port=None,
+                 conn_key=None,
+                 running_jobs=None):
+        """Add a new user
+        
+        Parameters:
+        -----------
+        username (str)
+            The user name.
+        
+        address (str or None):
+            The connection address. If None, get it from the connection files
+        
+        port (int or None):
+            The connection port. If None, get it from the connection files
+        
+        conn_key (str or None):
+            The connection key. If None, get it from the connection files
+        
+        running_jobs (list of MultiuserJob or None)
+            The running jobs of the user. If None asks to the users's master
+        
+        """
+        if address is None:
+            address = qpycomm.read_address_file(qpysys.user_conn_file + username)
+        if port is None or conn_key is None:
+            port, conn_key = qpycomm.read_conn_files(qpysys.user_conn_file + username)
+        new_user = User(username, address, port, conn_key)
+        self.logger.info('Adding new user: %s', username)
+        if running_jobs is None:
+            try:
+                self.logger.info('Requesting jobs from %s', username)
+                running_jobs = qpycomm.message_transfer(
+                    (qpyconst.FROM_MULTI_CUR_JOBS, ()),
+                    new_user.address,
+                    new_user.port,
+                    new_user.conn_key, timeout=2.0)
+                self.logger.info('Jobs from %s obtained!', username)
+            except:
+                self.logger.exception('Failed when reading jobs from %s',
+                                      username)
+                running_jobs = []
+        for job in running_jobs:
+            new_user.add_job(job, nodes)
+        self._the_users[username] = new_user
 
     def load_users(self, nodes):
         """Load the users.
@@ -309,39 +411,11 @@ class UsersCollection:
         The file should contain just the username of the users, one in each
         line.
         """
-        allowed_users = []
-        try:
-            f = open(qpysys.allowed_users_file, 'r')
-        except IOError:
-            return
-        for line in f:
-            allowed_users.append(line.strip())
-        f.close()
-        for user in allowed_users:
-            address = qpycomm.read_address_file(qpysys.user_conn_file + user)
+        for username in get_allowed_users():
             try:
-                port, conn_key = qpycomm.read_conn_files(
-                    qpysys.user_conn_file + user)
+                users.add_user(username, nodes)
             except:
-                pass
-            else:
-                new_user = User(user, address, port, conn_key)
-                self.logger.info('adding new user %s', user)
-                try:
-                    self.logger.info('requesting jobs from %s', user)
-                    cur_jobs = qpycomm.message_transfer(
-                        (qpyconst.FROM_MULTI_CUR_JOBS, ()),
-                        new_user.address,
-                        new_user.port,
-                        new_user.conn_key, timeout=2.0)
-                    self.logger.info('Jobs obtained!')
-                except Exception as e:
-                    self.logger.info('Exception passed: %s', e)
-                    pass
-                else:
-                    for job in cur_jobs:
-                        new_user.add_job(job, nodes)
-                    self.all_[user] = new_user
+                self.logger.exception("Failed when adding %s", username)
         self.distribute_cores(nodes)
 
     def distribute_cores(self, nodes):
@@ -404,27 +478,26 @@ class UsersCollection:
                 raise ParseError('Error to read min_cores')
         # General minimum cores
         left_cores = nodes.n_cores
-        for user in self.all_:
-            users_min[user] = min_cores
+        for username in self.names():
+            users_min[username] = min_cores
             left_cores -= min_cores
         if (left_cores < 0):
             raise NoNodeAvailableError(
                 'Requirement exceeds the number of cores')
         # Even distribution
         if (dist_type == 'even'):
-            n_users = len(self.all_)
-            if (n_users == 0):
+            if (len(self) == 0):
                 return 0
-            n_per_user = left_cores // n_users
-            for user in self.all_:
-                users_extra[user] = n_per_user
-            left_cores = left_cores - n_per_user*n_users
+            n_per_user = left_cores // len(self)
+            for username in self.names():
+                users_extra[username] = n_per_user
+            left_cores = left_cores - n_per_user*len(self)
         # Explicit distribution TODO: there was some bug here...
         elif (dist_type == 'explicit'):
             for line in f:
                 line_spl = line.split()
                 user = line_spl[0]
-                if user not in self.all_:
+                if user not in self:
                     continue
                 value = line_spl[1].split('+')
                 if len(value) > 2 or len(value) == 0:
@@ -442,7 +515,7 @@ class UsersCollection:
                 raise NoNodeAvailableError(
                     'Requirement exceeds the number of cores')
             left_cores_original = left_cores
-            for user, info in users_extra.items():
+            for username, info in users_extra.items():
                 try:
                     if (info[-1] == '%'):
                         n_per_user = float(info[:-1])
@@ -454,35 +527,33 @@ class UsersCollection:
                     raise ParseError('len(value) not correct')
                 add_cores = n_per_user
                 left_cores -= add_cores
-                users_extra[user] = add_cores
+                users_extra[username] = add_cores
         # Unknown type of distribution
         else:
             raise ParseError('Unknown type of distribution: ' + dist_type)
         f.close()
         # Equally share left cores
         while (left_cores != 0):
-            for user in users_extra:
+            for username in users_extra:
                 if (left_cores == 0):
                     break
-                users_extra[user] += int(copysign(1, left_cores))
+                users_extra[username] += int(copysign(1, left_cores))
                 left_cores += copysign(1, -left_cores)
         # Finally put into the users variable
         nodes._n_min_cores = 0  # BAD! nodes  should change _n_...
         nodes._n_used_min_cores = 0  # BAD! nodes  should change _n_...
-        for user in self.all_:
+        for user in self:
             try:
-                self.all_[user].min_cores = users_min[user]
+                user.min_cores = users_min[user.name]
             except:
-                self.all_[user].min_cores = 0
-            nodes._n_min_cores += self.all_[user].min_cores# BAD! nodes  should change _n_...
-            nodes._n_used_min_cores += min(self.all_[user].min_cores, # BAD! nodes  should change _n_...
-                                          self.all_[user].n_used_cores)
+                user.min_cores = 0
+            nodes._n_min_cores += user.min_cores# BAD! nodes  should change _n_...
+            nodes._n_used_min_cores += min(user.min_cores, # BAD! nodes  should change _n_...
+                                           user.n_used_cores)
             try:
-                self.all_[user].extra_cores = users_extra[user]
+                user.extra_cores = users_extra[user.name]
             except:
-                self.all_[user].extra_cores = 0
-        for user in self.all_:
-            self.all_[user].max_cores = (nodes.n_cores
-                                         - nodes.n_min_cores
-                                         + self.all_[user].min_cores)
+                user.extra_cores = 0
+        for user in self:
+            user.max_cores = nodes.n_cores - nodes.n_min_cores + user.min_cores
         return 0

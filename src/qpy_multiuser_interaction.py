@@ -68,8 +68,8 @@ def _handle_save_messages(args, users, nodes):
     args: (save_messages)
     """
     assert len(args) == 1
-    for user in users.all_:
-        users.all_[user].messages.save = args[0]
+    for user in users:
+        user.messages.save = args[0]
     for node in nodes:
         node.messages.save = args[0]
     return 0, 'Save messages set to {0}.\n'.format(args[0])
@@ -78,44 +78,37 @@ def _handle_save_messages(args, users, nodes):
 def _handle_sync_user_info(args, users, nodes):
     """Handle a request to synchronize user info
     
-    args: user_name, address,port, conn_key, cur_jobs
+    args: user_name, address, port, conn_key, cur_jobs
     """
     user, address, port, conn_key, new_cur_jobs = args
     try:
-        if user in users.all_:
-            users.all_[user].address = address
-            users.all_[user].port = port
-            users.all_[user].conn_key = conn_key
-            same_list = (len(new_cur_jobs) == len(users.all_[user].cur_jobs)
+        if user in users:
+            user.address = address
+            user.port = port
+            user.conn_key = conn_key
+            same_list = (len(new_cur_jobs) == len(user.cur_jobs)
                          and all(new_job == old_job
                                  for new_job, old_job in zip(
                                          new_cur_jobs,
-                                         users.all_[user].cur_jobs)))
+                                         user.cur_jobs)))
             return ((0, 'User exists')
                     if same_list else
                     (1, 'User exists but with a different job list.'))
         else:
-            try:
-                with open(qpysys.allowed_users_file, 'r') as f:
-                    allowed_users = list(line.strip() for line in f)
-            except:
-                allowed_users = []
-            if user in allowed_users:
-                new_user = qpyusers.User(user, address, port, conn_key)
-                for job in new_cur_jobs:
-                    new_user.add_job(job, nodes)
-                users.all_[user] = new_user
+            if user in qpyusers.get_allowed_users():
+                users.add_user(user, nodes,
+                               address, port, conn_key, new_cur_jobs)
                 return ((0, 'User added')
                         if users.distribute_cores(nodes) == 0 else
                         (0, 'User added. Cores distribution failed.'))
             else:
                 return 2, 'Not allowed user'
     finally:
-        for user in users.all_:
-            qpycomm.write_conn_files(qpysys.user_conn_file + user,
-                                     users.all_[user].address,
-                                     users.all_[user].port,
-                                     users.all_[user].conn_key)
+        for user in users:
+            qpycomm.write_conn_files(qpysys.user_conn_file + user.name,
+                                     user.address,
+                                     user.port,
+                                     user.conn_key)
 
 
 def _handle_add_job(args, users, nodes):
@@ -136,7 +129,7 @@ def _handle_add_job(args, users, nodes):
     assert isinstance(queue_size, int)
     assert isinstance(node_attr, list)
     try:
-        allocated_node = users.all_[user].request_node(
+        allocated_node = users[user].request_node(
             jobID,
             n_cores,
             mem,
@@ -144,7 +137,7 @@ def _handle_add_job(args, users, nodes):
             users,
             nodes)
     except qpyusers.NoNodeAvailableError as exc:
-        users.all_[user].n_queue = queue_size
+        users[user].n_queue = queue_size
         return 1, str(exc)
     except KeyError:
         return -1, 'User does not exists.'
@@ -154,7 +147,7 @@ def _handle_add_job(args, users, nodes):
                     + 'Contact the qpy-team.').format(type(ex).__name__,
                                                       ex.args)
     else:
-        users.all_[user].n_queue = queue_size - 1
+        users[user].n_queue = queue_size - 1
         return 0, allocated_node
 
 
@@ -168,8 +161,8 @@ def _handle_remove_job(args, users, nodes):
     assert isinstance(jobID, int)
     assert isinstance(queue_size, int)
     try:
-        users.all_[user].remove_job(jobID, nodes)
-        users.all_[user].n_queue = queue_size
+        users[user].remove_job(jobID, nodes)
+        users[user].n_queue = queue_size
         return 0, 'Job removed.'
     except ValueError:
         return 1, 'Job not found'
