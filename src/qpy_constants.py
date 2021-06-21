@@ -13,6 +13,20 @@ MULTIUSER_USER           = -1
 MULTIUSER_REQ_CORE       = -2
 MULTIUSER_REMOVE_JOB     = -3
 
+MULTIUSER_REQUEST_NAMES = ['',
+                           'load nodes',
+                           'distribute nodes',
+                           'status',
+                           'show variables',
+                           'finish',
+                           'start',
+                           'save messages',
+                           'tutorial',
+                           # =============
+                           'remove job (hidden option)',
+                           'request core (hidden option)',
+                           'user (hidden option)']
+
 JOBTYPE_SUB       = 1
 JOBTYPE_CHECK     = 2
 JOBTYPE_KILL      = 3

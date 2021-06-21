@@ -1,6 +1,7 @@
 """ qpy - Logging and messages
 
 """
+import os
 import sys
 import traceback
 import logging
@@ -42,6 +43,7 @@ def configure_logger(base_file,
     )
     ch.setFormatter(formatter)
     the_logger.addHandler(ch)
+    the_logger.propagate = False
     # ch2 = logging.StreamHandler(sys.stdout)
     # ch2.setFormatter(formatter)
     # the_ogger.addHandler(ch2)

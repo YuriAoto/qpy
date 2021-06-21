@@ -24,14 +24,13 @@ try:
     logger = qpylog.configure_logger(qpysys.multiuser_log_file,
                                      qpylog.logging.DEBUG)
     logger.info('Starting main thread of qpy-multiuser')
-    nodes = qpynodes.NodesCollection(logger)
+    nodes = qpynodes.NodesCollection()
     nodes.load_from_file(qpysys.nodes_file)
-    logger.info('nodes loaded')
+    logger.info('Nodes loaded')
     users = qpyusers.UsersCollection()
-    logger.info('users will be loaded')
     users.load_users(nodes)
-    logger.info('users loaded')
-    check_nodes = qpynodes.CheckNodes(nodes, logger)
+    logger.info('Users loaded')
+    check_nodes = qpynodes.CheckNodes(nodes)
     check_nodes.start()
 except:
     qpylog.logging.exception('Exception before handle_client')

@@ -16,11 +16,11 @@ if [[ -f nodes ]]
 then
     cp nodes ${QPY_MU_DIR}/nodes
 else
-    echo 'node1 cores=6 address=localhost bigmem' > ${QPY_MU_DIR}/nodes
-    echo 'node2 cores=6 address=localhost infiband' >> ${QPY_MU_DIR}/nodes
-    echo 'node3 cores=6 address=localhost bigmem infiband' >> ${QPY_MU_DIR}/nodes
-    echo 'node4 cores=6 address=localhost' >> ${QPY_MU_DIR}/nodes
-    echo 'node5 cores=6 address=localhost' >> ${QPY_MU_DIR}/nodes
+    echo 'node1 cores=16 address=localhost attributes=bigmem' > ${QPY_MU_DIR}/nodes
+    echo 'node2 cores=16 address=localhost attributes=infiband' >> ${QPY_MU_DIR}/nodes
+    echo 'node3 cores=16 address=localhost attributes=bigmem,infiband' >> ${QPY_MU_DIR}/nodes
+    echo 'node4 cores=16 address=localhost' >> ${QPY_MU_DIR}/nodes
+    echo 'node5 cores=16 address=localhost' >> ${QPY_MU_DIR}/nodes
 fi
 echo 'even' > ${QPY_MU_DIR}/distribution_rules
 

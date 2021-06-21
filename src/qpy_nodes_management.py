@@ -279,7 +279,7 @@ class Node:
                  'messages',
                  'logger')
     
-    def __init__(self, name, logger):
+    def __init__(self, name):
         self.name = name
         self.address = name
         self.max_cores = 0
@@ -297,7 +297,9 @@ class Node:
         self.load = 0.0
         self.total_disk = 0.0
         self.used_disk = 0.0
-        self.logger = logger
+        self.logger = qpylog.configure_logger(qpysys.multiuser_log_file,
+                                              level=logging.DEBUG,
+                                              logger_name=f'node {name}')
 
     def __str__(self):
         """String version of node"""
@@ -347,7 +349,7 @@ class Node:
         return f'{self.name}\n' + infos + messages
 
     @classmethod
-    def from_string(cls, x, logger):
+    def from_string(cls, x):
         """Construct a node from a string
         
         The string with the node info should be in the following format:
@@ -392,9 +394,13 @@ class Node:
         """
         lspl = x.split()
         name = lspl[0]
-        new_node = cls(name, logger)
+        new_node = cls(name)
         for keyval in lspl[1:]:
-            k, v = keyval.split('=')
+            try:
+                k, v = keyval.split('=')
+            except ValueError:
+                raise ValueError(
+                    f'Expected a pair <key>=<value>, but got {keyval}')
             if k == 'address':
                 new_node.address = v
             elif k == 'cores':
@@ -466,17 +472,21 @@ class Node:
          info.is_up,
          info.load,
          n_jobs) = _check_node_top(self.address)
-        self.logger.log(logging.INFO if info.is_up else logging.WARNING,
-                        "When checking load and untracked jobs for %s:\n%s",
-                        self.name, msg)
+        if info.is_up:
+            self.logger.info('Load and untracked jobs checked')
+        else:
+            self.logger.warning('After load and untracked jobs:\n',
+                                msg)
         info.n_outsiders = max(n_jobs - self.n_used_cores, 0)
         (msg,
          info.is_up,
          info.used_mem,
          info.total_mem) = _check_node_memory(self.address)
-        self.logger.log(logging.INFO if info.is_up else logging.WARNING,
-                        "When checking memory for %s:\n%s",
-                        self.name, msg)
+        if info.is_up:
+            self.logger.info('Memory checked')
+        else:
+            self.logger.warning('After memory:\n',
+                                msg)
         if self.scratch_dir is None:
             info.total_disk = -1.0
             info.used_disk = -1.0
@@ -485,9 +495,11 @@ class Node:
              info.is_up,
              info.total_disk,
              info.used_disk) = _check_node_disk(self.address, self.scratch_dir)
-            self.logger.log(logging.INFO if info.is_up else logging.WARNING,
-                            "When checking disk usage for %s:\n%s",
-                            self.name, msg)
+            if info.is_up:
+                self.logger.info('Disk usage checked')
+            else:
+                self.logger.warning('After disk usage:\n',
+                                    msg)
         return info
 
     def has_attributes(self, req_attr):
@@ -523,19 +535,17 @@ class Node:
         expression = expression.split()
         expression = [x
                       if x in keywords else
-                      str(x in self.attributes)
+                      str(x in self.attributes or x == self.name)
                       for x in expression]
         try:
             res = eval(' '.join(expression))
         except:
             res = True
-        self.logger.debug('In has_attributes:\n'
-                          'node = %s\n'
-                          'nodes attributes = %s\n'
-                          'original expression = %s\n'
-                          'evaluated expression = %s\n'
-                          'result = %s',
-                          self.name,
+        self.logger.debug('\n'
+                          'nodes attributes      %s\n'
+                          'original expression   %s\n'
+                          'parsed expression     %s\n'
+                          'evaluated expression  %s\n',
                           self.attributes,
                           req_attr,
                           expression,
@@ -617,12 +627,14 @@ class NodesCollection:
         'check_time',
         'logger')
 
-    def __init__(self, logger):
+    def __init__(self):
         """Initilise the class
         """
         self.check_lock = threading.RLock()
         self.check_alive = True
-        self.logger = logger
+        self.logger = qpylog.configure_logger(qpysys.multiuser_log_file,
+                                              level=logging.DEBUG,
+                                              logger_name='nodes')
         self.empty_nodes()
         self.check_time = 300
 
@@ -743,7 +755,7 @@ class NodesCollection:
             self.empty_nodes()
             with open(filename, 'r') as f:
                 for line in f:
-                    self.add_node(Node.from_string(line, self.logger))
+                    self.add_node(Node.from_string(line))
 
     def check(self):
         """Check all nodes and update their status"""
@@ -799,17 +811,15 @@ class CheckNodes(threading.Thread):
     """
 
     __slots__ = ('finish', 'nodes', 'logger')
-    
-    def __init__(self, nodes, logger):
+
+    def __init__(self, nodes):
         """Initiate the class"""
         threading.Thread.__init__(self)
         self.finish = threading.Event()
         self.nodes = nodes
-        self.logger = logger
 
     def run(self):
         """Checks the nodes."""
-        self.logger.info("Starting CheckNodes")
         while not self.finish.is_set():
             self.nodes.check()
             self.finish.wait(self.nodes.check_time)

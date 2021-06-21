@@ -20,12 +20,12 @@ def get_allowed_users():
     """Return a list of all allowed users."""
     try:
         with open(qpysys.allowed_users_file, 'r') as f:
-            x = list(line.strip() for line in f)
+            x = list(line.strip() for line in f if line.strip())
     except:
         x = []
     return x
 
-class User(object):
+class User:
     """A user from the qpy-multiuser point of view.
     
     This class contains the main functions to handle the interaction
@@ -86,7 +86,7 @@ class User(object):
         
         self.logger = qpylog.configure_logger(qpysys.multiuser_log_file,
                                               level=logging.DEBUG,
-                                              logger_name=f'user:{name}')
+                                              logger_name=f'user {name}')
         
         self.messages = qpylog.Messages()
         self.messages.save = True
@@ -219,7 +219,7 @@ class User(object):
         n_free_cores = ((nodes.n_cores - nodes.n_used_cores)
                         - (nodes.n_min_cores - nodes.n_used_min_cores))
         free_cores = n_free_cores >= num_cores
-        self.logger.debug('Requested resource info:\n'
+        self.logger.debug('Requesting resource:\n'
                           '  jobID = %s\n'
                           '  requested cores = %d\n'
                           '  requested memory = %.2f\n'
@@ -247,17 +247,17 @@ class User(object):
             if use_others_resource:
                 n_users_with_queue = 1
                 n_extra = 0
-                for user, info in users.items():
-                    if user == self.name:
+                for user in users:
+                    if user.name == self.name:
                         continue
-                    if (info.n_queue > 0
-                        and (info.n_used_cores >=
-                             info.min_cores + info.extra_cores)):
+                    if (user.n_queue > 0
+                        and (user.n_used_cores >=
+                             user.min_cores + user.extra_cores)):
                         n_users_with_queue += 1
-                    elif info.n_queue == 0:
-                        n_extra += min(info.extra_cores + info.min_cores
-                                       - info.n_used_cores,
-                                       info.extra_cores)
+                    elif user.n_queue == 0:
+                        n_extra += min(user.extra_cores + user.min_cores
+                                       - user.n_used_cores,
+                                       user.extra_cores)
                 n_extra_per_user = n_extra // n_users_with_queue
                 if (self.n_used_cores + num_cores <=
                     self.min_cores + self.extra_cores + n_extra_per_user
@@ -265,8 +265,7 @@ class User(object):
                     space_available = True
             else:
                 space_available = free_cores
-        self.logger.debug('Space available? %s',
-                          space_available)
+        self.logger.debug('Space available? %s', space_available)
         if space_available:
             best_node = None
             best_free_cores = 0
@@ -349,7 +348,7 @@ class UsersCollection:
         return iter(self._the_users)
     
     def items(self):
-        return iter(self._the_users.iter())
+        return iter(self._the_users.items())
 
     def add_user(self, username, nodes,
                  address=None,
@@ -376,12 +375,13 @@ class UsersCollection:
             The running jobs of the user. If None asks to the users's master
         
         """
+        self.logger.info('Adding new user: %s', username)
         if address is None:
             address = qpycomm.read_address_file(qpysys.user_conn_file + username)
         if port is None or conn_key is None:
             port, conn_key = qpycomm.read_conn_files(qpysys.user_conn_file + username)
         new_user = User(username, address, port, conn_key)
-        self.logger.info('Adding new user: %s', username)
+        self.logger.debug('A user for %s has been created.', username)
         if running_jobs is None:
             try:
                 self.logger.info('Requesting jobs from %s', username)
@@ -413,7 +413,7 @@ class UsersCollection:
         """
         for username in get_allowed_users():
             try:
-                users.add_user(username, nodes)
+                self.add_user(username, nodes)
             except:
                 self.logger.exception("Failed when adding %s", username)
         self.distribute_cores(nodes)

@@ -203,15 +203,22 @@ def handle_client(users, nodes, logger):
                              multiuser_port,
                              multiuser_key)
     while True:
-        logger.info("Starting main loop.")
+        logger.info("Waiting for a message.")
         try:
             client = conn.accept()
             (action_type, arguments) = client.recv()
         except:
             logger.exception("Connection failed")
         else:
-            logger.info("Received request: %s, with arguments %s",
-                        action_type, arguments)
+            logger.info('Received request:\n'
+                        '%s, internal code %s.\n'
+                        'Arguments:\n'
+                        '  %s\n',
+                        qpyconst.MULTIUSER_REQUEST_NAMES[action_type],
+                        action_type,
+                        arguments
+                        if action_type != qpyconst.MULTIUSER_USER else
+                        '(´･_･`) users connection are not logged!')
         try:
             if (action_type == qpyconst.MULTIUSER_NODES):
                 status, msg = _handle_reload_nodes(
