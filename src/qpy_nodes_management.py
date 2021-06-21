@@ -331,6 +331,7 @@ class Node:
 
     def __repr__(self):
         fields = [
+            ('address', self.address),
             ('max_cores', self.max_cores),
             ('n_used_cores', self.n_used_cores),
             ('n_outsiders', self.n_outsiders),

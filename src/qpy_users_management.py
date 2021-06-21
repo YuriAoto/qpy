@@ -299,7 +299,7 @@ class User:
                                       num_cores,
                                       best_node.name),
                          nodes)
-            return best_node.name + '=' + node.address
+            return best_node.name + '=' + best_node.address
         raise NoNodeAvailableError('No free cores.')
 
 
