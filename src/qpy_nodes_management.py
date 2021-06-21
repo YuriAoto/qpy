@@ -246,14 +246,14 @@ class Node:
     free_mem (float, property)
         total_mem - used_mem
     
-    scratch_dir (str)
+    check_dir (str)
         A path to a disk whose space is to be checked
     
     total_disk (float)
-        The total disk space (defined by scratch_dir)
+        The total disk space (defined by check_dir)
     
     used_disk (float)
-        The current free disk space (defined by scratch_dir)
+        The current free disk space (defined by check_dir)
     
     messages (Messages)
         Messages; TODO: associate to logging
@@ -273,7 +273,7 @@ class Node:
                  'total_mem',
                  'req_mem',
                  'used_mem',
-                 'scratch_dir',
+                 'check_dir',
                  'total_disk',
                  'used_disk',
                  'messages',
@@ -293,7 +293,7 @@ class Node:
         self.used_mem = 0.0
         self.n_outsiders = 0
         self.attributes = []
-        self.scratch_dir = None
+        self.check_dir = None
         self.load = 0.0
         self.total_disk = 0.0
         self.used_disk = 0.0
@@ -370,6 +370,9 @@ class Node:
             If not passed, the value is obtained from the machine,
             see check()
         
+        check_dir (str)
+            The path of a dist to be checked
+        
         memory (float-able)
             The maximum memory this node can use.
             If not passed, the value obtained from the machine,
@@ -407,6 +410,8 @@ class Node:
                 new_node.max_cores = int(v)
             elif k == 'memory':
                 new_node.total_mem = float(v)
+            elif k == 'check_dir':
+                new_node.check_dir = v
             elif k == 'pref_multicore':
                 if v.lower() == 'false':
                     new_node.pref_multicore = False
@@ -487,14 +492,14 @@ class Node:
         else:
             self.logger.warning('After memory:\n',
                                 msg)
-        if self.scratch_dir is None:
+        if self.check_dir is None:
             info.total_disk = -1.0
             info.used_disk = -1.0
         else:
             (msg,
              info.is_up,
              info.total_disk,
-             info.used_disk) = _check_node_disk(self.address, self.scratch_dir)
+             info.used_disk) = _check_node_disk(self.address, self.check_dir)
             if info.is_up:
                 self.logger.info('Disk usage checked')
             else:
