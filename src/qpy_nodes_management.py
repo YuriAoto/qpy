@@ -90,17 +90,16 @@ def _check_node_top(node_address, thr_cpu_usage=50):
     """
     command = "top -b -n1"  # | sed -n '8,50p'"
     msg = ''
+    n_jobs = 0
+    load = 0
+    conn_success = False
     try:
         std_out, std_err = qpycomm.node_exec(node_address, command)
     except Exception as e:
         msg = str(e)
-        conn_success = False
-        load = 0
-        n_outsiders = 0
     else:
         conn_success = True
         std_out = std_out.split("\n")
-        n_jobs = 0
         start_count = 0
         for line in std_out:
             line_spl = line.split()
@@ -481,8 +480,7 @@ class Node:
         if info.is_up:
             self.logger.info('Load and untracked jobs checked')
         else:
-            self.logger.warning('After load and untracked jobs:\n',
-                                msg)
+            self.logger.warning('After load and untracked jobs:\n%s', msg)
         info.n_outsiders = max(n_jobs - self.n_used_cores, 0)
         (msg,
          info.is_up,
@@ -491,8 +489,7 @@ class Node:
         if info.is_up:
             self.logger.info('Memory checked')
         else:
-            self.logger.warning('After memory:\n',
-                                msg)
+            self.logger.warning('After memory:\n%s', msg)
         if self.check_dir is None:
             info.total_disk = -1.0
             info.used_disk = -1.0
@@ -504,8 +501,7 @@ class Node:
             if info.is_up:
                 self.logger.info('Disk usage checked')
             else:
-                self.logger.warning('After disk usage:\n',
-                                    msg)
+                self.logger.warning('After disk usage:\n%s', msg)
         return info
 
     def has_attributes(self, req_attr):

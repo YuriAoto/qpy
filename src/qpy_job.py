@@ -426,9 +426,9 @@ class Job(object):
                    'use_script_copy': self.use_script_copy}
         self.info[0] = self.opt_parser.parse_cmd_line(self.info[0], options)
         first_arg = self.info[0].split()[0]
-        script_name = self._expand_script_name(first_arg)
-        if script_name is not None:
-            self.opt_parser.parse_file(script_name, options)
+#        script_name = self._expand_script_name(first_arg)
+#        if script_name is not None:
+#            self.opt_parser.parse_file(script_name, options)
         self.n_cores = options['n_cores']
         self.mem = options['mem']
         self.node_attr = options['node_attr']
