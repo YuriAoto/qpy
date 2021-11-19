@@ -12,6 +12,13 @@ import qpy_communication as qpycomm
 from qpy_exceptions import qpyConnectionError
 
 
+def node_address_from_string(name_address):
+    try:
+        return name_address.split('=')
+    except ValueError:
+        return name_address, name_address
+
+
 class UsersNode:
     """A node from the point of view of a qpy user
     
@@ -21,15 +28,21 @@ class UsersNode:
         Node name
     address (str)
         Node address (hostname, where one can ssh)
+    n_jobs (int)
+        Number of jobs (of this user) in this node
     """
     __slots__ = (
         'name',
-        'address')
+        'address',
+        '_n_jobs',
+        '_n_jobs_lock')
 
     def __init__(self, name, address=None):
         """Initialise the node"""
         self.name = name
         self.address = name if address is None else address
+        self._n_jobs = 0
+        self._n_jobs_lock = threading.RLock()
 
     def __str__(self):
         """String representation: just the name"""
@@ -39,14 +52,26 @@ class UsersNode:
         """Full representation: <name>=<address>"""
         return self.name + '=' + self.address
 
+    def __eq__(self, other):
+        """Two nodes are equal if they share name"""
+        return self.name == other.name
+
     @classmethod
     def from_string(cls, string):
         """Return object from the string '<name>[=<address>]'"""
-        try:
-            name, address = string.split('=')
-        except ValueError:
-            name = address = string
-        return cls(name, address)
+        return cls(*node_address_from_string(string))
+
+    def add_job(self):
+        with self._n_jobs_lock:
+            self._n_jobs += 1
+
+    def remove_job(self):
+        with self._n_jobs_lock:
+            self._n_jobs -= 1
+
+    @property
+    def n_jobs(self):
+        return self._n_jobs
 
 
 def _check_n_cpu(node_address):

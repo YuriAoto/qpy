@@ -57,53 +57,27 @@ class CheckRun(threading.Thread):
         while not self.finish.is_set():
             i = 0
             jobs_modification = False
+            nodes_down, all_running_jobs = self.jobs.fetch_running_jobs()
             with self.jobs.lock:
                 jobs_to_check = list(self.jobs.running)
+            self.config.logger.debug('nodes_down:\n%s', nodes_down)
+            self.config.logger.debug('all_running_jobs:\n%s', all_running_jobs)
+            self.config.logger.debug('jobs_to_check:\n%s', jobs_to_check)
             for job in jobs_to_check:
-                try:
-                    is_running = job.is_running(self.config)
-                except:
-                    self.config.logger.error(
-                        'Exception in CHECK_RUN.is_running',
-                        exc_info=True)
-                    self.config.messages.add(
-                        'CHECK_RUN: Exception in is_running: '
-                        + repr(sys.exc_info()[0]))
-                    is_running = True
-                if (not is_running) and job.status == qpyconst.JOB_ST_RUNNING:
-                    job.status = qpyconst.JOB_ST_DONE
-                    job.end_time = datetime.today()
-                    job.run_duration_()
+                if (job.node not in nodes_down
+                    and job.ID not in all_running_jobs
+                        and job.status == qpyconst.JOB_ST_RUNNING):
+                    multiuser_down = job.end_running(qpyconst.JOB_ST_DONE,
+                                                     len(self.jobs.queue),
+                                                     self.config)
+                    if multiuser_down:
+                        self.multiuser_alive.clear()
+                    else:
+                        self.multiuser_alive.set()
                     jobs_modification = True
                     self.jobs.mv(job, self.jobs.running, self.jobs.done)
                     self.skip_job_sub = 0
-                    if (job.cp_script_to_replace is not None):
-                        if (os.path.isfile(job.cp_script_to_replace[1])):
-                            os.remove(job.cp_script_to_replace[1])
-                    try:
-                        msg_back = qpycomm.message_transfer(
-                            (qpyconst.MULTIUSER_REMOVE_JOB,
-                             (qpysys.user,
-                              job.ID,
-                              len(self.jobs.queue))),
-                            qpycomm.multiuser_address,
-                            qpycomm.multiuser_port,
-                            qpycomm.multiuser_key)
-                    except:
-                        self.multiuser_alive.clear()
-                        self.config.logger.error(
-                            'Exception in CHECK_RUN message transfer',
-                            exc_info=True)
-                        self.config.messages.add(
-                            'CHECK_RUN: Exception in message transfer: '
-                            + repr(sys.exc_info()[0]))
-                    else:
-                        self.multiuser_alive.set()
-                        self.config.messages.add(
-                            'CHECK_RUN: Multiuser message: '
-                            + str(msg_back))
-                else:
-                    i += 1
+                    self.config.logger.info('Job %s changed to done.', job.ID)
             if jobs_modification:
                 self.jobs.write_all_jobs()
                 jobs_modification = False
@@ -159,48 +133,30 @@ class JobsKiller(threading.Thread):
             command = ('python3 '
                        + qpysys.source_dir + '/qpy_job_killer.py '
                        + str(job.ID))
+            self.config.logger.info('Killing job %s on %s', job.ID, job.node)
             try:
                 if job.status != qpyconst.JOB_ST_RUNNING:
-                    raise
+                    raise Exception('Job status is not running.')
                 (std_out, std_err) = qpycomm.node_exec(
                     job.node.address,
                     command,
                     pKey_file=self.config.ssh_p_key_file)
-            except:
-                pass
+                self.config.logger.debug('stdout of killing job:\n%r\n'
+                                         'stderr of killing job:\n%r',
+                                         std_out, std_err)
+            except Exception as e:
+                self.config.logger.warninig('Exception when killing job:\n%s', e)
             else:
-                job.status = qpyconst.JOB_ST_KILLED
-                job.end_time = datetime.today()
-                job.run_duration_()
-                self.jobs.mv(job, self.jobs.running, self.jobs.killed)
-                self.jobs.write_all_jobs()
-                self.config.messages.add('Killing: ' + str(job.ID)
-                                         + ' on node ' + repr(job.node)
-                                         + '. stdout = '
-                                         + repr(std_out) + '. stderr = '
-                                         + repr(std_err))
-                try:
-                    msg_back = qpycomm.message_transfer(
-                        (qpyconst.MULTIUSER_REMOVE_JOB,
-                         (qpysys.user,
-                          job.ID,
-                          len(self.jobs.queue))),
-                        qpycomm.multiuser_address,
-                        qpycomm.multiuser_port,
-                        qpycomm.multiuser_key)
-                except:
+                multiuser_down = job.end_running(qpyconst.JOB_ST_KILLED,
+                                                 len(self.jobs.queue),
+                                                 self.config)
+                if multiuser_down:
                     self.multiuser_alive.clear()
-                    self.config.logger.error(
-                        'Exception in JOBS_KILLER message transfer',
-                        exc_info=True)
-                    self.config.messages.add(
-                        'JOBS_KILLER: Exception in message transfer: '
-                        + repr(sys.exc_info()[0]))
                 else:
                     self.multiuser_alive.set()
-                    self.config.messages.add(
-                        'JOBS_KILLER: Message from multiuser: '
-                        + str(msg_back))
+                self.jobs.mv(job, self.jobs.running, self.jobs.killed)
+                self.jobs.write_all_jobs()
+                self.config.logger.info('Job %s changed to killed.', job.ID)
 
 
 class Submission(threading.Thread):
@@ -252,17 +208,13 @@ class Submission(threading.Thread):
         if not self.muHandler.multiuser_alive.is_set():
             self.skip_job_sub = 30
         i_next_job = -1
-            
         while not self.finish.is_set():
-
             if ((not self.muHandler.multiuser_alive.is_set())
                     and self.skip_job_sub == 0):
                 self.muHandler.add_to_multiuser()
                 if not self.muHandler.multiuser_alive.is_set():
                     self.skip_job_sub = 30
-
             if self.submit_jobs and self.skip_job_sub == 0:
-
                 if len(self.jobs.Q) != 0:
                     i_next_job = (i_next_job
                                   if abs(i_next_job) <= len(self.jobs.Q) else
@@ -296,28 +248,20 @@ class Submission(threading.Thread):
                     else:
                         status, allocated_node = msg_back
                         self.muHandler.multiuser_alive.set()
-                        self.config.messages.add(
-                            'SUB_CTRL: Message from multiuser: '
-                            + str(msg_back))
+                        self.config.logger.info('Message from multiuser:\n%s',
+                                                msg_back)
                         if status == 0:
-                            avail_node = qpynodes.UsersNode.from_string(
-                                allocated_node)
-                            self.config.messages.add(
-                                "SUB_CTRL: submitting job in "
-                                + repr(avail_node))
                             job = self.jobs.Q_pop(i_next_job)
-                            job.node = avail_node
+                            job.node = self.jobs.add_node(allocated_node)
+                            self.config.logger.debug('Submitting job in %r',
+                                                     job.node)
                             try:
                                 job.run(self.config)
                             except:
                                 # If it's not running,
                                 # we have to tell qpy-multiuser back somehow...
-                                self.config.messages.add(
-                                    "SUB_CTRL: exception when submitting job: "
-                                    + repr(sys.exc_info()[1]))
                                 self.config.logger.error(
-                                    "Exception in SUB_CTRL when"
-                                    + " submitting job",
+                                    "Exception in when submitting job",
                                     exc_info=True)
                                 job.node = None
                                 self.jobs.append(job, self.jobs.queue)
@@ -332,7 +276,6 @@ class Submission(threading.Thread):
                         else:
                             i_next_job = -1
                             self.skip_job_sub = 30
-
                 if jobs_modification:
                     self.jobs.write_all_jobs()
                     jobs_modification = False

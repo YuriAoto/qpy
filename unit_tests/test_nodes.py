@@ -8,6 +8,7 @@ import logging
 import unit_tests
 import qpy_nodes_management
 import qpy_system
+import qpy_job
 
 import qpy_logging
 
@@ -248,3 +249,40 @@ class Checking(unittest.TestCase):
         self.nodes.check()
         print(self.nodes)
 
+
+class RunningJobs(unittest.TestCase):
+
+    def test_1(self):
+        with open(os.path.join(os.path.dirname(__file__),
+                               'ps_example')) as f:
+            ps_out = f.read()
+        self.assertEqual(qpy_job._extract_jobID_from_ps(ps_out),
+                         [493, 494, 495])
+
+    def test_2(self):
+        with open(os.path.join(os.path.dirname(__file__),
+                               'ps_example2')) as f:
+            ps_out = f.read()
+        self.assertEqual(qpy_job._extract_jobID_from_ps(ps_out),
+                         [10065, 10066])
+
+    def test_3(self):
+        with open(os.path.join(os.path.dirname(__file__),
+                               'ps_example3')) as f:
+            ps_out = f.read()
+        self.assertEqual(qpy_job._extract_jobID_from_ps(ps_out),
+                         [])
+
+
+
+class TestUserNodes(unittest.TestCase):
+
+    def test1(self):
+        nodes_list = []
+        nodes_list.append(qpy_nodes_management.UsersNode.from_string('node1=address1'))
+        nodes_list.append(qpy_nodes_management.UsersNode.from_string('node2'))
+        nodes_list.append(qpy_nodes_management.UsersNode.from_string('node3=address1'))
+        new_node = qpy_nodes_management.UsersNode.from_string('node1=address1')
+        self.assertFalse(new_node is nodes_list[0])
+        self.assertTrue(new_node == nodes_list[0])
+        self.assertTrue(new_node in nodes_list)

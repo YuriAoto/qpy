@@ -381,16 +381,16 @@ class UsersCollection:
         if port is None or conn_key is None:
             port, conn_key = qpycomm.read_conn_files(qpysys.user_conn_file + username)
         new_user = User(username, address, port, conn_key)
-        self.logger.debug('A user for %s has been created.', username)
+        self.logger.info('A user for %s has been created.', username)
         if running_jobs is None:
             try:
-                self.logger.info('Requesting jobs from %s', username)
+                self.logger.debug('Requesting jobs from %s', username)
                 running_jobs = qpycomm.message_transfer(
                     (qpyconst.FROM_MULTI_CUR_JOBS, ()),
                     new_user.address,
                     new_user.port,
                     new_user.conn_key, timeout=2.0)
-                self.logger.info('Jobs from %s obtained!', username)
+                self.logger.debug('Jobs from %s obtained!', username)
             except:
                 self.logger.exception('Failed when reading jobs from %s',
                                       username)

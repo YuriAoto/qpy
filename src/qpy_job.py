@@ -18,6 +18,8 @@ import qpy_nodes_management as qpynodes
 from qpy_parser import ParseError
 
 
+jobID_pattern = re.compile('export QPY_JOB_ID=([0-9]+);')
+
 class JobId(object):
     """The job ID.
     
@@ -358,7 +360,7 @@ class Job(object):
         except:
             command.append(self.info[0])
         command = '; '.join(command)
-        config.logger.info("Sending command: %s", command)
+        config.logger.info("Sending command:\n%s", command)
         try:
             qpycomm.node_exec(self.node.address,
                               command,
@@ -369,7 +371,7 @@ class Job(object):
         except:
             config.logger.error("Exception in run", exc_info=True)
             raise Exception("Exception in run: " + str(sys.exc_info()[1]))
- 
+        self.node.add_job()
         self.start_time = datetime.today()
         self.status = qpyconst.JOB_ST_RUNNING
 
@@ -394,6 +396,35 @@ class Job(object):
         if (re_res):
             return True
         return False
+
+    def end_running(self, new_status, queue_size, config):
+        """Set job info to end of running"""
+        config.logger.info('End of running for job %s', self.ID)
+        self.status = new_status
+        self.end_time = datetime.today()
+        self.run_duration_()
+        self.node.remove_job()
+        if (self.cp_script_to_replace is not None):
+            if (os.path.isfile(self.cp_script_to_replace[1])):
+                os.remove(self.cp_script_to_replace[1])
+        try:
+            msg_back = qpycomm.message_transfer(
+                (qpyconst.MULTIUSER_REMOVE_JOB,
+                 (qpysys.user, self.ID, queue_size)),
+                qpycomm.multiuser_address,
+                qpycomm.multiuser_port,
+                qpycomm.multiuser_key)
+        except:
+            multiuser_down = True
+            config.logger.error(
+                'Exception in message transfer of Job.end_running',
+                exc_info=True)
+            self.config.messages.add(
+                'Exception in message transfer of Job.end_running'
+                + repr(sys.exc_info()[0]))
+        else:
+            multiuser_down = False
+        return multiuser_down
 
     def _expand_script_name(self, file_name):
         """Expand a filename to its absolute name, UNIX only.
@@ -455,11 +486,25 @@ class Job(object):
         return req
 
 
+def _extract_jobID_from_ps(ps_out):
+    """Find all jobID in the output of a ps command"""
+    jobs = []
+    for line in ps_out.split('\n'):
+        try:
+            jobs.append(int(jobID_pattern.search(line).group(1)))
+        except AttributeError:
+            pass
+    return jobs
+
+
 class JobCollection(object):
     """Store information about the jobs.
     
     Attributes:
     config (Configurations)     The qpy configurations
+    nodes (list of qpynodes.UsersNode)
+                                All the nodes that have been used (since
+                                last restart)
     all (list)                  All jobs
     queue (list)                Jobs in queue
     running (list)              Running jobs
@@ -472,6 +517,7 @@ class JobCollection(object):
 
     __slots__ = (
         'config',
+        'nodes',
         'all',
         'queue',
         'running',
@@ -488,6 +534,7 @@ class JobCollection(object):
         config (Configurations)      qpy configurations
         """
         self.config = config
+        self.nodes = []
         self.all = []
         self.queue = []
         self.running = []
@@ -528,6 +575,15 @@ class JobCollection(object):
         with self.lock:
             from_list.remove(job)
             to_list.append(job)
+
+    def add_node(self, node):
+        name, address = qpynodes.node_address_from_string(node)
+        for n in self.nodes:
+            if n.name == name:
+                return n
+        new_node = qpynodes.UsersNode(name, address)
+        self.nodes.append(new_node)
+        return new_node
 
     def check(self, pattern, config):
         """Return string with information on required jobs.
@@ -575,10 +631,12 @@ class JobCollection(object):
                                              job.mem,
                                              job.n_cores,
                                              job.node.name))
+        self.config.logger.debug('Current jobs:\n%s')
         return cur_jobs
 
     def initialize_old_jobs(self):
         """Initialize jobs from file (global) all_jobs_file."""
+        self.config.logger.info('Inilialising old jobs')
         with self.lock:
             if os.path.isfile(qpysys.all_jobs_file):
                 with open(qpysys.all_jobs_file, 'r') as f:
@@ -646,8 +704,7 @@ class JobCollection(object):
                             if new_node == 'None':
                                 new_job.node = None
                             else:
-                                new_job.node = qpynodes.UsersNode.from_string(
-                                    new_node)
+                                new_job.node = self.add_node(new_node)
                             new_job.status = int(new_status)
                             new_job.node_attr = new_node_attr
                             self.all.append(new_job)
@@ -656,6 +713,7 @@ class JobCollection(object):
                                 self.Q.appendleft(new_job)
                             elif new_job.status == qpyconst.JOB_ST_RUNNING:
                                 self.running.append(new_job)
+                                self.job.node.add_job()
                                 new_job.re_run = True
                             elif new_job.status == qpyconst.JOB_ST_DONE:
                                 self.done.append(new_job)
@@ -663,6 +721,9 @@ class JobCollection(object):
                                 self.killed.append(new_job)
                             elif new_job.status == qpyconst.JOB_ST_UNDONE:
                                 self.undone.append(new_job)
+                            self.config.logger.debug('Added old job:\n%s',
+                                                     new_job)
+        self.config.logger.info('Old jobs have been initialized!')
 
     def jump_Q(self, job_list, pos):
         """Reorganize the queue.
@@ -741,3 +802,30 @@ class JobCollection(object):
                 self.queue[iq:iq] = jobs_to_jump[::-1]
                 self.all[ia:ia] = jobs_to_jump[::-1]
             return 'Queue reordered.\n'
+
+    def fetch_running_jobs(self):
+        """Check which jobs are running in the nodes
+        
+        Return:
+        nodes_down, jobs
+        
+        where nodes_down is a list with all nodes from which the job
+        information could not be read, and jobs is a list with all job IDs.
+        
+        """
+        command = 'ps -fu ' + qpysys.sys_user
+        nodes_down = []
+        jobs = []
+        for node in self.nodes:
+            if node.n_jobs > 0:
+                try:
+                    (std_out,
+                     std_err) = qpycomm.node_exec(node.address,
+                                                  command,
+                                                  pKey_file=self.config.ssh_p_key_file)
+                except Exception as e:
+                    self.config.warning('Exception when fetching running jobs: %s', e)
+                    nodes_down.append(node)
+                else:
+                    jobs.extend(_extract_jobID_from_ps(std_out))
+        return nodes_down, jobs

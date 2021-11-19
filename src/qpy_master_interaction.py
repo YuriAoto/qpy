@@ -79,15 +79,17 @@ class MultiuserHandler(threading.Thread):
     def run(self):
         """Wait messages from the client, see class documentation."""
         while True:
+            self.config.logger.debug('MultiuserHandler: accept connection ...')
             client_master = self.Listener_master.accept()
+            self.config.logger.debug('MultiuserHandler: recv connection ...')
             (msg_type, arguments) = client_master.recv()
-            self.config.messages.add('MultiuserHandler: Received: '
-                                     + str(msg_type) + ' -> ' + str(arguments))
+            self.config.logger.info('MultiuserHandler: message received:\n'
+                                    '%s, %s', msg_type, arguments)
             if msg_type == qpyconst.FROM_MULTI_CUR_JOBS:
-                multiuser_cur_jobs = self.jobs.multiuser_cur_jobs()
-                client_master.send(multiuser_cur_jobs)
+                client_master.send(self.jobs.multiuser_cur_jobs())
                 self.multiuser_alive.set()
             elif msg_type == qpyconst.FROM_MULTI_FINISH:
+                self.config.logger.debug('MultiuserHandler: finishing.')
                 client_master.send('Finishing MultiuserHandler.')
                 self.Listener_master.close()
                 break
@@ -109,21 +111,17 @@ class MultiuserHandler(threading.Thread):
                                                 qpycomm.multiuser_key)
         except:
             self.multiuser_alive.clear()
-            self.config.messages.add(
-                'MULTIUSER_HANDLER: Exception in message transfer: '
-                + repr(sys.exc_info()[0]) + ' '
-                + repr(sys.exc_info()[1]))
-            self.config.logger.error(
-                'Exception in MULTIUSER_HANDLER message transfer',
-                exc_info=True)
+            self.config.logger.error('MultiuserHandler: '
+                                     'exception when sending current jobs',
+                                     exc_info=True)
         else:
             if msg_back[0] == 2:
                 self.multiuser_alive.clear()
             else:
                 self.multiuser_alive.set()
-            self.config.logger.info(
-                'MULTIUSER_HANDLER: Message from multiuser: '
-                + str(msg_back))
+            self.config.logger.info('MultiuserHandler: '
+                                    'message from multiuser:\n%s',
+                                    msg_back)
 
 
 def handle_qpy(jobs,
