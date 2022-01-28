@@ -713,7 +713,7 @@ class JobCollection(object):
                                 self.Q.appendleft(new_job)
                             elif new_job.status == qpyconst.JOB_ST_RUNNING:
                                 self.running.append(new_job)
-                                self.job.node.add_job()
+                                new_job.node.add_job()
                                 new_job.re_run = True
                             elif new_job.status == qpyconst.JOB_ST_DONE:
                                 self.done.append(new_job)
@@ -824,7 +824,7 @@ class JobCollection(object):
                                                   command,
                                                   pKey_file=self.config.ssh_p_key_file)
                 except Exception as e:
-                    self.config.warning('Exception when fetching running jobs: %s', e)
+                    self.config.logger.warning('Exception when fetching running jobs: %s', e)
                     nodes_down.append(node)
                 else:
                     jobs.extend(_extract_jobID_from_ps(std_out))

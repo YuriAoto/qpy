@@ -80,9 +80,10 @@ def _handle_sync_user_info(args, users, nodes):
     
     args: user_name, address, port, conn_key, cur_jobs
     """
-    user, address, port, conn_key, new_cur_jobs = args
+    username, address, port, conn_key, new_cur_jobs = args
     try:
-        if user in users:
+        if username in users:
+            user = users[username]
             user.address = address
             user.port = port
             user.conn_key = conn_key
