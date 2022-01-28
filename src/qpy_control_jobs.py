@@ -258,14 +258,19 @@ class Submission(threading.Thread):
                             try:
                                 job.run(self.config)
                             except:
-                                # If it's not running,
-                                # we have to tell qpy-multiuser back somehow...
                                 self.config.logger.error(
                                     "Exception in when submitting job",
                                     exc_info=True)
                                 job.node = None
                                 self.jobs.append(job, self.jobs.queue)
                                 self.jobs.append(job, self.jobs.Q)
+                                multiuser_down = job.end_running(qpyconst.JOB_ST_DONE,
+                                                                 len(self.jobs.queue),
+                                                                 self.config)
+                                if multiuser_down:
+                                    self.muHandler.multiuser_alive.clear()
+                                else:
+                                    self.muHandler.multiuser_alive.set()
                             else:
                                 self.jobs.mv(job,
                                              self.jobs.queue,
