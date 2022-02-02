@@ -251,7 +251,7 @@ class Submission(threading.Thread):
                         self.config.logger.info('Message from multiuser:\n%s',
                                                 msg_back)
                         if status == 0:
-                            job = self.jobs.Q_pop(i_next_job)
+                            job = self.jobs.Q[i_next_job]
                             job.node = self.jobs.add_node(allocated_node)
                             self.config.logger.debug('Submitting job in %r',
                                                      job.node)
@@ -261,17 +261,16 @@ class Submission(threading.Thread):
                                 self.config.logger.error(
                                     "Exception in when submitting job",
                                     exc_info=True)
-                                job.node = None
-                                self.jobs.append(job, self.jobs.queue)
-                                self.jobs.append(job, self.jobs.Q)
-                                multiuser_down = job.end_running(qpyconst.JOB_ST_DONE,
+                                multiuser_down = job.end_running(qpyconst.JOB_ST_QUEUE,
                                                                  len(self.jobs.queue),
                                                                  self.config)
+                                job.node = None
                                 if multiuser_down:
                                     self.muHandler.multiuser_alive.clear()
                                 else:
                                     self.muHandler.multiuser_alive.set()
                             else:
+                                job = self.jobs.Q_pop(i_next_job)
                                 self.jobs.mv(job,
                                              self.jobs.queue,
                                              self.jobs.running)
