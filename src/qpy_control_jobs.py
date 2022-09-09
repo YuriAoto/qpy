@@ -145,7 +145,8 @@ class JobsKiller(threading.Thread):
                                          'stderr of killing job:\n%r',
                                          std_out, std_err)
             except Exception as e:
-                self.config.logger.warninig('Exception when killing job:\n%s', e)
+                self.config.logger.warning('Exception when killing job:\n%s', e)
+                self.to_kill.put(job)
             else:
                 multiuser_down = job.end_running(qpyconst.JOB_ST_KILLED,
                                                  len(self.jobs.queue),

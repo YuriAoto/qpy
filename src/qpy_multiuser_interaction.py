@@ -96,8 +96,8 @@ def _handle_sync_user_info(args, users, nodes):
                     if same_list else
                     (1, 'User exists but with a different job list.'))
         else:
-            if user in qpyusers.get_allowed_users():
-                users.add_user(user, nodes,
+            if username in qpyusers.get_allowed_users():
+                users.add_user(username, nodes,
                                address, port, conn_key, new_cur_jobs)
                 return ((0, 'User added')
                         if users.distribute_cores(nodes) == 0 else
